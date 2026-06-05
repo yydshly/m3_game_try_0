@@ -4,6 +4,22 @@ A lightweight, friendly multi-agent town life simulation prototype.
 
 The first release focuses on a complete playable loop without external dependencies: residents, places, tasks, mood, energy, relationships, memories, event feed, town tips, and daily reports. Later, `services/narrator.js` can be replaced with a real LLM or multi-agent backend without rewriting the UI.
 
+## Why This Project Exists
+
+AI Town Life is not only a cozy town simulation prototype. It is also an experiment in using MiniMax-M3 as a planning brain for AI-driven game worlds.
+
+The project explores three questions:
+
+1. Can a lightweight web game make AI agent behavior visible and playable?
+2. Can MiniMax-M3 plan resident actions based on state, memory, needs, and town goals?
+3. Can a small town simulation become a practical prototype for a new kind of AI game experience?
+
+The current version is still a prototype, but it already validates an important direction: large language models can be more than NPC dialogue generators. They can act as planners, narrators, and observers inside living game systems.
+
+## 项目意义
+
+这个项目不是单纯的小镇模拟页面，而是一个 AI 游戏方向实验。它试图验证：大模型是否可以成为游戏世界中的规划者、叙事者和观察者，而不仅仅是 NPC 台词生成器。
+
 ## Run Locally
 
 ```powershell

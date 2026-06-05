@@ -538,6 +538,38 @@ function renderRelationships(state) {
   `;
 }
 
+function renderProjectMeaning() {
+  return `
+    <section class="project-meaning" aria-label="为什么是 AI 小镇？">
+      <div class="project-meaning__header">
+        <span class="eyebrow">🌟 项目宣言</span>
+        <h2 class="project-meaning__title">为什么是 AI 小镇？</h2>
+        <p class="project-meaning__lead">这不是一个普通的小镇模拟页面，而是一个用 MiniMax-M3 探索 AI 游戏新形态的原型。</p>
+      </div>
+      <div class="project-meaning__grid">
+        <article class="project-meaning__card">
+          <div class="project-meaning__icon" aria-hidden="true">🌿</div>
+          <h3>一个可以被观察的温柔世界</h3>
+          <p>玩家不是在管理冰冷的数据，而是在陪伴一群有心情、有体力、有记忆、有关系的居民度过一天。每一次安排，都会影响他们的状态、互动和小镇的故事。</p>
+        </article>
+        <article class="project-meaning__card">
+          <div class="project-meaning__icon" aria-hidden="true">🤖</div>
+          <h3>一个 M3 Agent 能力实验场</h3>
+          <p>AI 管家不是简单生成一句话，而是根据居民状态、小镇资源、任务目标和最近记忆，尝试为每个居民做出合理安排。这是对大模型规划、结构化输出、角色一致性和多 Agent 协作能力的真实验证。</p>
+        </article>
+        <article class="project-meaning__card">
+          <div class="project-meaning__icon" aria-hidden="true">🎮</div>
+          <h3>一个 AI 游戏方向的产品原型</h3>
+          <p>这个项目的目标不是复制传统游戏，而是探索一种新的体验：玩家提供意图，AI 生成生活，居民持续变化，小镇慢慢形成属于自己的故事。它是游戏、陪伴、Agent 和内容生成之间的交叉实验。</p>
+        </article>
+      </div>
+      <div class="project-meaning__summary">
+        <p>当前版本仍是原型，但它已经验证了一个方向：AI 不只是游戏里的 NPC 台词生成器，也可以成为小镇生活的规划者、叙事者和观察者。</p>
+      </div>
+    </section>
+  `;
+}
+
 function renderReports(state) {
   const [latestReport, ...olderReports] = state.reports;
   if (!latestReport) {
@@ -662,6 +694,7 @@ export function renderApp(root, state, handlers, uiState = {}) {
           ${state.residents.map((resident) => renderResidentCard(resident, safeUiState.selectedResidentId)).join("")}
         </div>
       </section>
+      ${renderProjectMeaning()}
     </div>
   `;
 
