@@ -163,6 +163,20 @@ function renderGameHud(state) {
 function renderGameActions(state, safeUiState) {
   const nextPhaseLabel = state.phaseIndex === phases.length - 1 ? "🌙 结束今天" : `⏭️ 推进到${phases[state.phaseIndex + 1].label}`;
   const phase = getCurrentPhase(state);
+  const isAnimating = safeUiState.isAnimating;
+  const animMsg = safeUiState.animationMessage || "";
+
+  // Animation banner shown while residents are traveling/acting
+  const animBanner = isAnimating
+    ? `<div class="game-actions__anim-banner" aria-live="polite">🚶 ${escapeHtml(animMsg)}</div>`
+    : "";
+
+  // Buttons disabled during animation (except auto-play toggle and new-town)
+  const advancingDisabled = isAnimating ? "disabled" : "";
+  const aiLoading = safeUiState.llmStatus === "loading" ? "disabled" : "";
+  const eventLoading = safeUiState.eventDirectorStatus === "loading" ? "disabled" : "";
+  const broadcastLoading = safeUiState.broadcastStatus === "loading" ? "disabled" : "";
+
   return `
     <div class="game-actions">
       <p class="game-actions__title">🎮 游戏操作</p>
@@ -173,26 +187,31 @@ function renderGameActions(state, safeUiState) {
           <span class="game-actions__stat-phase">${escapeHtml(phase.label)}</span>
         </span>
       </div>
+      ${animBanner}
       <div class="game-actions__section">
         <p class="game-actions__section-label">⏭️ 推进</p>
-        <button class="button button--primary" type="button" data-action="advance">${escapeHtml(nextPhaseLabel)}</button>
-        <button class="button button--ghost" type="button" data-action="run-day">🌙 结束今天</button>
+        <button class="button button--primary" type="button" data-action="advance" ${advancingDisabled}>
+          ${isAnimating ? "居民行动中..." : escapeHtml(nextPhaseLabel)}
+        </button>
+        <button class="button button--ghost" type="button" data-action="run-day" ${advancingDisabled}>
+          ${isAnimating ? "居民行动中..." : "🌙 结束今天"}
+        </button>
       </div>
       <div class="game-actions__section">
         <p class="game-actions__section-label">🤖 AI 管家</p>
-        <button class="button button--ai" type="button" data-action="minimax-plan" ${safeUiState.llmStatus === "loading" ? "disabled" : ""}>
+        <button class="button button--ai" type="button" data-action="minimax-plan" ${aiLoading || advancingDisabled}>
           ${safeUiState.llmStatus === "loading" ? "🤖 管家思考中..." : "🤖 AI 管家安排"}
         </button>
       </div>
       <div class="game-actions__section">
         <p class="game-actions__section-label">🎭 事件导演</p>
-        <button class="button button--event" type="button" data-action="minimax-event" ${safeUiState.eventDirectorStatus === "loading" ? "disabled" : ""}>
+        <button class="button button--event" type="button" data-action="minimax-event" ${eventLoading || advancingDisabled}>
           ${safeUiState.eventDirectorStatus === "loading" ? "🎭 观察中..." : "🎭 生成小镇事件"}
         </button>
       </div>
       <div class="game-actions__section">
         <p class="game-actions__section-label">📻 氛围广播</p>
-        <button class="button button--broadcast" type="button" data-action="minimax-broadcast" ${safeUiState.broadcastStatus === "loading" ? "disabled" : ""}>
+        <button class="button button--broadcast" type="button" data-action="minimax-broadcast" ${broadcastLoading || advancingDisabled}>
           ${safeUiState.broadcastStatus === "loading" ? "📻 广播中..." : "📻 生成小镇广播"}
         </button>
       </div>
@@ -1079,6 +1098,8 @@ export function renderApp(root, state, handlers, uiState = {}) {
     broadcastMessage: uiState.broadcastMessage ?? "",
     latestBroadcast: uiState.latestBroadcast ?? null,
     activeTaskAnimations: uiState.activeTaskAnimations ?? [],
+    isAnimating: Boolean(uiState.isAnimating),
+    animationMessage: uiState.animationMessage ?? "",
   };
 
   root.innerHTML = `

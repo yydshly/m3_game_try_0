@@ -355,6 +355,26 @@ button, select {
   margin: 0;
 }
 
+/* Animation banner — shown while residents are traveling/acting */
+.game-actions__anim-banner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--gold-soft), var(--panel));
+  border: 1.5px solid var(--gold);
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #8a6020;
+  animation: animBannerIn 300ms ease-out;
+}
+
+@keyframes animBannerIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 /* Primary action buttons in left panel */
 .game-actions .button--primary,
 .game-actions .button--ai {

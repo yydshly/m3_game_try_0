@@ -140,6 +140,14 @@ Gait is inferred from the task: `forage` = run, `rest` = slow, everything else =
 
 This is still not a full pathfinding or sprite-sheet system. It is a DOM/CSS travel layer that prepares the town stage for future walking sprites, directional movement, and richer scene choreography.
 
+## Animation Timing Sync
+
+The town stage now synchronizes phase progression with resident animation. While residents are traveling or performing a task, phase advancement is locked to prevent visual state from being interrupted.
+
+Auto play waits for the current travel and task animation cycle to finish before scheduling the next phase. This keeps the simulation state and the visible town stage aligned.
+
+The lock is controlled by `uiState.isAnimating`. When an animation starts, `isAnimating` is set to `true` and a banner reads "居民正在行动中……". All major buttons (advance, run-day, AI plan, event, broadcast) are disabled until the animation completes. Auto play uses recursive `setTimeout` instead of `setInterval`, scheduling the next phase only after `TASK_ANIMATION_DURATION_MS` (3250ms) plus a buffer.
+
 ## 小镇氛围与广播
 
 AI 小镇生活新增了轻量氛围层。MiniMax-M3 可以根据当前天数、阶段、居民状态、小镇资源、最近事件和日报生成一段小镇广播文案。
@@ -175,6 +183,14 @@ M3 生成的小镇事件可以带两个温和选择。当前版本只把玩家�
 步态根据任务推断：采集 = run，休息 = slow，其余 = walk。体力低于 30 的居民也会慢走。方向根据水平坐标计算：目标在右侧则面朝右，否则面朝左。
 
 当前版本仍不是完整寻路或帧动画系统，而是基于 DOM/CSS 的位置移动层，为后续行走帧动画、方向动作和更复杂的场景调度做准备。
+
+## 动画节奏锁步
+
+小镇舞台新增了动画节奏锁步。居民移动或执行任务时，阶段推进会暂时锁定，避免动画还没播放完就进入下一阶段。
+
+自动推进会等待当前移动与任务动画完成后，再安排下一次推进，使 simulation 状态和视觉舞台保持一致。
+
+锁由 `uiState.isAnimating` 控制。动画开始时 `isAnimating` 设为 `true`，并显示"居民正在行动中……"横幅。在此期间，推进阶段、结束今天、AI 管家、事件导演、氛围广播按钮均被禁用。自动推进从 `setInterval` 改为递归 `setTimeout`，只在 `TASK_ANIMATION_DURATION_MS`（3250ms）加上缓冲后才安排下一次推进。
 
 ### API Style Configuration
 

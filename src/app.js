@@ -13,6 +13,15 @@ if (state) {
 } else {
   state = createInitialState();
 }
+// ── Animation Timing Constants ───────────────────────────────────────────────────────
+
+const TRAVEL_ANIMATION_MS = 1150;
+const TASK_ACTION_MS = 2100;
+const TASK_ANIMATION_DURATION_MS = TRAVEL_ANIMATION_MS + TASK_ACTION_MS; // 3250ms
+const AUTO_PLAY_DELAY_MS = TASK_ANIMATION_DURATION_MS + 700; // ~4000ms
+
+// ── UI State ──────────────────────────────────────────────────────────────────────
+
 let uiState = {
   selectedResidentId: state.residents[0]?.id ?? null,
   autoPlay: false,
@@ -24,6 +33,8 @@ let uiState = {
   broadcastMessage: "",
   latestBroadcast: null,
   activeTaskAnimations: [],
+  isAnimating: false,
+  animationMessage: "",
 };
 let autoPlayTimer = null;
 let animationTimer = null;
@@ -76,32 +87,59 @@ function buildTaskAnimations(prevState, nextState) {
   });
 }
 
-function showTaskAnimations(prevState, nextState) {
+function showTaskAnimations(prevState, nextState, options = {}) {
   if (animationTimer) clearTimeout(animationTimer);
-  const animations = buildTaskAnimations(prevState, nextState);
-  uiState = { ...uiState, activeTaskAnimations: animations };
+  uiState = {
+    ...uiState,
+    activeTaskAnimations: buildTaskAnimations(prevState, nextState),
+    isAnimating: true,
+    animationMessage: "居民正在行动中……",
+  };
   render();
   animationTimer = setTimeout(() => {
-    uiState = { ...uiState, activeTaskAnimations: [] };
+    uiState = {
+      ...uiState,
+      activeTaskAnimations: [],
+      isAnimating: false,
+      animationMessage: "",
+    };
     animationTimer = null;
     render();
-  }, 3800);
+    if (typeof options.afterComplete === "function") {
+      options.afterComplete();
+    }
+  }, TASK_ANIMATION_DURATION_MS);
 }
 
 function stopAutoPlay() {
   if (autoPlayTimer) {
-    clearInterval(autoPlayTimer);
+    clearTimeout(autoPlayTimer);
     autoPlayTimer = null;
   }
   uiState = { ...uiState, autoPlay: false };
 }
 
+function scheduleAutoPlay() {
+  if (!uiState.autoPlay) return;
+  if (autoPlayTimer) clearTimeout(autoPlayTimer);
+  autoPlayTimer = setTimeout(() => {
+    if (!uiState.autoPlay) return;
+    if (uiState.isAnimating) {
+      // wait for animation to finish then retry
+      scheduleAutoPlay();
+      return;
+    }
+    const prev = state;
+    const next = advancePhase(state);
+    commit(next);
+    showTaskAnimations(prev, next, { afterComplete: scheduleAutoPlay });
+  }, AUTO_PLAY_DELAY_MS);
+}
+
 function startAutoPlay() {
   if (autoPlayTimer) return;
   uiState = { ...uiState, autoPlay: true };
-  autoPlayTimer = setInterval(() => {
-    commit(advancePhase(state));
-  }, 1400);
+  scheduleAutoPlay();
 }
 
 function commit(nextState) {
@@ -118,12 +156,14 @@ function render() {
   try {
     renderApp(root, state, {
       onAdvance: () => {
+        if (uiState.isAnimating) return;
         const prev = state;
         const next = advancePhase(state);
         commit(next);
         showTaskAnimations(prev, next);
       },
       onRunDay: () => {
+        if (uiState.isAnimating) return;
         let prev = state;
         let next = state;
         const steps = 3 - state.phaseIndex;
@@ -253,7 +293,20 @@ function render() {
         stopAutoPlay();
         if (animationTimer) { clearTimeout(animationTimer); animationTimer = null; }
         clearState();
-        uiState = { selectedResidentId: null, autoPlay: false, llmStatus: "idle", llmMessage: "", eventDirectorStatus: "idle", eventDirectorMessage: "", broadcastStatus: "idle", broadcastMessage: "", latestBroadcast: null, activeTaskAnimations: [] };
+        uiState = {
+          selectedResidentId: null,
+          autoPlay: false,
+          llmStatus: "idle",
+          llmMessage: "",
+          eventDirectorStatus: "idle",
+          eventDirectorMessage: "",
+          broadcastStatus: "idle",
+          broadcastMessage: "",
+          latestBroadcast: null,
+          activeTaskAnimations: [],
+          isAnimating: false,
+          animationMessage: "",
+        };
         commit(createInitialState());
       },
     }, uiState);
