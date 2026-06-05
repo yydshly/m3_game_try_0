@@ -19,7 +19,10 @@ function meter(label, value, tone = "green") {
   const safeValue = Math.round(value);
   return `
     <div class="meter" aria-label="${safeLabel} ${safeValue}">
-      <div class="meter__top"><span>${safeLabel}</span><strong>${safeValue}</strong></div>
+      <div class="meter__top">
+        <span>${safeLabel}</span>
+        <strong>${safeValue}</strong>
+      </div>
       <div class="meter__track" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${safeValue}">
         <span class="meter__bar meter__bar--${tone}" style="width:${pct(value)}"></span>
       </div>
@@ -32,7 +35,9 @@ function renderAgentSummary(agent) {
   const needs = agent.needs ?? { rest: 0, social: 0, achievement: 0 };
   return `
     <div class="agent-summary">
-      <p class="agent-reason"><span class="agent-reason__label">💭 想法：</span>${escapeHtml(agent.decisionReason)}</p>
+      <p class="agent-reason">
+        <span class="agent-reason__label">💭 想法：</span>${escapeHtml(agent.decisionReason)}
+      </p>
       <div class="agent-needs-row">
         <span class="agent-need-badge agent-need-badge--rest" title="休息需求">🌙 ${Math.round(needs.rest)}</span>
         <span class="agent-need-badge agent-need-badge--social" title="社交需求">💬 ${Math.round(needs.social)}</span>
@@ -73,49 +78,11 @@ function renderHeader(state) {
   `;
 }
 
-function renderTips(state) {
-  const tips = getTownTips(state);
-  return `
-    <section class="panel tips">
-      <div class="panel__head">
-        <h2>🏠 管家提示</h2>
-        <span class="panel-badge">自动</span>
-      </div>
-      <div class="tip-list">
-        ${tips
-          .map(
-            (tip) => `
-              <article class="tip">
-                <strong>${escapeHtml(tip.title)}</strong>
-                <p>${escapeHtml(tip.text)}</p>
-              </article>
-            `,
-          )
-          .join("")}
-      </div>
-    </section>
-  `;
-}
-
-function renderLlmStatus(uiState) {
-  if (!uiState.llmMessage) return "";
-  const statusIcon = uiState.llmStatus === "error" ? "⚠️" : uiState.llmStatus === "loading" ? "🤖" : "✨";
-  return `
-    <section class="panel llm-status llm-status--${escapeHtml(uiState.llmStatus)}">
-      <div class="panel__head">
-        <h2>${statusIcon} AI 小镇管家</h2>
-        <span class="llm-status-badge llm-status-badge--${escapeHtml(uiState.llmStatus)}">${escapeHtml(uiState.llmStatus)}</span>
-      </div>
-      <p>${escapeHtml(uiState.llmMessage)}</p>
-    </section>
-  `;
-}
-
 function renderTownStats(state) {
   return `
     <section class="stats" aria-label="小镇状态">
       ${meter("舒适度", state.town.comfort, "green")}
-      <div class="stat-pill"><span>物资</span><strong>${state.town.supplies}</strong></div>
+      <div class="stat-pill"><span>📦 物资</span><strong>${state.town.supplies}</strong></div>
       ${meter("精神", state.town.spirit, "gold")}
     </section>
   `;
@@ -123,11 +90,12 @@ function renderTownStats(state) {
 
 function renderGoals(state) {
   const goals = getTownGoals(state);
+  const completedCount = goals.filter((goal) => goal.value >= goal.target).length;
   return `
     <section class="panel goals">
       <div class="panel__head">
         <h2>🎯 今日目标</h2>
-        <span class="panel-badge">${goals.filter((goal) => goal.value >= goal.target).length}/${goals.length}</span>
+        <span class="panel-badge">${completedCount}/${goals.length}</span>
       </div>
       <div class="goal-list">
         ${goals
@@ -150,58 +118,65 @@ function renderGoals(state) {
   `;
 }
 
-function renderLocationCard(state, location) {
-  const residents = getResidentsAtLocation(state, location.id);
-  const residentList = residents.length
-    ? residents.map((resident) => `<span class="mini-avatar" title="${escapeHtml(resident.name)} - ${escapeHtml(getTask(resident.assignmentId)?.label ?? "")}">${escapeHtml(resident.avatar)}</span>`).join("")
-    : `<span class="empty-note">暂无居民</span>`;
-
+function renderTips(state) {
+  const tips = getTownTips(state);
   return `
-    <article class="location location--${escapeHtml(location.tone)}">
-      <div class="location__icon" aria-hidden="true">${escapeHtml(location.icon)}</div>
-      <div>
-        <h3>${escapeHtml(location.name)}</h3>
-        <p>${escapeHtml(location.description)}</p>
-        <div class="location__residents" aria-label="这里的居民">${residentList}</div>
+    <section class="panel tips">
+      <div class="panel__head">
+        <h2>🏠 管家提示</h2>
       </div>
-    </article>
+      <div class="tip-list">
+        ${tips
+          .map(
+            (tip) => `
+              <article class="tip">
+                <strong>${escapeHtml(tip.title)}</strong>
+                <p>${escapeHtml(tip.text)}</p>
+              </article>
+            `,
+          )
+          .join("")}
+      </div>
+    </section>
   `;
 }
 
-function residentOffset(index) {
-  const offsets = [
-    { x: -3, y: -5 },
-    { x: 3, y: -4 },
-    { x: -5, y: 3 },
-    { x: 5, y: 4 },
-    { x: 0, y: 7 },
-  ];
-  return offsets[index % offsets.length];
-}
-
-function locationPosition(locationId) {
-  return getLocation(locationId)?.position ?? { x: 50, y: 50 };
+function renderLlmStatus(uiState) {
+  if (!uiState.llmMessage) return "";
+  const statusIcon = uiState.llmStatus === "error" ? "⚠️" : uiState.llmStatus === "loading" ? "🤖" : "✨";
+  const friendlyMessage = uiState.llmStatus === "error"
+    ? (uiState.llmMessage.includes("Failed to fetch") || uiState.llmMessage.includes("NetworkError")
+      ? "🤖 AI 管家暂时还没准备好，你可以先手动安排居民今天的生活~"
+      : uiState.llmMessage)
+    : uiState.llmMessage;
+  return `
+    <section class="panel llm-status llm-status--${escapeHtml(uiState.llmStatus)}">
+      <div class="panel__head">
+        <h2>${statusIcon} AI 小镇管家</h2>
+        <span class="llm-status-badge llm-status-badge--${escapeHtml(uiState.llmStatus)}">${escapeHtml(uiState.llmStatus)}</span>
+      </div>
+      <p>${escapeHtml(friendlyMessage)}</p>
+    </section>
+  `;
 }
 
 function residentStatus(resident) {
-  if (resident.energy < 30) {
-    return { id: "tired", label: "疲惫 😴" };
-  }
-  if (resident.mood < 45) {
-    return { id: "low-mood", label: "低落 😔" };
-  }
-  if (resident.mood >= 82) {
-    return { id: "happy", label: "开心 😊" };
-  }
+  if (resident.energy < 30) return { id: "tired", label: "疲惫 😴" };
+  if (resident.mood < 45) return { id: "low-mood", label: "低落 😔" };
+  if (resident.mood >= 82) return { id: "happy", label: "开心 😊" };
   return { id: "steady", label: "平稳 🙂" };
 }
 
 function renderStageResident(state, resident, selectedResidentId) {
   const residentsAtLocation = getResidentsAtLocation(state, resident.locationId);
   const index = residentsAtLocation.findIndex((item) => item.id === resident.id);
-  const offset = residentOffset(index);
-  const current = locationPosition(resident.locationId);
-  const previous = locationPosition(resident.previousLocationId ?? resident.locationId);
+  const offsets = [
+    { x: -3, y: -5 }, { x: 3, y: -4 }, { x: -5, y: 3 }, { x: 5, y: 4 }, { x: 0, y: 7 }
+  ];
+  const offset = offsets[index % offsets.length];
+  const getLocationPos = (locId) => getLocation(locId)?.position ?? { x: 50, y: 50 };
+  const current = getLocationPos(resident.locationId);
+  const previous = getLocationPos(resident.previousLocationId ?? resident.locationId);
   const task = getTask(resident.assignmentId);
   const status = residentStatus(resident);
 
@@ -212,7 +187,7 @@ function renderStageResident(state, resident, selectedResidentId) {
       type="button"
       title="${escapeHtml(resident.name)} / ${escapeHtml(task.label)} / ${escapeHtml(status.label)}"
       style="--x:${current.x + offset.x}%; --y:${current.y + offset.y}%; --from-x:${previous.x + offset.x}%; --from-y:${previous.y + offset.y}%;"
-      aria-label="${escapeHtml(resident.name)} at ${escapeHtml(getLocation(resident.locationId).name)}, ${escapeHtml(task.label)}, ${escapeHtml(status.label)}"
+      aria-label="${escapeHtml(resident.name)} 在 ${escapeHtml(getLocation(resident.locationId).name)} / ${escapeHtml(task.label)} / ${escapeHtml(status.label)}"
       aria-pressed="${resident.id === selectedResidentId ? "true" : "false"}"
     >
       <em>${escapeHtml(task.icon)}</em>
@@ -226,6 +201,7 @@ function renderStageResident(state, resident, selectedResidentId) {
 function renderTownStage(state, uiState) {
   const latestEvent = [...state.events].reverse().find((event) => event.type !== "system");
   const phase = getCurrentPhase(state);
+
   return `
     <div class="town-stage town-stage--${escapeHtml(phase.id)}" aria-label="小镇地图 - ${escapeHtml(phase.label)}">
       <div class="stage-sky" aria-hidden="true">
@@ -244,7 +220,7 @@ function renderTownStage(state, uiState) {
             <article
               class="stage-place stage-place--${escapeHtml(location.tone)}"
               style="--x:${location.position.x}%; --y:${location.position.y}%;"
-              aria-label="${escapeHtml(location.name)}地点"
+              aria-label="${escapeHtml(location.name)}"
             >
               <span>${escapeHtml(location.icon)}</span>
               <strong>${escapeHtml(location.name)}</strong>
@@ -255,15 +231,40 @@ function renderTownStage(state, uiState) {
       ${state.residents.map((resident) => renderStageResident(state, resident, uiState.selectedResidentId)).join("")}
       ${
         latestEvent
-          ? `<aside class="stage-bubble" aria-live="polite"><span>📌 最新动态</span><p>${escapeHtml(latestEvent.text)}</p></aside>`
+          ? `
+          <aside class="stage-bubble" aria-live="polite">
+            <span class="stage-bubble__tag">📌 最新动态</span>
+            <p>${escapeHtml(latestEvent.text)}</p>
+          </aside>`
           : ""
       }
       <div class="stage-legend" aria-hidden="true">
-        <span><i class="status-dot status-dot--happy"></i>开心</span>
-        <span><i class="status-dot status-dot--steady"></i>平稳</span>
-        <span><i class="status-dot status-dot--tired"></i>疲惫</span>
+        <span class="stage-legend__item"><i class="status-dot status-dot--happy"></i>开心</span>
+        <span class="stage-legend__item"><i class="status-dot status-dot--steady"></i>平稳</span>
+        <span class="stage-legend__item"><i class="status-dot status-dot--tired"></i>疲惫</span>
       </div>
     </div>
+  `;
+}
+
+function renderLocationCard(state, location) {
+  const residents = getResidentsAtLocation(state, location.id);
+  const residentList = residents.length
+    ? residents.map((resident) => {
+        const task = getTask(resident.assignmentId);
+        return `<span class="mini-avatar" title="${escapeHtml(resident.name)} - ${escapeHtml(task?.label ?? "")}">${escapeHtml(resident.avatar)}</span>`;
+      }).join("")
+    : `<span class="empty-note">暂无居民</span>`;
+
+  return `
+    <article class="location location--${escapeHtml(location.tone)}">
+      <div class="location__icon" aria-hidden="true">${escapeHtml(location.icon)}</div>
+      <div class="location__info">
+        <h3>${escapeHtml(location.name)}</h3>
+        <p>${escapeHtml(location.description)}</p>
+        <div class="location__residents" aria-label="这里的居民">${residentList}</div>
+      </div>
+    </article>
   `;
 }
 
@@ -273,32 +274,33 @@ function renderSpotlight(state, uiState) {
 
   const task = getTask(selected.assignmentId);
   const location = getLocation(selected.locationId);
+  const status = residentStatus(selected);
+
   return `
     <section class="panel spotlight">
-      <div class="panel__head">
-        <h2>👤 居民详情</h2>
-        <span class="panel-badge">${escapeHtml(location.name)}</span>
-      </div>
-      <div class="spotlight__body">
-        <div class="avatar spotlight__avatar" aria-hidden="true">${escapeHtml(selected.avatar)}</div>
-        <div>
+      <div class="spotlight__header">
+        <div class="spotlight__avatar" aria-hidden="true">${escapeHtml(selected.avatar)}</div>
+        <div class="spotlight__info">
           <h3>${escapeHtml(selected.name)}</h3>
           <p>${escapeHtml(selected.role)} · ${escapeHtml(selected.skill)}</p>
         </div>
       </div>
+
       <div class="spotlight__role-card">
         <div class="spotlight__plan">
-          <span>当前安排</span>
+          <span>📋 当前安排</span>
           <strong>${escapeHtml(task.label)}</strong>
         </div>
         <div class="spotlight__status">
-          <span class="status-tag status-tag--${residentStatus(selected).id}">${escapeHtml(residentStatus(selected).label)}</span>
+          <span class="status-tag status-tag--${status.id}">${escapeHtml(status.label)}</span>
           <span class="personality-tag">${escapeHtml(selected.personality)}</span>
         </div>
       </div>
+
       ${renderAgentSummary(selected.agent)}
       ${meter("心情", selected.mood, "rose")}
       ${meter("体力", selected.energy, "blue")}
+
       <div class="spotlight__memory-wrap">
         <p class="spotlight__memory-label">📝 最近记忆</p>
         <p class="spotlight__memory">${escapeHtml(selected.memory[0] ?? "还没有记忆哦~")}</p>
@@ -310,11 +312,13 @@ function renderSpotlight(state, uiState) {
 function renderResidentCard(resident, selectedResidentId) {
   const task = getTask(resident.assignmentId);
   const location = getLocation(resident.locationId);
+  const status = residentStatus(resident);
+
   return `
     <article class="resident ${resident.id === selectedResidentId ? "resident--selected" : ""}" data-resident-card="${escapeHtml(resident.id)}">
       <div class="resident__head">
-        <div class="avatar" aria-hidden="true">${escapeHtml(resident.avatar)}</div>
-        <div>
+        <div class="resident__avatar" aria-hidden="true">${escapeHtml(resident.avatar)}</div>
+        <div class="resident__info">
           <h3>${escapeHtml(resident.name)}</h3>
           <p>${escapeHtml(resident.role)} · ${escapeHtml(resident.skill)}</p>
         </div>
@@ -346,6 +350,7 @@ function renderResidentCard(resident, selectedResidentId) {
 function renderEventFeed(state) {
   const events = [...state.events].reverse().slice(0, 12);
   const typeIcon = { action: "🏃", social: "💬", system: "🔔", report: "📰" };
+
   return `
     <section class="panel">
       <div class="panel__head">
@@ -357,7 +362,9 @@ function renderEventFeed(state) {
           .map(
             (event) => `
               <article class="feed-item feed-item--${escapeHtml(event.type)}">
-                <span class="feed-item__meta">${typeIcon[event.type] ?? "📌"} 第 ${event.day} 天 · ${escapeHtml(event.phase)}</span>
+                <span class="feed-item__meta">
+                  ${typeIcon[event.type] ?? "📌"} 第 ${event.day} 天 · ${escapeHtml(event.phase)}
+                </span>
                 <p>${escapeHtml(event.text)}</p>
               </article>
             `,
@@ -381,8 +388,8 @@ function renderRelationships(state) {
           .map(
             (pair) => `
               <div class="relation">
-                <span>${escapeHtml(pair.a.name)} 🤝 ${escapeHtml(pair.b.name)}</span>
-                <strong>${pair.value}</strong>
+                <span class="relation__names">${escapeHtml(pair.a.name)} 🤝 ${escapeHtml(pair.b.name)}</span>
+                <span class="relation__value">${pair.value}</span>
                 <div class="relation__track" aria-hidden="true"><i style="width:${pct(pair.value)}"></i></div>
               </div>
             `,
@@ -399,7 +406,7 @@ function renderReports(state) {
     return `
       <section class="panel report">
         <div class="panel__head"><h2>📰 小镇日报</h2></div>
-        <p class="empty-note">📋 晚上阶段结束后，会生成今日日报哦~</p>
+        <p class="report__empty">📋 晚上阶段结束后，会生成今日日报哦~</p>
       </section>
     `;
   }
@@ -407,9 +414,9 @@ function renderReports(state) {
   return `
     <section class="panel report report--active">
       <div class="report__header">
-        <div class="report__badge">📰 小镇日报</div>
+        <span class="report__badge">📰 小镇日报</span>
         <h2>${escapeHtml(report.title)}</h2>
-        <span class="report__phase">${escapeHtml(report.phase)}</span>
+        <span class="report__phase-tag">${escapeHtml(report.phase)}</span>
       </div>
       <p class="report__summary">${escapeHtml(report.summary)}</p>
       <div class="report__highlights">
@@ -454,7 +461,7 @@ export function renderApp(root, state, handlers, uiState = {}) {
     llmStatus: uiState.llmStatus ?? "idle",
     llmMessage: uiState.llmMessage ?? "",
   };
-  const nextPhaseLabel = state.phaseIndex === phases.length - 1 ? "结束今天" : `推进到${phases[state.phaseIndex + 1].label}`;
+  const nextPhaseLabel = state.phaseIndex === phases.length - 1 ? "🌙 结束今天" : `⏭️ 推进到${phases[state.phaseIndex + 1].label}`;
 
   root.innerHTML = `
     <div class="shell">
@@ -465,13 +472,13 @@ export function renderApp(root, state, handlers, uiState = {}) {
           <div class="section-head">
             <div>
               <p class="eyebrow">🗺️ 小镇地图</p>
-              <h2>地点</h2>
+              <h2>五大地点</h2>
             </div>
             <div class="actions">
-              <button class="button button--ghost" type="button" data-action="reset-assignments">重置安排</button>
-              <button class="button button--ghost" type="button" data-action="run-day">结束今天</button>
+              <button class="button button--ghost" type="button" data-action="reset-assignments">🔄 重置安排</button>
+              <button class="button button--ghost" type="button" data-action="run-day">🌙 结束今天</button>
               <button class="button button--ai" type="button" data-action="minimax-plan" ${safeUiState.llmStatus === "loading" ? "disabled" : ""}>
-                ${safeUiState.llmStatus === "loading" ? "管家思考中..." : "🤖 AI 管家安排"}
+                ${safeUiState.llmStatus === "loading" ? "🤖 管家思考中..." : "🤖 AI 管家安排"}
               </button>
               <button class="button ${safeUiState.autoPlay ? "button--live" : "button--ghost"}" type="button" data-action="toggle-auto">
                 ${safeUiState.autoPlay ? "⏸️ 暂停" : "▶️ 自动推进"}
