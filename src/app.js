@@ -104,6 +104,9 @@ function render() {
             residentIds: evt.residentIds ?? [],
             placeId: evt.placeId ?? "plaza",
             suggestedFollowUp: evt.suggestedFollowUp ?? "",
+            choices: evt.choices ?? [],
+            chosenChoiceId: null,
+            choiceResultText: null,
           };
           const nextState = {
             ...state,
@@ -118,6 +121,46 @@ function render() {
           uiState = { ...uiState, eventDirectorStatus: "error", eventDirectorMessage: error.message };
           render();
         }
+      },
+      onChooseEvent: (eventId, choiceId) => {
+        const events = state.events ?? [];
+        const sourceEvent = events.find((e) => e.id === eventId);
+        if (!sourceEvent) return;
+        if (sourceEvent.type !== "m3-event") return;
+        if (sourceEvent.chosenChoiceId) return;
+        const choice = (sourceEvent.choices ?? []).find((c) => c.id === choiceId);
+        if (!choice) return;
+
+        const currentPhase = phases[state.phaseIndex];
+
+        const updatedEvents = events.map((e) => {
+          if (e.id !== eventId) return e;
+          return {
+            ...e,
+            chosenChoiceId: choiceId,
+            choiceResultText: choice.resultText,
+          };
+        });
+
+        const playerChoiceEvent = {
+          id: `choice-${eventId}-${choiceId}`,
+          type: "player-choice",
+          day: state.day,
+          phase: currentPhase.label,
+          sourceEventId: eventId,
+          choiceId,
+          title: "你的选择",
+          text: choice.resultText,
+          choiceLabel: choice.label,
+          residentIds: sourceEvent.residentIds,
+          placeId: sourceEvent.placeId,
+        };
+
+        const nextState = {
+          ...state,
+          events: [...updatedEvents, playerChoiceEvent],
+        };
+        commit(nextState);
       },
       onMiniMaxBroadcast: async () => {
         stopAutoPlay();

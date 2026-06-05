@@ -575,6 +575,40 @@ function renderM3EventItem(event, residents) {
         .join("")
     : "";
 
+  const hasChoices = Array.isArray(event.choices) && event.choices.length > 0;
+  const isChosen = Boolean(event.chosenChoiceId);
+  const chosenChoice = hasChoices ? event.choices.find((c) => c.id === event.chosenChoiceId) : null;
+
+  let choicesHtml = "";
+  if (hasChoices && !isChosen) {
+    choicesHtml = `
+      <div class="m3-event__choices">
+        <p class="m3-event__choices-prompt">你要怎么做？</p>
+        <div class="m3-event__choice-buttons">
+          ${event.choices.map((choice) => `
+            <button
+              class="event-choice"
+              type="button"
+              data-action="choose-event"
+              data-event-id="${escapeHtml(event.id)}"
+              data-choice-id="${escapeHtml(choice.id)}"
+            >
+              <span class="event-choice__label">${escapeHtml(choice.label)}</span>
+              <span class="event-choice__preview">${escapeHtml(choice.preview)}</span>
+            </button>
+          `).join("")}
+        </div>
+      </div>
+    `;
+  } else if (hasChoices && isChosen && chosenChoice) {
+    choicesHtml = `
+      <div class="m3-event__chosen">
+        <p class="m3-event__chosen-label">已选择：${escapeHtml(chosenChoice.label)}</p>
+        <p class="m3-event__chosen-result">结果：${escapeHtml(chosenChoice.resultText)}</p>
+      </div>
+    `;
+  }
+
   return `
     <article class="feed-item feed-item--m3-event">
       <div class="m3-event__header">
@@ -590,6 +624,7 @@ function renderM3EventItem(event, residents) {
         ${participantHtml ? `<span class="m3-event__residents">👥 ${participantHtml}</span>` : ""}
       </div>
       ${event.suggestedFollowUp ? `<p class="m3-event__followup">💡 ${escapeHtml(event.suggestedFollowUp)}</p>` : ""}
+      ${choicesHtml}
     </article>
   `;
 }
@@ -637,9 +672,42 @@ function renderTownBroadcastItem(event, residents) {
   `;
 }
 
+function renderPlayerChoiceItem(event, residents) {
+  const placeName = {
+    garden: "花园", cafe: "咖啡馆", workshop: "工坊", plaza: "广场", forest: "森林",
+  }[event.placeId] ?? "广场";
+
+  const participantHtml = event.residentIds && event.residentIds.length > 0
+    ? event.residentIds
+        .map((id) => {
+          const resident = residents.find((r) => r.id === id);
+          if (!resident) return "";
+          return `<span class="player-choice__resident">${escapeHtml(resident.name)}</span>`;
+        })
+        .join("")
+    : "";
+
+  return `
+    <article class="feed-item feed-item--player-choice">
+      <div class="player-choice__header">
+        <span class="feed-item__meta">
+          🧭 第 ${event.day} 天 · ${escapeHtml(event.phase)}
+        </span>
+      </div>
+      <p class="player-choice__title">你的选择</p>
+      <p class="player-choice__label">你选择了：${escapeHtml(event.choiceLabel ?? "")}</p>
+      <p class="player-choice__text">${escapeHtml(event.text)}</p>
+      <div class="player-choice__footer">
+        <span class="player-choice__place">📍 ${escapeHtml(placeName)}</span>
+        ${participantHtml ? `<span class="player-choice__residents">👥 ${participantHtml}</span>` : ""}
+      </div>
+    </article>
+  `;
+}
+
 function renderEventFeed(state) {
   const events = [...state.events].reverse().slice(0, 12);
-  const typeIcon = { action: "🏃", social: "💬", system: "🔔", report: "📰", "m3-event": "🎭", "town-broadcast": "📻" };
+  const typeIcon = { action: "🏃", social: "💬", system: "🔔", report: "📰", "m3-event": "🎭", "town-broadcast": "📻", "player-choice": "🧭" };
 
   return `
     <section class="panel">
@@ -655,6 +723,9 @@ function renderEventFeed(state) {
             }
             if (event.type === "town-broadcast") {
               return renderTownBroadcastItem(event, state.residents);
+            }
+            if (event.type === "player-choice") {
+              return renderPlayerChoiceItem(event, state.residents);
             }
             return `
               <article class="feed-item feed-item--${escapeHtml(event.type)}">
@@ -815,6 +886,14 @@ function bindEvents(root, handlers) {
   root.querySelectorAll("[data-resident-task]").forEach((select) => {
     select.addEventListener("change", (event) => {
       handlers.onAssignTask(event.target.dataset.residentTask, event.target.value);
+    });
+  });
+  root.querySelectorAll("[data-action='choose-event']").forEach((button) => {
+    button.addEventListener("click", () => {
+      handlers.onChooseEvent(
+        button.dataset.eventId,
+        button.dataset.choiceId,
+      );
     });
   });
 }

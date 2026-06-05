@@ -212,7 +212,7 @@ function fallbackTaskForResident(resident, state) {
 function buildEventPrompt(state) {
   return {
     system:
-      "You are the event director for a cozy AI town life simulation game. Generate one small town event that feels warm, observable, and connected to the current town state. Return strict JSON only. No markdown, no explanation.",
+      "You are the event director for a cozy AI town life simulation game. Generate one small town event that feels warm, observable, and connected to the current town state. Return strict JSON only. No markdown, no explanation. Return one event with exactly two gentle player choices. The choices should not require combat, danger, adult content, or destructive actions. The resultText should describe what happens after the player chooses it. Do not promise or imply numeric stat changes in resultText.",
     userContent: JSON.stringify({
       validResidentIds: ["hua", "yuan", "mimi", "zhou", "seven"],
       validPlaceIds: ["garden", "cafe", "workshop", "plaza", "forest"],
@@ -225,11 +225,68 @@ function buildEventPrompt(state) {
           residentIds: ["valid resident ids involved"],
           placeId: "valid place id",
           suggestedFollowUp: "short Chinese suggestion under 30 characters",
+          choices: [
+            {
+              id: "choice_a",
+              label: "Chinese button label within 24 characters",
+              preview: "Chinese preview text within 40 characters",
+              resultText: "Chinese result description within 100 characters",
+            },
+            {
+              id: "choice_b",
+              label: "Chinese button label within 24 characters",
+              preview: "Chinese preview text within 40 characters",
+              resultText: "Chinese result description within 100 characters",
+            },
+          ],
         },
       },
       state,
     }),
   };
+}
+
+const FALLBACK_CHOICES = [
+  {
+    id: "gentle_help",
+    label: "温柔地帮忙",
+    preview: "让居民主动参与这件小事。",
+    resultText: "居民们用温柔的方式回应了这件小事，小镇的今天多了一点故事。",
+  },
+  {
+    id: "watch_first",
+    label: "先观察一下",
+    preview: "先看看事情会如何发展。",
+    resultText: "你选择先观察一下，居民们把这件事记在了今天的小镇动态里。",
+  },
+];
+
+function normalizeEventChoices(rawChoices) {
+  const raw = Array.isArray(rawChoices) ? rawChoices : [];
+  const selected = raw.slice(0, 2);
+
+  while (selected.length < 2) {
+    const fallbackIdx = selected.length;
+    if (fallbackIdx < FALLBACK_CHOICES.length) {
+      selected.push({ ...FALLBACK_CHOICES[fallbackIdx] });
+    } else {
+      selected.push({ ...FALLBACK_CHOICES[0], id: `fallback_${selected.length}` });
+    }
+  }
+
+  return selected.map((choice, idx) => {
+    const id = String(choice.id ?? "").trim() || (idx === 0 ? "choice_a" : "choice_b");
+    const label = String(choice.label ?? "").trim() || FALLBACK_CHOICES[idx]?.label || "温柔地帮忙";
+    const preview = String(choice.preview ?? "").trim() || "这个选择会被记录在小镇动态里。";
+    const resultText = String(choice.resultText ?? "").trim() || "你的选择被小镇记住了，居民们继续着今天的生活。";
+
+    return {
+      id,
+      label: label.slice(0, 24),
+      preview: preview.slice(0, 40),
+      resultText: resultText.slice(0, 100),
+    };
+  });
 }
 
 function normalizeMiniMaxEvent(rawEvent, state) {
@@ -251,6 +308,8 @@ function normalizeMiniMaxEvent(rawEvent, state) {
     "今天的小镇很安静，居民们各自继续着自己的生活。";
   const suggestedFollowUp = String(event.suggestedFollowUp ?? "").slice(0, 60);
 
+  const choices = normalizeEventChoices(event.choices);
+
   return {
     type: "m3-event",
     title: title.slice(0, 36),
@@ -259,6 +318,7 @@ function normalizeMiniMaxEvent(rawEvent, state) {
     residentIds,
     placeId,
     suggestedFollowUp,
+    choices,
   };
 }
 

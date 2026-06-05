@@ -1436,6 +1436,163 @@ button, select {
   line-height: 1.4;
 }
 
+/* ── Event Choices ── */
+.m3-event__choices {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.5);
+  border: 1px solid var(--line);
+}
+
+.m3-event__choices-prompt {
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--purple);
+}
+
+.m3-event__choice-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.event-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 2px solid var(--purple);
+  background: var(--panel);
+  cursor: pointer;
+  text-align: left;
+  transition: all 160ms ease;
+  box-shadow: 0 2px 8px rgba(139, 123, 181, 0.15);
+}
+
+.event-choice:hover {
+  background: var(--purple-soft);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(139, 123, 181, 0.25);
+}
+
+.event-choice:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.event-choice:focus-visible {
+  outline: 3px solid var(--purple-soft);
+  outline-offset: 2px;
+}
+
+.event-choice__label {
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: var(--purple);
+}
+
+.event-choice__preview {
+  font-size: 0.75rem;
+  color: var(--ink-light);
+  line-height: 1.4;
+}
+
+/* ── Chosen State ── */
+.m3-event__chosen {
+  margin-top: 10px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--green-soft), rgba(255,255,255,0.8));
+  border: 1px solid var(--green);
+}
+
+.m3-event__chosen-label {
+  margin: 0 0 4px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: var(--green-deep);
+}
+
+.m3-event__chosen-result {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--ink);
+  line-height: 1.5;
+}
+
+/* ── Player Choice Event ── */
+.feed-item--player-choice {
+  background: linear-gradient(135deg, var(--green-soft), var(--panel-soft));
+  border-left: 3px solid var(--green);
+}
+
+.player-choice__header {
+  margin-bottom: 4px;
+}
+
+.player-choice__title {
+  margin: 0 0 4px;
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: var(--green-deep);
+}
+
+.player-choice__label {
+  margin: 0 0 4px;
+  font-size: 0.82rem;
+  color: var(--ink);
+  line-height: 1.4;
+}
+
+.player-choice__text {
+  margin: 0 0 6px;
+  font-size: 0.84rem;
+  color: var(--ink);
+  line-height: 1.6;
+}
+
+.player-choice__footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.player-choice__place,
+.player-choice__residents {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.player-choice__resident {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+@media (max-width: 600px) {
+  .m3-event__choice-buttons {
+    flex-direction: column;
+  }
+
+  .event-choice {
+    width: 100%;
+  }
+}
+
 /* ============================================================
    Broadcast Button
    ============================================================ */

@@ -110,11 +110,19 @@ The first version only generates text and a suggested music mood. It does not ge
 
 Click `📻 生成小镇广播` in the left panel. The broadcast appears in 小镇动态 with its title, script, mood, music mood, place, residents, and a music prompt suggestion.
 
+## Event Choices
+
+M3-generated town events can include two gentle player choices. The first version records the selected choice into the event feed without changing game stats. This keeps the system safe and observable while validating a core game loop: AI creates a situation, the player responds, and the town remembers the response.
+
 ## 小镇氛围与广播
 
 AI 小镇生活新增了轻量氛围层。MiniMax-M3 可以根据当前天数、阶段、居民状态、小镇资源、最近事件和日报生成一段小镇广播文案。
 
 当前版本只生成广播文字和建议音乐氛围，不生成真实音频，这样先验证广播内容是否有游戏魅力，再逐步接入 TTS 和背景音乐生成。
+
+## 事件选择
+
+M3 生成的小镇事件可以带两个温和选择。当前版本只把玩家选择写入小镇动态，不直接修改资源、心情或关系。这样可以先验证一个核心体验：AI 创造情境，玩家做出回应，小镇记住这个回应。
 
 ### API Style Configuration
 
