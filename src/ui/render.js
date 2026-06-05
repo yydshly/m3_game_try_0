@@ -125,6 +125,42 @@ function renderTownStats(state) {
   `;
 }
 
+function renderGameActions(state, safeUiState) {
+  const nextPhaseLabel = state.phaseIndex === phases.length - 1 ? "🌙 结束今天" : `⏭️ 推进到${phases[state.phaseIndex + 1].label}`;
+  const phase = getCurrentPhase(state);
+  return `
+    <div class="game-actions">
+      <p class="game-actions__title">🎮 游戏操作</p>
+      <div class="game-actions__stats">
+        <span class="game-actions__stat">
+          <span class="game-actions__stat-label">📅</span>
+          <strong>第 ${state.day} 天</strong>
+          <span class="game-actions__stat-phase">${escapeHtml(phase.label)}</span>
+        </span>
+      </div>
+      <div class="game-actions__section">
+        <p class="game-actions__section-label">⏭️ 推进</p>
+        <button class="button button--primary" type="button" data-action="advance">${escapeHtml(nextPhaseLabel)}</button>
+        <button class="button button--ghost" type="button" data-action="run-day">🌙 结束今天</button>
+      </div>
+      <div class="game-actions__section">
+        <p class="game-actions__section-label">🤖 AI 管家</p>
+        <button class="button button--ai" type="button" data-action="minimax-plan" ${safeUiState.llmStatus === "loading" ? "disabled" : ""}>
+          ${safeUiState.llmStatus === "loading" ? "🤖 管家思考中..." : "🤖 AI 管家安排"}
+        </button>
+      </div>
+      <div class="game-actions__section">
+        <p class="game-actions__section-label">⚙️ 其他</p>
+        <button class="button ${safeUiState.autoPlay ? "button--live" : "button--ghost"}" type="button" data-action="toggle-auto">
+          ${safeUiState.autoPlay ? "⏸️ 暂停" : "▶️ 自动推进"}
+        </button>
+        <button class="button button--ghost" type="button" data-action="reset-assignments">🔄 重置安排</button>
+        <button class="button button--ghost" type="button" data-action="new-town">🏠 新小镇</button>
+      </div>
+    </div>
+  `;
+}
+
 function renderGoals(state) {
   const goals = getTownGoals(state);
   const completedCount = goals.filter((goal) => goal.value >= goal.target).length;
@@ -226,18 +262,21 @@ function renderStageResident(state, resident, selectedResidentId) {
 
   return `
     <button
-      class="stage-resident stage-resident--${escapeHtml(status.id)}"
+      class="stage-resident stage-resident--${escapeHtml(status.id)}${resident.id === selectedResidentId ? " stage-resident--selected" : ""}"
       data-resident-select="${escapeHtml(resident.id)}"
       type="button"
       title="${escapeHtml(resident.name)} / ${escapeHtml(task.label)} / ${escapeHtml(status.label)}"
       style="--x:${current.x + offset.x}%; --y:${current.y + offset.y}%; --from-x:${previous.x + offset.x}%; --from-y:${previous.y + offset.y}%;"
-      aria-label="${escapeHtml(resident.name)} 在 ${escapeHtml(getLocation(resident.locationId).name)} / ${escapeHtml(task.label)} / ${escapeHtml(status.label)}"
+      aria-label="${escapeHtml(resident.name)} 在 ${escapeHtml(getLocation(resident.locationId).name)} / ${escapeHtml(task.label)}"
       aria-pressed="${resident.id === selectedResidentId ? "true" : "false"}"
     >
-      <em>${escapeHtml(task.icon)}</em>
-      <span class="resident-icon-wrap">${getResidentAvatarImg(resident, 40)}</span>
-      <i>${escapeHtml(resident.name)}</i>
-      <b>${escapeHtml(task.label)}</b>
+      <span class="char-chip">
+        <span class="char-avatar">${getResidentAvatarImg(resident, 36)}</span>
+        <span class="char-text">
+          <span class="char-name">${escapeHtml(resident.name)}</span>
+          <span class="char-task">${escapeHtml(task.label)}</span>
+        </span>
+      </span>
     </button>
   `;
 }
@@ -299,17 +338,18 @@ function renderLocationCard(state, location) {
   const residentList = residents.length
     ? residents.map((resident) => {
         const task = getTask(resident.assignmentId);
-        return `<span class="mini-avatar" title="${escapeHtml(resident.name)} - ${escapeHtml(task?.label ?? "")}">${getResidentAvatarImg(resident, 24)}</span>`;
+        return `<span class="mini-avatar" title="${escapeHtml(resident.name)} - ${escapeHtml(task?.label ?? "")}">${getResidentAvatarImg(resident, 22)}</span>`;
       }).join("")
-    : `<span class="empty-note">暂无居民</span>`;
+    : "";
 
   return `
     <article class="location location--${escapeHtml(location.tone)}">
-      <div class="location__icon" aria-hidden="true">${escapeHtml(location.icon)}</div>
+      <div class="location__icon">
+        <img src="${LOCATION_ICONS[location.id] ?? ""}" alt="${escapeHtml(location.name)}" />
+      </div>
       <div class="location__info">
         <h3>${escapeHtml(location.name)}</h3>
-        <p>${escapeHtml(location.description)}</p>
-        <div class="location__residents" aria-label="这里的居民">${residentList}</div>
+        <div class="location__residents" aria-label="这里的居民">${residentList || '<span class="empty-note">-</span>'}</div>
       </div>
     </article>
   `;
@@ -331,7 +371,9 @@ function renderSpotlight(state, uiState) {
         <span class="panel-badge">${escapeHtml(location.name)}</span>
       </div>
       <div class="spotlight__header">
-        <div class="spotlight__avatar" aria-hidden="true">${getResidentAvatarImg(selected, 72)}</div>
+        <div class="spotlight__portrait" aria-hidden="true">
+          ${getResidentAvatarImg(selected, 96)}
+        </div>
         <div class="spotlight__info">
           <h3>${escapeHtml(selected.name)}</h3>
           <p>${escapeHtml(selected.role)} · ${escapeHtml(selected.skill)}</p>
@@ -537,30 +579,18 @@ export function renderApp(root, state, handlers, uiState = {}) {
     llmStatus: uiState.llmStatus ?? "idle",
     llmMessage: uiState.llmMessage ?? "",
   };
-  const nextPhaseLabel = state.phaseIndex === phases.length - 1 ? "🌙 结束今天" : `⏭️ 推进到${phases[state.phaseIndex + 1].label}`;
 
   root.innerHTML = `
     <div class="shell">
       ${renderHeader(state)}
       ${renderTownStats(state)}
       <main class="layout">
+        ${renderGameActions(state, safeUiState)}
         <section class="map-panel">
           <div class="section-head">
             <div>
               <p class="eyebrow">🗺️ 小镇地图</p>
               <h2>五大地点</h2>
-            </div>
-            <div class="actions">
-              <button class="button button--ghost" type="button" data-action="reset-assignments">🔄 重置安排</button>
-              <button class="button button--ghost" type="button" data-action="run-day">🌙 结束今天</button>
-              <button class="button button--ai" type="button" data-action="minimax-plan" ${safeUiState.llmStatus === "loading" ? "disabled" : ""}>
-                ${safeUiState.llmStatus === "loading" ? "🤖 管家思考中..." : "🤖 AI 管家安排"}
-              </button>
-              <button class="button ${safeUiState.autoPlay ? "button--live" : "button--ghost"}" type="button" data-action="toggle-auto">
-                ${safeUiState.autoPlay ? "⏸️ 暂停" : "▶️ 自动推进"}
-              </button>
-              <button class="button button--ghost" type="button" data-action="new-town">🏠 新小镇</button>
-              <button class="button button--primary" type="button" data-action="advance">${escapeHtml(nextPhaseLabel)}</button>
             </div>
           </div>
           ${renderTownStage(state, safeUiState)}

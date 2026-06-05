@@ -23,11 +23,11 @@ renderApp(root, advancePhase(createInitialState()), noopHandlers);
 
 const result = {
   hasStage: root.innerHTML.includes("town-stage"),
-  residents: root.innerHTML.split('class="stage-resident').length - 1,
+  residents: root.innerHTML.split('class="stage-resident ').length - 1,
   places: root.innerHTML.split('class="stage-place').length - 1,
   bubble: root.innerHTML.includes("stage-bubble"),
   travelVars: root.innerHTML.includes("--from-x"),
-  actionBadges: root.innerHTML.split("<em>").length - 1,
+  actionBadges: root.innerHTML.split('class="char-chip"').length - 1,
   legend: root.innerHTML.includes("stage-legend"),
   spotlightStatus: root.innerHTML.includes("spotlight__status"),
   goals: root.innerHTML.split('<article class="goal').length - 1,
