@@ -389,30 +389,38 @@ function residentStatus(resident) {
 
 // ── Town Stage (Map) ──────────────────────────────────────────────────────────
 
-function renderPlaceLabel(placeId, isActive) {
+function renderPlaceLabel(placeId, isActive, anim) {
   const place = stagePlaces[placeId];
   if (!place) return "";
   const activeClass = isActive ? " stage-place-label--active" : "";
+  const taskClass = anim ? ` stage-place-label--task stage-place-label--effect-${escapeHtml(anim.effect)}` : "";
+  const effectAnchor = anim
+    ? `<span class="stage-effect-anchor stage-effect-anchor--${escapeHtml(anim.effect)}" aria-hidden="true"></span>`
+    : "";
+
   return `
-    <div class="stage-place-label stage-place-label--${escapeHtml(placeId)}${activeClass}"
+    <div class="stage-place-label stage-place-label--${escapeHtml(placeId)}${activeClass}${taskClass}"
          style="left:${place.x}%; top:${place.y}%;"
          aria-label="${escapeHtml(place.label)}">
       <span class="stage-place-label__icon">${place.icon}</span>
       <span class="stage-place-label__name">${escapeHtml(place.label)}</span>
+      ${effectAnchor}
     </div>
   `;
 }
 
-function renderStageCharacter(resident, position, taskLabel, status, isSelected) {
+function renderStageCharacter(resident, position, taskLabel, status, isSelected, anim) {
   const posX = position.x;
   const posY = position.y;
   const selectedClass = isSelected ? " stage-character--selected" : "";
   const statusClass = ` stage-character--${status.id}`;
+  const activeClass = anim ? ` stage-character--active stage-character--${escapeHtml(anim.action)}` : "";
   const task = taskLabel ? escapeHtml(taskLabel) : "";
+  const actionBubble = anim ? `<span class="stage-character__action-bubble">${escapeHtml(anim.bubble)}</span>` : "";
 
   return `
     <button
-      class="stage-character${selectedClass}${statusClass}"
+      class="stage-character${selectedClass}${statusClass}${activeClass}"
       style="left:${posX}%; top:${posY}%;"
       data-action="select-resident"
       data-resident-id="${escapeHtml(resident.id)}"
@@ -425,6 +433,7 @@ function renderStageCharacter(resident, position, taskLabel, status, isSelected)
       </span>
       <span class="stage-character__name">${escapeHtml(resident.name)}</span>
       ${task ? `<span class="stage-character__task">${escapeHtml(task)}</span>` : ""}
+      ${actionBubble}
     </button>
   `;
 }
@@ -432,13 +441,17 @@ function renderStageCharacter(resident, position, taskLabel, status, isSelected)
 function renderTownStage(state, uiState) {
   const latestEvent = [...state.events].reverse().find((event) => event.type !== "system");
   const phase = getCurrentPhase(state);
+  const activeAnimations = uiState.activeTaskAnimations ?? [];
 
   // Determine which place has residents (for active labels)
   const activePlaceIds = new Set(state.residents.map((r) => r.locationId));
 
   // Build place labels
   const placeLabelsHtml = Object.keys(stagePlaces)
-    .map((placeId) => renderPlaceLabel(placeId, activePlaceIds.has(placeId)))
+    .map((placeId) => {
+      const placeAnim = activeAnimations.find((a) => a.placeId === placeId);
+      return renderPlaceLabel(placeId, activePlaceIds.has(placeId), placeAnim);
+    })
     .join("");
 
   // Build stage characters — group residents by location for offsetting
@@ -451,18 +464,20 @@ function renderTownStage(state, uiState) {
   }
 
   const charactersHtml = state.residents
-    .map((resident, globalIndex) => {
+    .map((resident) => {
       const locals = residentsByLocation[resident.locationId] ?? [];
       const localIndex = locals.indexOf(resident);
       const pos = getResidentStagePosition(resident, localIndex);
       const task = getTask(resident.assignmentId);
       const status = residentStatus(resident);
+      const anim = activeAnimations.find((a) => a.residentId === resident.id);
       return renderStageCharacter(
         resident,
         pos,
         task?.label ?? "",
         status,
         resident.id === uiState.selectedResidentId,
+        anim,
       );
     })
     .join("");
@@ -1031,6 +1046,7 @@ export function renderApp(root, state, handlers, uiState = {}) {
     broadcastStatus: uiState.broadcastStatus ?? "idle",
     broadcastMessage: uiState.broadcastMessage ?? "",
     latestBroadcast: uiState.latestBroadcast ?? null,
+    activeTaskAnimations: uiState.activeTaskAnimations ?? [],
   };
 
   root.innerHTML = `

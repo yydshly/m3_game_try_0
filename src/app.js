@@ -23,8 +23,49 @@ let uiState = {
   broadcastStatus: "idle",
   broadcastMessage: "",
   latestBroadcast: null,
+  activeTaskAnimations: [],
 };
 let autoPlayTimer = null;
+let animationTimer = null;
+
+// ── Task Animation Layer ────────────────────────────────────────────────────────────
+
+const TASK_STAGE_EFFECTS = {
+  plant:   { action: "work", effect: "bloom", bubble: "花园变得更有精神了。" },
+  cook:    { action: "work", effect: "steam",  bubble: "餐厅飘出了热气。" },
+  repair:  { action: "work", effect: "spark",  bubble: "工坊传来轻轻的敲打声。" },
+  chat:    { action: "chat", effect: "chat",   bubble: "广场上的聊天声多了起来。" },
+  forage:  { action: "work", effect: "leaf",   bubble: "森林里传来树叶沙沙声。" },
+  rest:    { action: "rest", effect: "rest",   bubble: "有人在安静地休息。" },
+};
+
+function buildTaskAnimations(nextState) {
+  return nextState.residents.map((resident) => {
+    const taskId = resident.assignmentId;
+    const effect = TASK_STAGE_EFFECTS[taskId] ?? TASK_STAGE_EFFECTS.rest;
+    return {
+      id: `anim-${Date.now()}-${resident.id}`,
+      residentId: resident.id,
+      taskId,
+      placeId: resident.locationId,
+      action: effect.action,
+      effect: effect.effect,
+      bubble: effect.bubble,
+      startedAt: Date.now(),
+    };
+  });
+}
+
+function showTaskAnimations(nextState) {
+  if (animationTimer) clearTimeout(animationTimer);
+  uiState = { ...uiState, activeTaskAnimations: buildTaskAnimations(nextState) };
+  render();
+  animationTimer = setTimeout(() => {
+    uiState = { ...uiState, activeTaskAnimations: [] };
+    animationTimer = null;
+    render();
+  }, 3200);
+}
 
 function stopAutoPlay() {
   if (autoPlayTimer) {
@@ -55,7 +96,11 @@ function commit(nextState) {
 function render() {
   try {
     renderApp(root, state, {
-      onAdvance: () => commit(advancePhase(state)),
+      onAdvance: () => {
+        const next = advancePhase(state);
+        commit(next);
+        showTaskAnimations(next);
+      },
       onRunDay: () => {
         let next = state;
         const steps = 3 - state.phaseIndex;
@@ -63,6 +108,7 @@ function render() {
           next = advancePhase(next);
         }
         commit(next);
+        showTaskAnimations(next);
       },
       onToggleAutoPlay: () => {
         if (autoPlayTimer) {
@@ -182,8 +228,9 @@ function render() {
       onResetAssignments: () => commit(resetAssignments(state)),
       onNewTown: () => {
         stopAutoPlay();
+        if (animationTimer) { clearTimeout(animationTimer); animationTimer = null; }
         clearState();
-        uiState = { selectedResidentId: null, autoPlay: false, llmStatus: "idle", llmMessage: "", eventDirectorStatus: "idle", eventDirectorMessage: "", broadcastStatus: "idle", broadcastMessage: "", latestBroadcast: null };
+        uiState = { selectedResidentId: null, autoPlay: false, llmStatus: "idle", llmMessage: "", eventDirectorStatus: "idle", eventDirectorMessage: "", broadcastStatus: "idle", broadcastMessage: "", latestBroadcast: null, activeTaskAnimations: [] };
         commit(createInitialState());
       },
     }, uiState);

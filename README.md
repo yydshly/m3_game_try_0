@@ -124,7 +124,11 @@ The first version does not change resources, mood, energy, or relationships. It 
 
 The central map has been upgraded into an illustrated town stage. The stage uses a layered SVG background with a painted grass field, winding paths, buildings, a fountain, trees, and decorative elements. Place labels float on the scene as game-style wooden plaques, and residents appear as illustrated character tokens with task bubbles overhead.
 
-This stage does not implement full walking animation yet. It prepares the project for the next step: task animation, where residents can move between places, play task effects, and show action bubbles.
+## Task Animation Layer
+
+The illustrated town stage now supports a lightweight task animation layer. When the player advances the phase, residents show temporary action states (`work`, `chat`, `rest`), task feedback bubbles above their heads, and the active place plays a gentle effect (bloom, steam, spark, chat, leaf, or rest). Animations last ~3 seconds and are driven purely by DOM/CSS — no canvas or game engine required.
+
+This prepares the project for future walking animation, sprite sheets, and richer scene choreography.
 
 ## 小镇氛围与广播
 
@@ -146,7 +150,11 @@ M3 生成的小镇事件可以带两个温和选择。当前版本只把玩家�
 
 中央地图已经从卡片式地图升级为插画式小镇舞台。舞台使用分层 SVG 背景，包含草地、弯曲道路、建筑、喷泉、树木和装饰元素。地点以游戏风格木牌悬浮在场景中，居民以角色令牌形式出现，头顶显示任务气泡。
 
-当前版本还不实现完整行走动画，而是为下一步任务动画层做准备：居民可以在地点之间移动、播放任务特效，并显示行动气泡。
+## 任务动画层
+
+插画式小镇舞台新增了轻量任务动画层。玩家推进阶段时，居民会显示临时行动状态（work / chat / rest）、头顶任务反馈气泡，所在地点播放轻量特效（bloom / steam / spark / chat / leaf / rest）。动画持续约 3 秒，纯 DOM/CSS 实现，无需游戏引擎。
+
+当前版本为后续行走动画、角色帧动画和更复杂的场景调度做准备。
 
 ### API Style Configuration
 
