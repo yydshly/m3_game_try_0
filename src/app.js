@@ -2,6 +2,7 @@ import { createInitialState, upgradeState } from "./domain/state.js";
 import { advancePhase, applyAgentPlan, assignTask, resetAssignments } from "./domain/simulation.js";
 import { applyChoiceMemory } from "./domain/memory.js";
 import { requestMiniMaxPlan, requestMiniMaxEvent, requestMiniMaxBroadcast } from "./services/minimaxClient.js";
+import { generateBroadcastSpeech } from "./services/minimaxTts.js";
 import { loadState, saveState, clearState } from "./services/persistence.js";
 import { renderApp } from "./ui/render.js";
 import { phases } from "./data/seed.js";
@@ -33,6 +34,14 @@ let uiState = {
   broadcastStatus: "idle",
   broadcastMessage: "",
   latestBroadcast: null,
+  broadcastAudio: {
+    status: "idle",
+    text: "",
+    audioUrl: null,
+    error: null,
+    traceId: null,
+    generatedAt: null,
+  },
   activeTaskAnimations: [],
   isAnimating: false,
   animationMessage: "",
@@ -320,12 +329,63 @@ function render() {
             broadcastStatus: "ready",
             broadcastMessage: "小镇广播已加入动态。",
             latestBroadcast: bc,
+            // Reset TTS state when new broadcast is generated
+            broadcastAudio: { status: "idle", text: bc.script ?? "", audioUrl: null, error: null, traceId: null, generatedAt: null },
           };
           commit(nextState);
         } catch (error) {
           uiState = { ...uiState, broadcastStatus: "error", broadcastMessage: error.message };
           render();
         }
+      },
+      onGenerateTts: async () => {
+        const latestBc = uiState.latestBroadcast;
+        if (!latestBc) return;
+        const scriptText = latestBc.script ?? latestBc.text ?? "";
+        if (!scriptText.trim()) return;
+
+        uiState = {
+          ...uiState,
+          broadcastAudio: { status: "generating", text: scriptText, audioUrl: null, error: null, traceId: null, generatedAt: null },
+        };
+        render();
+
+        try {
+          const result = await generateBroadcastSpeech(scriptText);
+          uiState = {
+            ...uiState,
+            broadcastAudio: {
+              status: "ready",
+              text: scriptText,
+              audioUrl: result.audioUrl,
+              error: null,
+              traceId: result.traceId,
+              generatedAt: Date.now(),
+            },
+          };
+          render();
+        } catch (error) {
+          uiState = {
+            ...uiState,
+            broadcastAudio: {
+              status: "error",
+              text: scriptText,
+              audioUrl: null,
+              error: error.message,
+              traceId: null,
+              generatedAt: null,
+            },
+          };
+          render();
+        }
+      },
+      onPlayTts: () => {
+        const ba = uiState.broadcastAudio;
+        if (!ba.audioUrl) return;
+        const audio = new Audio(ba.audioUrl);
+        audio.play().catch(() => {
+          // Silently fail — audio play may be blocked by browser autoplay policy
+        });
       },
       onAssignTask: (residentId, taskId) => commit(assignTask(state, residentId, taskId)),
       onSelectResident: (residentId) => {
@@ -348,6 +408,7 @@ function render() {
           broadcastStatus: "idle",
           broadcastMessage: "",
           latestBroadcast: null,
+          broadcastAudio: { status: "idle", text: "", audioUrl: null, error: null, traceId: null, generatedAt: null },
           activeTaskAnimations: [],
           isAnimating: false,
           animationMessage: "",

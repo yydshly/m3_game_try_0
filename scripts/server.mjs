@@ -38,6 +38,19 @@ const minimaxModel =
 
 const minimaxTimeoutMs = Number(envValue("MINIMAX_TIMEOUT_MS") ?? config.minimax?.timeoutMs ?? 30_000);
 
+const ttsEnabled = config.tts?.enabled ?? true;
+const ttsModel = config.tts?.model ?? "speech-2.8-hd";
+const ttsVoiceId = config.tts?.voiceId ?? "female-tianmei";
+const ttsSpeed = Number(config.tts?.speed ?? 1);
+const ttsVol = Number(config.tts?.vol ?? 1);
+const ttsPitch = Number(config.tts?.pitch ?? 0);
+const ttsSampleRate = Number(config.tts?.sampleRate ?? 32000);
+const ttsBitrate = String(config.tts?.bitrate ?? "128000");
+const ttsFormat = config.tts?.format ?? "mp3";
+const ttsChannel = Number(config.tts?.channel ?? 1);
+const ttsTimeoutMs = Number(config.tts?.timeoutMs ?? 30_000);
+const ttsApiKey = minimaxApiKey; // shares the same key as other MiniMax services
+
 const mimeTypes = {
   ".css": "text/css; charset=utf-8",
   ".html": "text/html; charset=utf-8",
@@ -805,6 +818,125 @@ async function handleMiniMaxPlan(request, response) {
   }
 }
 
+// ── TTS (Text-to-Speech) ─────────────────────────────────────────────────────────
+
+async function handleMiniMaxTts(request, response) {
+  if (!ttsEnabled) {
+    sendJson(response, 501, {
+      error: "TTS 功能已禁用。",
+      technicalError: "TTS is not enabled in config.",
+    });
+    return;
+  }
+
+  if (!ttsApiKey || ttsApiKey === "your_minimax_api_key_here") {
+    sendJson(response, 501, {
+      error: "语音合成暂时不可用，请在配置中启用 MiniMax API Key。",
+      technicalError: "MiniMax API key is not configured for TTS.",
+    });
+    return;
+  }
+
+  let body;
+  try {
+    const raw = await readJson(request);
+    body = raw;
+  } catch {
+    sendJson(response, 400, { error: "Invalid request body.", technicalError: "JSON parse error." });
+    return;
+  }
+
+  const text = String(body?.text ?? "").trim();
+  if (!text) {
+    sendJson(response, 400, { error: "广播文本为空。", technicalError: "text is empty." });
+    return;
+  }
+  if (text.length > 3000) {
+    sendJson(response, 400, {
+      error: `广播文本超过 3000 字符限制（当前 ${text.length} 字符）。`,
+      technicalError: `text length ${text.length} exceeds 3000.`,
+    });
+    return;
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), ttsTimeoutMs);
+
+    const ttsResponse = await fetch("https://api.minimaxi.com/v1/t2a_v2", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${ttsApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: ttsModel,
+        text,
+        stream: false,
+        voice_setting: {
+          voice_id: ttsVoiceId,
+          speed: ttsSpeed,
+          vol: ttsVol,
+          pitch: ttsPitch,
+          emotion: "happy",
+        },
+        audio_setting: {
+          sample_rate: ttsSampleRate,
+          bitrate: ttsBitrate,
+          format: ttsFormat,
+          channel: ttsChannel,
+        },
+        subtitle_enable: false,
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeout);
+
+    const payload = await ttsResponse.json().catch(() => ({}));
+
+    if (!ttsResponse.ok) {
+      const statusCode = payload?.base_resp?.status_code ?? ttsResponse.status;
+      const statusMsg = payload?.base_resp?.status_msg ?? "";
+      sendJson(response, ttsResponse.status, {
+        error: "语音合成请求失败，请稍后重试。",
+        technicalError: `MiniMax TTS returned ${statusCode}: ${statusMsg}`,
+      });
+      return;
+    }
+
+    const audioHex = payload?.data?.audio;
+    if (!audioHex || typeof audioHex !== "string" || audioHex.length === 0) {
+      sendJson(response, 502, {
+        error: "语音合成未返回音频数据。",
+        technicalError: "Response data.audio is empty.",
+      });
+      return;
+    }
+
+    // Convert hex audio to a Blob URL served by this proxy
+    const audioBuffer = Buffer.from(audioHex, "hex");
+    const audioBase64 = audioBuffer.toString("base64");
+    const dataUrl = `data:audio/${ttsFormat};base64,${audioBase64}`;
+
+    sendJson(response, 200, {
+      audioUrl: dataUrl,
+      traceId: payload?.extra_info?.trace_id ?? null,
+      extraInfo: payload?.extra_info ?? null,
+    });
+  } catch (error) {
+    const isTimeout = error.name === "AbortError";
+    sendJson(response, isTimeout ? 504 : 500, {
+      error: isTimeout
+        ? `语音合成超时了（${ttsTimeoutMs / 1000}s），请稍后重试。`
+        : "语音合成遇到未知错误，请稍后重试。",
+      technicalError: isTimeout
+        ? `TTS request timed out after ${ttsTimeoutMs}ms.`
+        : error.message,
+    });
+  }
+}
+
 function resolvePath(url) {
   const pathname = decodeURIComponent(new URL(url, `http://localhost:${port}`).pathname);
   const requested = pathname === "/" ? "/index.html" : pathname;
@@ -828,6 +960,11 @@ const server = createServer((request, response) => {
 
   if (request.method === "POST" && request.url === "/api/minimax/broadcast") {
     handleMiniMaxBroadcast(request, response);
+    return;
+  }
+
+  if (request.method === "POST" && request.url === "/api/minimax/tts") {
+    handleMiniMaxTts(request, response);
     return;
   }
 

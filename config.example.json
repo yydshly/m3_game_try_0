@@ -10,5 +10,18 @@
     "anthropicBaseUrl": "https://api.minimaxi.com/anthropic",
     "baseUrl": "https://api.minimax.io/v1",
     "timeoutMs": 30000
+  },
+  "tts": {
+    "enabled": true,
+    "model": "speech-2.8-hd",
+    "voiceId": "female-tianmei",
+    "speed": 1,
+    "vol": 1,
+    "pitch": 0,
+    "sampleRate": 32000,
+    "bitrate": "128000",
+    "format": "mp3",
+    "channel": 1,
+    "timeoutMs": 30000
   }
 }

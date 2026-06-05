@@ -380,6 +380,34 @@ function renderAtmospherePanel(state, uiState) {
   const moodMap = { warm: "温暖", calm: "平静", lively: "活泼", tired: "疲惫", hopeful: "充满希望", tense: "紧张" };
   const placeMap = { garden: "花园", cafe: "咖啡馆", workshop: "工坊", plaza: "广场", forest: "森林" };
 
+  const ba = uiState.broadcastAudio ?? { status: "idle", text: "", audioUrl: null, error: null };
+  const ttsStatusLabels = {
+    idle: "🔊",
+    generating: "🔊",
+    ready: "🔊",
+    playing: "🔊",
+    error: "⚠️",
+  };
+  const ttsStatusText = {
+    idle: "生成语音",
+    generating: "生成中…",
+    ready: "播放语音",
+    playing: "播放中…",
+    error: "重试",
+  }[ba.status] ?? "生成语音";
+
+  const ttsButtonClass = {
+    idle: "button--broadcast",
+    generating: "button--ghost",
+    ready: "button--broadcast",
+    playing: "button--ghost",
+    error: "button--broadcast",
+  }[ba.status] ?? "button--broadcast";
+
+  const ttsDisabled = ba.status === "generating" || ba.status === "playing" ? "disabled" : "";
+  const hasAudio = ba.status === "ready" && ba.audioUrl;
+  const hasError = ba.status === "error" && ba.error;
+
   return `
     <section class="panel atmosphere-panel">
       <div class="panel__head">
@@ -396,6 +424,23 @@ function renderAtmospherePanel(state, uiState) {
             <span class="atmosphere-tag">📍 ${escapeHtml(placeMap[latestBc.placeId] ?? "广场")}</span>
           </div>
           ${latestBc.musicPrompt ? `<p class="atmosphere-broadcast-preview__music">🎵 ${escapeHtml(latestBc.musicPrompt.slice(0, 80))}</p>` : ""}
+        </div>
+        <div class="atmosphere-tts-row">
+          <button
+            class="button ${ttsButtonClass}"
+            type="button"
+            data-action="generate-tts"
+            ${ttsDisabled}
+            title="${hasError ? escapeHtml(ba.error) : ""}"
+          >
+            ${ttsStatusLabels[ba.status] ?? "🔊"} ${escapeHtml(ttsStatusText)}
+          </button>
+          ${hasAudio ? `
+            <button class="button button--ghost" type="button" data-action="play-tts">
+              ▶️ 播放
+            </button>
+          ` : ""}
+          ${hasError ? `<span class="tts-error-hint">⚠️ ${escapeHtml(ba.error)}</span>` : ""}
         </div>
       ` : `
         <p class="atmosphere-empty">让 M3 根据今天的小镇状态，写一段早安或晚间广播。</p>
@@ -1074,6 +1119,8 @@ function bindEvents(root, handlers) {
   root.querySelector("[data-action='minimax-plan']").addEventListener("click", handlers.onMiniMaxPlan);
   root.querySelector("[data-action='minimax-event']").addEventListener("click", handlers.onMiniMaxEvent);
   root.querySelector("[data-action='minimax-broadcast']").addEventListener("click", handlers.onMiniMaxBroadcast);
+  root.querySelector("[data-action='generate-tts']")?.addEventListener("click", handlers.onGenerateTts);
+  root.querySelector("[data-action='play-tts']")?.addEventListener("click", handlers.onPlayTts);
   root.querySelector("[data-action='reset-assignments']").addEventListener("click", handlers.onResetAssignments);
   root.querySelector("[data-action='new-town']").addEventListener("click", handlers.onNewTown);
   root.querySelectorAll("[data-action='select-resident']").forEach((button) => {
@@ -1120,6 +1167,7 @@ export function renderApp(root, state, handlers, uiState = {}) {
     broadcastStatus: uiState.broadcastStatus ?? "idle",
     broadcastMessage: uiState.broadcastMessage ?? "",
     latestBroadcast: uiState.latestBroadcast ?? null,
+    broadcastAudio: uiState.broadcastAudio ?? { status: "idle", text: "", audioUrl: null, error: null, traceId: null, generatedAt: null },
     activeTaskAnimations: uiState.activeTaskAnimations ?? [],
     isAnimating: Boolean(uiState.isAnimating),
     animationMessage: uiState.animationMessage ?? "",
