@@ -27,6 +27,17 @@ function meter(label, value, tone = "green") {
   `;
 }
 
+function renderAgentSummary(agent) {
+  if (!agent) return "";
+  const needs = agent.needs ?? { rest: 0, social: 0, achievement: 0 };
+  return `
+    <div class="agent-summary">
+      <p><strong>Reason:</strong> ${escapeHtml(agent.decisionReason)}</p>
+      <p><strong>Needs:</strong> Rest ${Math.round(needs.rest)} / Social ${Math.round(needs.social)} / Achievement ${Math.round(needs.achievement)}</p>
+    </div>
+  `;
+}
+
 function taskOptions(selectedId) {
   return tasks
     .map((task) => `<option value="${escapeHtml(task.id)}" ${task.id === selectedId ? "selected" : ""}>${escapeHtml(task.label)}</option>`)
@@ -278,6 +289,7 @@ function renderSpotlight(state, uiState) {
         <span>${escapeHtml(residentStatus(selected).label)}</span>
         <span>${escapeHtml(selected.personality)}</span>
       </div>
+      ${renderAgentSummary(selected.agent)}
       ${meter("Mood", selected.mood, "rose")}
       ${meter("Energy", selected.energy, "blue")}
       <p class="spotlight__memory">${escapeHtml(selected.memory[0] ?? "No memory yet.")}</p>
@@ -302,6 +314,7 @@ function renderResidentCard(resident, selectedResidentId) {
         <span>Location: ${escapeHtml(location.name)}</span>
         <span>Plan: ${escapeHtml(task.label)}</span>
       </div>
+      ${renderAgentSummary(resident.agent)}
       ${meter("Mood", resident.mood, "rose")}
       ${meter("Energy", resident.energy, "blue")}
       <label class="select-label">

@@ -1,4 +1,5 @@
 import { locations, phases, residents } from "../data/seed.js";
+import { createResidentAgent, ensureResidentAgent } from "./agent.js";
 
 function createRelationshipMap() {
   const map = {};
@@ -28,6 +29,7 @@ export function createInitialState() {
       previousLocationId: resident.favoriteLocation,
       assignmentId: resident.preferredTask,
       memory: [`第 1 天搬进小镇，最想先熟悉${locations.find((l) => l.id === resident.favoriteLocation).name}。`],
+      agent: createResidentAgent(resident),
     })),
     relationships: createRelationshipMap(),
     events: [
@@ -40,5 +42,12 @@ export function createInitialState() {
       },
     ],
     reports: [],
+  };
+}
+
+export function upgradeState(state) {
+  return {
+    ...state,
+    residents: Array.isArray(state.residents) ? state.residents.map(ensureResidentAgent) : [],
   };
 }

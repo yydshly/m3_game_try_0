@@ -15,6 +15,7 @@
     "minimax-adapter-check": "node scripts/minimax-adapter-check.mjs",
     "validate": "node scripts/validate.mjs",
     "smoke": "node scripts/smoke.mjs",
-    "render-check": "node scripts/render-check.mjs"
+    "render-check": "node scripts/render-check.mjs",
+    "agent-check": "node scripts/agent-check.mjs"
   }
 }

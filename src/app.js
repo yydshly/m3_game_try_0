@@ -1,11 +1,16 @@
-import { createInitialState } from "./domain/state.js";
+import { createInitialState, upgradeState } from "./domain/state.js";
 import { advancePhase, applyAgentPlan, assignTask, resetAssignments } from "./domain/simulation.js";
 import { requestMiniMaxPlan } from "./services/minimaxClient.js";
 import { loadState, saveState, clearState } from "./services/persistence.js";
 import { renderApp } from "./ui/render.js";
 
 const root = document.querySelector("#app");
-let state = loadState() ?? createInitialState();
+let state = loadState();
+if (state) {
+  state = upgradeState(state);
+} else {
+  state = createInitialState();
+}
 let uiState = {
   selectedResidentId: state.residents[0]?.id ?? null,
   autoPlay: false,

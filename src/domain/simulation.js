@@ -1,6 +1,7 @@
 import { phases, tasks } from "../data/seed.js";
 import { createDailyReport, describeMemory, narrateAction, narratePair } from "../services/narrator.js";
 import { getCurrentPhase, getLocation, getTask } from "./selectors.js";
+import { ensureResidentAgent, updateAgentNeeds, applySocialInteraction, getDefaultTaskReason } from "./agent.js";
 
 function clamp(value, min = 0, max = 100) {
   return Math.max(min, Math.min(max, value));
@@ -10,12 +11,20 @@ function clone(state) {
   return structuredClone(state);
 }
 
-function chooseTask(resident, state) {
+function chooseAgentTask(resident, state) {
   const assigned = getTask(resident.assignmentId);
-  if (resident.energy < 26) return getTask("rest");
-  if (assigned) return assigned;
-  if (state.town.supplies <= 3) return getTask("forage");
-  return getTask(resident.preferredTask) ?? tasks[0];
+  if (resident.energy < 26) {
+    return { task: getTask("rest"), reason: "energy low, needs rest" };
+  }
+  if (state.town.supplies <= 3) {
+    return { task: getTask("forage"), reason: "supplies low, help town forage" };
+  }
+  if (assigned) {
+    const reason = getDefaultTaskReason(resident, assigned, state);
+    return { task: assigned, reason };
+  }
+  const preferred = getTask(resident.preferredTask) ?? tasks[0];
+  return { task: preferred, reason: "follows preferred task" };
 }
 
 function applyTownDelta(town, task) {
@@ -49,6 +58,8 @@ function processSocialEvents(next, phaseLabel) {
       const b = group[index + 1];
       const delta = a.mood > 35 && b.mood > 35 ? 3 : -2;
       applyRelationship(next, a.id, b.id, delta);
+      applySocialInteraction(a, 6);
+      applySocialInteraction(b, 6);
       events.push({
         id: crypto.randomUUID(),
         day: next.day,
@@ -86,13 +97,18 @@ export function applyAgentPlan(state, plan) {
   const reasons = new Map();
 
   next.residents = next.residents.map((resident) => {
+    const safeResident = ensureResidentAgent(resident);
     const assignment = assignments.find((item) => item.residentId === resident.id);
-    if (!assignment || !allowedTaskIds.has(assignment.taskId)) return resident;
+    if (!assignment || !allowedTaskIds.has(assignment.taskId)) return safeResident;
     reasons.set(resident.id, assignment.reason);
     return {
-      ...resident,
+      ...safeResident,
       assignmentId: assignment.taskId,
-      memory: assignment.reason ? [`MiniMax plan: ${assignment.reason}`, ...resident.memory].slice(0, 5) : resident.memory,
+      agent: {
+        ...safeResident.agent,
+        decisionReason: assignment.reason ? String(assignment.reason) : safeResident.agent.decisionReason,
+      },
+      memory: assignment.reason ? [`MiniMax plan: ${assignment.reason}`, ...safeResident.memory].slice(0, 5) : safeResident.memory,
     };
   });
 
@@ -119,18 +135,20 @@ export function advancePhase(state) {
   const events = [];
 
   next.residents = next.residents.map((resident) => {
-    const task = chooseTask(resident, next);
+    const safeResident = ensureResidentAgent(resident);
+    const { task, reason } = chooseAgentTask(safeResident, next);
     const location = getLocation(task.locationId);
     next.town = applyTownDelta(next.town, task);
 
-    const preferredBonus = resident.preferredTask === task.id ? 3 : 0;
-    const favoriteBonus = resident.favoriteLocation === location.id ? 2 : 0;
-    const energyAfter = clamp(resident.energy - task.energyCost, 0, 100);
-    const moodAfter = clamp(resident.mood + task.moodDelta + preferredBonus + favoriteBonus - (energyAfter < 20 ? 6 : 0));
+    const preferredBonus = safeResident.preferredTask === task.id ? 3 : 0;
+    const favoriteBonus = safeResident.favoriteLocation === location.id ? 2 : 0;
+    const energyAfter = clamp(safeResident.energy - task.energyCost, 0, 100);
+    const moodAfter = clamp(safeResident.mood + task.moodDelta + preferredBonus + favoriteBonus - (energyAfter < 20 ? 6 : 0));
+    const agentNeeds = updateAgentNeeds(safeResident, task);
 
     const memory = [
       describeMemory(task.id, location.id, phaseLabel),
-      ...resident.memory,
+      ...safeResident.memory,
     ].slice(0, 5);
 
     events.push({
@@ -138,15 +156,20 @@ export function advancePhase(state) {
       day: next.day,
       phase: phaseLabel,
       type: "action",
-      text: narrateAction(resident, task, location, phaseLabel),
+      text: narrateAction(safeResident, task, location, phaseLabel),
     });
 
     return {
-      ...resident,
-      previousLocationId: resident.locationId,
+      ...safeResident,
+      previousLocationId: safeResident.locationId,
       mood: moodAfter,
       energy: energyAfter,
       locationId: location.id,
+      agent: {
+        ...safeResident.agent,
+        needs: agentNeeds,
+        decisionReason: reason,
+      },
       memory,
     };
   });

@@ -32,6 +32,18 @@ function compactState(state) {
       assignmentId: resident.assignmentId,
       preferredTask: resident.preferredTask,
       memory: resident.memory.slice(0, 3),
+      agent: {
+        needs: resident.agent?.needs ?? {
+          rest: 0,
+          social: 0,
+          achievement: 0,
+        },
+        goals: resident.agent?.goals ?? {
+          shortTerm: "",
+          longTerm: "",
+        },
+        decisionReason: resident.agent?.decisionReason ?? "",
+      },
     })),
     recentEvents: state.events.slice(-8).map((event) => ({
       day: event.day,
