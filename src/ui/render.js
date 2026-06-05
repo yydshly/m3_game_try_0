@@ -146,6 +146,12 @@ function renderGameActions(state, safeUiState) {
         </button>
       </div>
       <div class="game-actions__section">
+        <p class="game-actions__section-label">🎭 事件导演</p>
+        <button class="button button--event" type="button" data-action="minimax-event" ${safeUiState.eventDirectorStatus === "loading" ? "disabled" : ""}>
+          ${safeUiState.eventDirectorStatus === "loading" ? "🎭 观察中..." : "🎭 生成小镇事件"}
+        </button>
+      </div>
+      <div class="game-actions__section">
         <p class="game-actions__section-label">⚙️ 其他</p>
         <button class="button ${safeUiState.autoPlay ? "button--live" : "button--ghost"}" type="button" data-action="toggle-auto">
           ${safeUiState.autoPlay ? "⏸️ 暂停" : "▶️ 自动推进"}
@@ -251,6 +257,30 @@ function renderLlmStatus(uiState) {
       </div>
       <p>${escapeHtml(message)}</p>
       ${hint ? `<p class="llm-status__hint">💡 ${escapeHtml(hint)}</p>` : ""}
+    </section>
+  `;
+}
+
+// ── Event Director Status ─────────────────────────────────────────────────────
+
+function renderEventDirectorStatus(uiState) {
+  const statusLabels = {
+    idle: { icon: "🎭", label: "idle", text: "让 M3 观察小镇，生成一个今天的小事件。" },
+    loading: { icon: "🎭", label: "思考中", text: "M3 正在观察居民和小镇动态……" },
+    ready: { icon: "✨", label: "已就绪", text: uiState.eventDirectorMessage || "小镇事件已加入动态。" },
+    error: { icon: "⚠️", label: "异常", text: uiState.eventDirectorMessage || "事件导演暂时没有灵感，请稍后再试。" },
+  };
+  const info = statusLabels[uiState.eventDirectorStatus] ?? statusLabels.idle;
+  const isError = uiState.eventDirectorStatus === "error";
+
+  return `
+    <section class="panel event-director event-director--${escapeHtml(uiState.eventDirectorStatus ?? "idle")}">
+      <div class="panel__head">
+        <h2>${info.icon} 小镇事件导演</h2>
+        <span class="llm-status-badge llm-status-badge--${escapeHtml(uiState.eventDirectorStatus ?? "idle")}">${escapeHtml(info.label)}</span>
+      </div>
+      <p>${escapeHtml(info.text)}</p>
+      ${isError && uiState.eventDirectorMessage ? `<p class="llm-status__hint">💡 检查 MiniMax 配置或稍后重试。</p>` : ""}
     </section>
   `;
 }
@@ -467,9 +497,52 @@ function renderResidentCard(resident, selectedResidentId) {
 
 // ── Event Feed ────────────────────────────────────────────────────────────────
 
+const TONE_LABELS = {
+  cozy: "温暖",
+  surprise: "惊喜",
+  social: "社交",
+  resource: "物资",
+  memory: "回忆",
+};
+
+function renderM3EventItem(event, residents) {
+  const toneLabel = TONE_LABELS[event.tone] ?? event.tone ?? "温暖";
+  const placeName = {
+    garden: "花园", cafe: "咖啡馆", workshop: "工坊", plaza: "广场", forest: "森林",
+  }[event.placeId] ?? "广场";
+
+  const participantHtml = event.residentIds && event.residentIds.length > 0
+    ? event.residentIds
+        .map((id) => {
+          const resident = residents.find((r) => r.id === id);
+          if (!resident) return "";
+          return `<span class="m3-event__resident" title="${escapeHtml(resident.name)}">${escapeHtml(resident.name)}</span>`;
+        })
+        .join("")
+    : "";
+
+  return `
+    <article class="feed-item feed-item--m3-event">
+      <div class="m3-event__header">
+        <span class="feed-item__meta">
+          🎭 第 ${event.day} 天 · ${escapeHtml(event.phase)}
+        </span>
+        <span class="m3-event__tone">${escapeHtml(toneLabel)}</span>
+      </div>
+      ${event.title ? `<p class="m3-event__title">${escapeHtml(event.title)}</p>` : ""}
+      <p class="m3-event__text">${escapeHtml(event.text)}</p>
+      <div class="m3-event__footer">
+        <span class="m3-event__place">📍 ${escapeHtml(placeName)}</span>
+        ${participantHtml ? `<span class="m3-event__residents">👥 ${participantHtml}</span>` : ""}
+      </div>
+      ${event.suggestedFollowUp ? `<p class="m3-event__followup">💡 ${escapeHtml(event.suggestedFollowUp)}</p>` : ""}
+    </article>
+  `;
+}
+
 function renderEventFeed(state) {
   const events = [...state.events].reverse().slice(0, 12);
-  const typeIcon = { action: "🏃", social: "💬", system: "🔔", report: "📰" };
+  const typeIcon = { action: "🏃", social: "💬", system: "🔔", report: "📰", "m3-event": "🎭" };
 
   return `
     <section class="panel">
@@ -479,16 +552,19 @@ function renderEventFeed(state) {
       </div>
       <div class="feed" aria-live="polite">
         ${events
-          .map(
-            (event) => `
+          .map((event) => {
+            if (event.type === "m3-event") {
+              return renderM3EventItem(event, state.residents);
+            }
+            return `
               <article class="feed-item feed-item--${escapeHtml(event.type)}">
                 <span class="feed-item__meta">
                   ${typeIcon[event.type] ?? "📌"} 第 ${event.day} 天 · ${escapeHtml(event.phase)}
                 </span>
                 <p>${escapeHtml(event.text)}</p>
               </article>
-            `,
-          )
+            `;
+          })
           .join("")}
       </div>
     </section>
@@ -621,6 +697,7 @@ function bindEvents(root, handlers) {
   root.querySelector("[data-action='run-day']").addEventListener("click", handlers.onRunDay);
   root.querySelector("[data-action='toggle-auto']").addEventListener("click", handlers.onToggleAutoPlay);
   root.querySelector("[data-action='minimax-plan']").addEventListener("click", handlers.onMiniMaxPlan);
+  root.querySelector("[data-action='minimax-event']").addEventListener("click", handlers.onMiniMaxEvent);
   root.querySelector("[data-action='reset-assignments']").addEventListener("click", handlers.onResetAssignments);
   root.querySelector("[data-action='new-town']").addEventListener("click", handlers.onNewTown);
   root.querySelectorAll("[data-resident-select]").forEach((button) => {
@@ -649,6 +726,8 @@ export function renderApp(root, state, handlers, uiState = {}) {
     autoPlay: Boolean(uiState.autoPlay),
     llmStatus: uiState.llmStatus ?? "idle",
     llmMessage: uiState.llmMessage ?? "",
+    eventDirectorStatus: uiState.eventDirectorStatus ?? "idle",
+    eventDirectorMessage: uiState.eventDirectorMessage ?? "",
   };
 
   root.innerHTML = `
@@ -674,6 +753,7 @@ export function renderApp(root, state, handlers, uiState = {}) {
         </section>
         <aside class="side-panel">
           ${renderLlmStatus(safeUiState)}
+          ${renderEventDirectorStatus(safeUiState)}
           ${renderSpotlight(state, safeUiState)}
         </aside>
       </main>

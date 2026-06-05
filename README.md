@@ -92,6 +92,16 @@ http://127.0.0.1:4173
 
 Click `🤖 AI 管家安排`. The server sends the current town state to MiniMax and applies the returned resident task plan.
 
+### M3 Town Event Director
+
+The `🎭 生成小镇事件` button asks MiniMax-M3 to observe the current town state and generate a small, cozy event for the town event feed. Events are written into the story timeline without modifying game stats — making the feature safe and observable.
+
+Click `🎭 生成小镇事件` in the left panel. The event appears in 小镇动态 with its title, text, tone, involved residents, place, and a suggested follow-up.
+
+## M3 小镇事件导演
+
+除了安排居民任务，AI 小镇生活还可以让 MiniMax-M3 根据当前状态生成一个小镇事件。第一版只把事件写入小镇动态，不直接修改资源或居民数值，用来验证 M3 是否适合作为轻量叙事导演。
+
 ### API Style Configuration
 
 Two API styles are supported:

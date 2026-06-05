@@ -1313,6 +1313,130 @@ button, select {
 .llm-status-badge--error   { background: var(--rose-soft); color: var(--rose); }
 
 /* ============================================================
+   Event Director Button & Panel
+   ============================================================ */
+
+.button--event {
+  background: linear-gradient(145deg, var(--purple), #7a6ba5);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(139, 123, 181, 0.35);
+}
+
+.button--event:hover {
+  background: linear-gradient(145deg, #9a8cc5, var(--purple));
+}
+
+.event-director {
+  background: linear-gradient(145deg, var(--purple-soft), var(--panel));
+  border-color: var(--purple);
+  border-width: 1px;
+}
+
+.event-director--ready {
+  background: linear-gradient(145deg, var(--green-soft), var(--panel));
+  border-color: var(--green);
+}
+
+.event-director--error {
+  background: linear-gradient(145deg, var(--rose-soft), var(--panel));
+  border-color: var(--rose);
+}
+
+.event-director p {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--ink-light);
+  line-height: 1.5;
+}
+
+/* ============================================================
+   M3 Event Feed Items
+   ============================================================ */
+
+.feed-item--m3-event {
+  background: linear-gradient(135deg, var(--purple-soft), var(--panel-soft));
+  border-left: 3px solid var(--purple);
+}
+
+.m3-event__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.m3-event__tone {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--purple-soft);
+  color: var(--purple);
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.m3-event__title {
+  margin: 0 0 4px;
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--ink);
+  line-height: 1.3;
+}
+
+.m3-event__text {
+  margin: 0 0 8px;
+  font-size: 0.84rem;
+  color: var(--ink);
+  line-height: 1.6;
+}
+
+.m3-event__footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.m3-event__place {
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.m3-event__residents {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.m3-event__resident {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.m3-event__followup {
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--gold-soft);
+  border-left: 2px solid var(--gold);
+  font-size: 0.78rem;
+  color: #8a6a20;
+  line-height: 1.4;
+}
+
+/* ============================================================
    Event Feed — Story Timeline
    ============================================================ */
 

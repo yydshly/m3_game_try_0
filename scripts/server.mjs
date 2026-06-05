@@ -207,6 +207,199 @@ function fallbackTaskForResident(resident, state) {
   return resident.preferredTask ?? "chat";
 }
 
+// ── Event Director ──────────────────────────────────────────────────────────────
+
+function buildEventPrompt(state) {
+  return {
+    system:
+      "You are the event director for a cozy AI town life simulation game. Generate one small town event that feels warm, observable, and connected to the current town state. Return strict JSON only. No markdown, no explanation.",
+    userContent: JSON.stringify({
+      validResidentIds: ["hua", "yuan", "mimi", "zhou", "seven"],
+      validPlaceIds: ["garden", "cafe", "workshop", "plaza", "forest"],
+      requiredSchema: {
+        event: {
+          type: "m3-event",
+          title: "short Chinese title under 18 characters",
+          text: "Chinese event text under 120 Chinese characters",
+          tone: "cozy | surprise | social | resource | memory",
+          residentIds: ["valid resident ids involved"],
+          placeId: "valid place id",
+          suggestedFollowUp: "short Chinese suggestion under 30 characters",
+        },
+      },
+      state,
+    }),
+  };
+}
+
+function normalizeMiniMaxEvent(rawEvent, state) {
+  const validResidents = Array.isArray(state.residents) ? state.residents : [];
+  const allowedResidentIds = new Set(validResidents.map((r) => r.id));
+  const allowedPlaceIds = new Set(["garden", "cafe", "workshop", "plaza", "forest"]);
+  const allowedTones = new Set(["cozy", "surprise", "social", "resource", "memory"]);
+
+  const event = rawEvent?.event ?? rawEvent ?? {};
+
+  const residentIds = Array.isArray(event.residentIds)
+    ? event.residentIds.filter((id) => allowedResidentIds.has(id))
+    : [];
+
+  const placeId = allowedPlaceIds.has(event.placeId) ? event.placeId : "plaza";
+  const tone = allowedTones.has(event.tone) ? event.tone : "cozy";
+  const title = String(event.title ?? "").trim() || "小镇发生了一件小事";
+  const text = String(event.text ?? "").trim() ||
+    "今天的小镇很安静，居民们各自继续着自己的生活。";
+  const suggestedFollowUp = String(event.suggestedFollowUp ?? "").slice(0, 60);
+
+  return {
+    type: "m3-event",
+    title: title.slice(0, 36),
+    text: text.slice(0, 240),
+    tone,
+    residentIds,
+    placeId,
+    suggestedFollowUp,
+  };
+}
+
+async function requestMiniMaxAnthropicEvent({ apiKey, baseUrl, model, state, signal }) {
+  const { system, userContent } = buildEventPrompt(state);
+  const response = await fetch(`${baseUrl}/v1/messages`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${apiKey}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 600,
+      temperature: 0.85,
+      system,
+      messages: [{ role: "user", content: [{ type: "text", text: userContent }] }],
+      thinking: { type: "disabled" },
+    }),
+    signal,
+  });
+  return response;
+}
+
+async function requestMiniMaxOpenAiEvent({ apiKey, baseUrl, model, state, signal }) {
+  const { system, userContent } = buildEventPrompt(state);
+  const response = await fetch(`${baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${apiKey}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: userContent },
+      ],
+      temperature: 0.85,
+      max_tokens: 600,
+    }),
+    signal,
+  });
+  return response;
+}
+
+async function handleMiniMaxEvent(request, response) {
+  if (!minimaxApiKey || minimaxApiKey === "your_minimax_api_key_here") {
+    sendJson(response, 501, {
+      error: "AI 事件导演暂时还没准备好，你可以先继续推进小镇生活。",
+      technicalError: "MiniMax API key is not configured.",
+      fallback: true,
+    });
+    return;
+  }
+
+  try {
+    const { state } = await readJson(request);
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), minimaxTimeoutMs);
+    let minimaxResponse;
+
+    try {
+      if (minimaxApiStyle === "openai") {
+        minimaxResponse = await requestMiniMaxOpenAiEvent({
+          apiKey: minimaxApiKey,
+          baseUrl: minimaxBaseUrl,
+          model: minimaxModel,
+          state,
+          signal: controller.signal,
+        });
+      } else {
+        minimaxResponse = await requestMiniMaxAnthropicEvent({
+          apiKey: minimaxApiKey,
+          baseUrl: minimaxAnthropicBaseUrl,
+          model: minimaxModel,
+          state,
+          signal: controller.signal,
+        });
+      }
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    const payload = await minimaxResponse.json().catch(() => ({}));
+
+    if (!minimaxResponse.ok) {
+      sendJson(response, minimaxResponse.status, {
+        error: "AI 事件导演遇到了一点问题，暂时无法生成事件。",
+        technicalError: payload?.error?.message ?? payload?.message ?? `MiniMax returned ${minimaxResponse.status}`,
+        fallback: false,
+      });
+      return;
+    }
+
+    let rawText;
+    let usedStyle = minimaxApiStyle;
+
+    if (minimaxApiStyle === "openai") {
+      rawText = payload?.choices?.[0]?.message?.content;
+    } else {
+      rawText = extractAnthropicText(payload);
+      usedStyle = "anthropic";
+    }
+
+    if (!rawText) {
+      sendJson(response, 502, {
+        error: "AI 事件导演没有返回有效内容，请稍后重试。",
+        technicalError: "No text content in response.",
+        fallback: false,
+      });
+      return;
+    }
+
+    const parsed = extractJsonObject(rawText);
+    const event = normalizeMiniMaxEvent(parsed, state);
+
+    sendJson(response, 200, {
+      event: {
+        id: `m3-event-${Date.now()}`,
+        ...event,
+      },
+      model: payload.model ?? minimaxModel,
+      provider: "minimax",
+      apiStyle: usedStyle,
+    });
+  } catch (error) {
+    const isTimeout = error.name === "AbortError";
+    sendJson(response, isTimeout ? 504 : 500, {
+      error: isTimeout
+        ? `AI 事件导演思考超时了（${minimaxTimeoutMs / 1000}s），请稍后重试。`
+        : "AI 事件导演遇到未知错误，请稍后重试。",
+      technicalError: isTimeout
+        ? `Request timed out after ${minimaxTimeoutMs}ms.`
+        : error.message,
+      fallback: false,
+    });
+  }
+}
+
 function normalizeMiniMaxPlan(rawPlan, state) {
   const residents = Array.isArray(state.residents) ? state.residents : [];
   const allowedResidents = new Set(residents.map((resident) => resident.id));
@@ -354,6 +547,11 @@ function resolvePath(url) {
 const server = createServer((request, response) => {
   if (request.method === "POST" && request.url === "/api/minimax/plan") {
     handleMiniMaxPlan(request, response);
+    return;
+  }
+
+  if (request.method === "POST" && request.url === "/api/minimax/event") {
+    handleMiniMaxEvent(request, response);
     return;
   }
 

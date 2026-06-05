@@ -16,6 +16,28 @@ export async function requestMiniMaxPlan(state) {
   return payload;
 }
 
+export async function requestMiniMaxEvent(state) {
+  const response = await fetch("./api/minimax/event", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      state: compactEventState(state),
+    }),
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(
+      payload.error ??
+        payload.technicalError ??
+        `Event director request failed with ${response.status}`,
+    );
+  }
+  return payload;
+}
+
 function compactState(state) {
   return {
     day: state.day,
@@ -50,6 +72,36 @@ function compactState(state) {
       phase: event.phase,
       type: event.type,
       text: event.text,
+    })),
+  };
+}
+
+function compactEventState(state) {
+  const phase = ["早上", "下午", "晚上"];
+  return {
+    day: state.day,
+    phase: phase[state.phaseIndex] ?? "早上",
+    town: {
+      comfort: state.town.comfort,
+      supplies: state.town.supplies,
+      spirit: state.town.spirit,
+    },
+    residents: state.residents.map((resident) => ({
+      id: resident.id,
+      name: resident.name,
+      mood: resident.mood,
+      energy: resident.energy,
+      locationId: resident.locationId,
+      task: resident.assignmentId,
+    })),
+    recentEvents: state.events.slice(-8).map((event) => ({
+      day: event.day,
+      type: event.type,
+      text: event.text,
+    })),
+    recentReports: state.reports.slice(-3).map((report) => ({
+      title: report.title,
+      summary: report.summary,
     })),
   };
 }

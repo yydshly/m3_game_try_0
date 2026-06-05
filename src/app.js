@@ -1,8 +1,9 @@
 import { createInitialState, upgradeState } from "./domain/state.js";
 import { advancePhase, applyAgentPlan, assignTask, resetAssignments } from "./domain/simulation.js";
-import { requestMiniMaxPlan } from "./services/minimaxClient.js";
+import { requestMiniMaxPlan, requestMiniMaxEvent } from "./services/minimaxClient.js";
 import { loadState, saveState, clearState } from "./services/persistence.js";
 import { renderApp } from "./ui/render.js";
+import { phases } from "./data/seed.js";
 
 const root = document.querySelector("#app");
 let state = loadState();
@@ -16,6 +17,8 @@ let uiState = {
   autoPlay: false,
   llmStatus: "idle",
   llmMessage: "",
+  eventDirectorStatus: "idle",
+  eventDirectorMessage: "",
 };
 let autoPlayTimer = null;
 
@@ -79,6 +82,40 @@ function render() {
           render();
         }
       },
+      onMiniMaxEvent: async () => {
+        stopAutoPlay();
+        uiState = { ...uiState, eventDirectorStatus: "loading", eventDirectorMessage: "M3 正在观察居民和小镇动态……" };
+        render();
+        try {
+          const result = await requestMiniMaxEvent(state);
+          const evt = result.event;
+          const currentPhase = phases[state.phaseIndex];
+          const newEvent = {
+            id: evt.id ?? `m3-event-${Date.now()}`,
+            type: "m3-event",
+            day: state.day,
+            phase: currentPhase.label,
+            title: evt.title,
+            text: evt.text,
+            tone: evt.tone ?? "cozy",
+            residentIds: evt.residentIds ?? [],
+            placeId: evt.placeId ?? "plaza",
+            suggestedFollowUp: evt.suggestedFollowUp ?? "",
+          };
+          const nextState = {
+            ...state,
+            events: [...(state.events ?? []), newEvent],
+          };
+          const followUp = evt.suggestedFollowUp
+            ? `✨ 建议：${evt.suggestedFollowUp}`
+            : "✨ 小镇事件已加入动态。";
+          uiState = { ...uiState, eventDirectorStatus: "ready", eventDirectorMessage: followUp };
+          commit(nextState);
+        } catch (error) {
+          uiState = { ...uiState, eventDirectorStatus: "error", eventDirectorMessage: error.message };
+          render();
+        }
+      },
       onAssignTask: (residentId, taskId) => commit(assignTask(state, residentId, taskId)),
       onSelectResident: (residentId) => {
         uiState = { ...uiState, selectedResidentId: residentId };
@@ -88,7 +125,7 @@ function render() {
       onNewTown: () => {
         stopAutoPlay();
         clearState();
-        uiState = { selectedResidentId: null, autoPlay: false, llmStatus: "idle", llmMessage: "" };
+        uiState = { selectedResidentId: null, autoPlay: false, llmStatus: "idle", llmMessage: "", eventDirectorStatus: "idle", eventDirectorMessage: "" };
         commit(createInitialState());
       },
     }, uiState);
