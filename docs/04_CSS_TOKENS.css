@@ -1,0 +1,91 @@
+:root {
+  /* AI 小镇生活：治愈系游戏 UI tokens */
+  --town-cream-50: #fffaf0;
+  --town-cream-100: #fff4dc;
+  --town-paper: #fff7e8;
+  --town-parchment: #f7e7c9;
+  --town-wood: #8b5e34;
+  --town-wood-dark: #4d3728;
+
+  --town-green-50: #eef9e8;
+  --town-green-100: #d8f0c8;
+  --town-green-300: #9ed98d;
+  --town-green-500: #5ca96b;
+  --town-green-700: #3f7d4a;
+
+  --town-sky-100: #dff3ff;
+  --town-sky-300: #8ed0ee;
+  --town-sky-500: #559cc8;
+
+  --town-sun-100: #fff1b8;
+  --town-sun-300: #f7ce6a;
+  --town-sun-500: #e69a3a;
+
+  --town-rose-100: #ffe0e6;
+  --town-rose-400: #ed7f8f;
+  --town-purple-100: #eadfff;
+  --town-purple-400: #a985d6;
+
+  --town-text: #463626;
+  --town-muted: #8a7359;
+  --town-line: rgba(126, 93, 51, 0.18);
+
+  --radius-xl: 28px;
+  --radius-lg: 22px;
+  --radius-md: 16px;
+  --radius-sm: 12px;
+
+  --shadow-soft: 0 12px 32px rgba(76, 55, 28, 0.12);
+  --shadow-card: 0 8px 22px rgba(76, 55, 28, 0.14);
+  --shadow-button: 0 8px 0 rgba(87, 61, 31, 0.20), 0 14px 24px rgba(76, 55, 28, 0.15);
+  --shadow-glow-green: 0 0 0 4px rgba(156, 217, 141, 0.35), 0 12px 26px rgba(62, 125, 74, 0.24);
+  --shadow-glow-gold: 0 0 0 4px rgba(247, 206, 106, 0.35), 0 12px 26px rgba(168, 103, 36, 0.22);
+
+  --ease-game: 180ms cubic-bezier(.2,.8,.2,1);
+}
+
+/* Suggested base background */
+body {
+  color: var(--town-text);
+  background:
+    radial-gradient(circle at 10% 10%, rgba(247, 206, 106, 0.22), transparent 28%),
+    radial-gradient(circle at 90% 12%, rgba(142, 208, 238, 0.20), transparent 30%),
+    linear-gradient(180deg, #fff8e8 0%, #e9f4d6 52%, #d7ecbe 100%);
+}
+
+/* Suggested reusable panel */
+.game-panel {
+  background:
+    linear-gradient(180deg, rgba(255, 252, 242, 0.96), rgba(255, 244, 220, 0.94));
+  border: 1px solid var(--town-line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+/* Suggested button feel */
+.game-button {
+  border: 0;
+  border-radius: 20px;
+  box-shadow: var(--shadow-button);
+  transition: transform var(--ease-game), box-shadow var(--ease-game), filter var(--ease-game);
+  cursor: pointer;
+}
+
+.game-button:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.03);
+}
+
+.game-button:active {
+  transform: translateY(2px) scale(0.97);
+  box-shadow: 0 4px 0 rgba(87, 61, 31, 0.18), 0 8px 16px rgba(76, 55, 28, 0.12);
+}
+
+/* Suggested HUD card */
+.hud-card {
+  background: rgba(255, 249, 235, 0.92);
+  border: 1px solid var(--town-line);
+  border-radius: 20px;
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(10px);
+}
