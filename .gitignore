@@ -3,3 +3,4 @@ config.*.local.json
 .env
 .env.local
 *.log
+config.json

@@ -4,8 +4,8 @@
     "port": 4173
   },
   "minimax": {
-    "apiKey": "sk-cp-31qlf5SGB3w5ZPHbn26Z3l0XsdmIcUy-4i-Krewzmjp8f3mOYyHMnVg3l1zTnUQuSXSPhXmJG-6wygUgMT1rWoqVgq254wXjZHzdxxJCwCcEiRhTViNMnK8",
-    "model": "MiniMax-M3",
+    "apiKey": "your_minimax_api_key_here",
+    "model": "MiniMax-M2.1",
     "baseUrl": "https://api.minimax.io/v1",
     "timeoutMs": 30000
   }
