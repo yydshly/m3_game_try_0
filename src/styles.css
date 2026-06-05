@@ -333,24 +333,30 @@ button, select {
   margin-bottom: 16px;
   border-radius: 16px;
   overflow: hidden;
-  border: 2px solid var(--line-strong);
-  box-shadow: inset 0 0 60px rgba(90, 158, 111, 0.08);
+  border: 3px solid var(--line-strong);
+  box-shadow: inset 0 0 80px rgba(90, 158, 111, 0.1), 0 8px 32px rgba(61, 48, 39, 0.12);
 }
 
-/* Stage themes per phase */
+/* Stage themes per phase — richer backgrounds */
 .town-stage--morning {
   background:
-    linear-gradient(180deg, #d4e8dc 0%, #c8e0cc 40%, #b8d4bc 100%);
+    radial-gradient(ellipse at 80% 15%, rgba(255, 240, 180, 0.5) 0%, transparent 40%),
+    radial-gradient(ellipse at 20% 80%, rgba(180, 220, 160, 0.4) 0%, transparent 35%),
+    linear-gradient(180deg, #c8e4cc 0%, #a8d4a8 40%, #8cc88c 100%);
 }
 
 .town-stage--afternoon {
   background:
-    linear-gradient(180deg, #dce8d4 0%, #d0e0c0 40%, #c0d4a8 100%);
+    radial-gradient(ellipse at 75% 10%, rgba(255, 230, 150, 0.4) 0%, transparent 35%),
+    radial-gradient(ellipse at 25% 85%, rgba(200, 220, 160, 0.35) 0%, transparent 30%),
+    linear-gradient(180deg, #c8dcc0 0%, #a8c890 40%, #90b870 100%);
 }
 
 .town-stage--evening {
   background:
-    linear-gradient(180deg, #d8dce0 0%, #c8d0d8 40%, #b8c0c8 100%);
+    radial-gradient(ellipse at 70% 10%, rgba(180, 160, 200, 0.3) 0%, transparent 35%),
+    radial-gradient(ellipse at 30% 90%, rgba(160, 140, 180, 0.25) 0%, transparent 30%),
+    linear-gradient(180deg, #b8c0c8 0%, #98a8a0 40%, #889898 100%);
 }
 
 /* Sky elements */
@@ -439,10 +445,10 @@ button, select {
   align-items: center;
   gap: 6px;
   width: 88px;
-  padding: 12px 8px;
-  border-radius: 16px;
-  border: 2px solid rgba(255, 255, 255, 0.9);
-  background: rgba(255, 255, 255, 0.92);
+  padding: 10px 6px;
+  border-radius: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.95);
   box-shadow: var(--shadow-md), inset 0 1px 0 rgba(255,255,255,1);
   transform: translate(-50%, -50%);
   transition: transform 200ms ease, box-shadow 200ms ease;
@@ -451,34 +457,33 @@ button, select {
 }
 
 .stage-place:hover {
-  transform: translate(-50%, -54%);
-  box-shadow: var(--shadow-lg);
+  transform: translate(-50%, -56%);
+  box-shadow: var(--shadow-lg), 0 0 0 3px rgba(90, 158, 111, 0.2);
   z-index: 10;
 }
 
-.stage-place__icon {
+.place-icon {
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  color: #fff;
-  font-size: 1.1rem;
-  font-weight: 900;
-  box-shadow: 0 3px 8px rgba(0,0,0,0.15);
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.12);
 }
 
-.stage-place--fresh  .stage-place__icon { background: var(--green); }
-.stage-place--warm   .stage-place__icon { background: var(--rose); }
-.stage-place--craft  .stage-place__icon { background: var(--blue); }
-.stage-place--social .stage-place__icon { background: var(--gold); }
-.stage-place--wild   .stage-place__icon { background: #527f78; }
+.place-icon img {
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+}
 
 .stage-place__name {
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   font-weight: 800;
   color: var(--ink);
   text-align: center;
+  text-shadow: 0 1px 2px rgba(255,255,255,0.8);
 }
 
 /* Stage Residents — Character Markers */
@@ -766,6 +771,10 @@ button, select {
   color: var(--ink);
 }
 
+.panel__head--spotlight {
+  margin-bottom: 14px;
+}
+
 .panel-badge {
   display: inline-flex;
   align-items: center;
@@ -878,16 +887,16 @@ button, select {
 }
 
 .spotlight__avatar {
-  width: 52px;
-  height: 52px;
-  border-radius: 14px;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
   background: var(--panel);
   box-shadow: var(--shadow-md);
   display: grid;
   place-items: center;
-  font-size: 1.4rem;
+  font-size: 1.5rem;
   font-weight: 900;
-  border: 2px solid var(--gold-soft);
+  border: 3px solid var(--gold-soft);
 }
 
 .spotlight__info h3 {
@@ -973,13 +982,17 @@ button, select {
 
 .agent-reason {
   margin: 0 0 10px;
-  font-size: 0.82rem;
+  font-size: 0.85rem;
   color: var(--ink-light);
   line-height: 1.5;
+  padding: 8px 10px;
+  background: rgba(255,255,255,0.6);
+  border-radius: 8px;
+  border-left: 3px solid var(--green);
 }
 
 .agent-reason__label {
-  color: var(--ink);
+  color: var(--green-deep);
   font-weight: 800;
 }
 
@@ -1018,7 +1031,7 @@ button, select {
 
 .spotlight__memory {
   margin: 0;
-  font-size: 0.82rem;
+  font-size: 0.85rem;
   color: var(--ink-light);
   line-height: 1.5;
 }
@@ -1253,7 +1266,7 @@ button, select {
 }
 
 /* ============================================================
-   Daily Report — Newspaper Style
+   Daily Report — Newspaper / Handcraft Style
    ============================================================ */
 
 .report {
@@ -1261,15 +1274,34 @@ button, select {
 }
 
 .report--active {
-  background: linear-gradient(145deg, var(--panel), #f8f5ee);
+  background:
+    linear-gradient(145deg, #fffdf5, #faf5e8);
   border-color: var(--gold);
   border-width: 2px;
+  position: relative;
+  overflow: hidden;
+}
+
+.report--active::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--gold) 0px,
+    var(--gold-soft) 6px,
+    var(--gold) 12px
+  );
 }
 
 .report__header {
   margin-bottom: 12px;
   padding-bottom: 10px;
   border-bottom: 2px dashed var(--line-strong);
+  position: relative;
 }
 
 .report__badge {
@@ -1277,17 +1309,17 @@ button, select {
   align-items: center;
   gap: 4px;
   margin-bottom: 4px;
-  padding: 3px 10px;
+  padding: 4px 12px;
   border-radius: 999px;
   background: var(--gold-soft);
   color: #8a6a20;
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   font-weight: 800;
 }
 
 .report__header h2 {
-  margin: 4px 0;
-  font-size: 1rem;
+  margin: 6px 0 4px;
+  font-size: 1.05rem;
   color: var(--ink);
 }
 
@@ -1302,26 +1334,27 @@ button, select {
 }
 
 .report__summary {
-  margin: 0 0 12px;
-  padding: 12px;
+  margin: 0 0 14px;
+  padding: 14px;
   border-radius: 10px;
   background: var(--panel-soft);
   color: var(--ink);
-  font-size: 0.88rem;
-  line-height: 1.6;
+  font-size: 0.9rem;
+  line-height: 1.7;
   border: 1px solid var(--line);
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.04);
 }
 
 .report__highlights {
-  padding: 10px 12px;
+  padding: 12px 14px;
   border-radius: 10px;
   background: var(--gold-soft);
-  border: 1px solid var(--gold);
+  border: 1px dashed var(--gold);
 }
 
 .report__highlights-label {
-  margin: 0 0 6px;
-  font-size: 0.75rem;
+  margin: 0 0 8px;
+  font-size: 0.78rem;
   font-weight: 800;
   color: #8a6a20;
 }
@@ -1329,9 +1362,9 @@ button, select {
 .report__highlights ul {
   margin: 0;
   padding-left: 16px;
-  font-size: 0.8rem;
+  font-size: 0.82rem;
   color: var(--ink-light);
-  line-height: 1.7;
+  line-height: 1.8;
 }
 
 .report__empty {

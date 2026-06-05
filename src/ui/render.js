@@ -1,4 +1,12 @@
 import { locations, phases, tasks } from "../data/seed.js";
+
+const LOCATION_ICONS = {
+  garden: "./src/assets/ui/garden.svg",
+  cafe: "./src/assets/ui/restaurant.svg",
+  workshop: "./src/assets/ui/workshop.svg",
+  plaza: "./src/assets/ui/plaza.svg",
+  forest: "./src/assets/ui/forest.svg",
+};
 import { getCurrentPhase, getLocation, getResidentsAtLocation, getTask, getTopRelationships, getTownGoals, getTownTips } from "../domain/selectors.js";
 
 function escapeHtml(value) {
@@ -144,16 +152,23 @@ function renderTips(state) {
 function renderLlmStatus(uiState) {
   if (!uiState.llmMessage) return "";
   const statusIcon = uiState.llmStatus === "error" ? "⚠️" : uiState.llmStatus === "loading" ? "🤖" : "✨";
-  const friendlyMessage = uiState.llmStatus === "error"
-    ? (uiState.llmMessage.includes("Failed to fetch") || uiState.llmMessage.includes("NetworkError")
-      ? "🤖 AI 管家暂时还没准备好，你可以先手动安排居民今天的生活~"
-      : uiState.llmMessage)
-    : uiState.llmMessage;
+  const badgeLabel = { idle: "待机", loading: "思考中", ready: "就绪", error: "异常" };
+  const friendlyMessage = (() => {
+    if (uiState.llmStatus === "loading") return "🤖 AI 管家正在观察小镇状态……";
+    if (uiState.llmStatus === "ready") return "✨ AI 管家已给出今天的安排建议~";
+    if (uiState.llmStatus === "error") {
+      if (uiState.llmMessage.includes("Failed to fetch") || uiState.llmMessage.includes("NetworkError") || uiState.llmMessage.includes("fetch")) {
+        return "🤖 AI 管家暂时还没准备好，你可以先手动安排居民今天的生活~";
+      }
+      return "🤖 AI 管家遇到了一点问题：" + uiState.llmMessage;
+    }
+    return uiState.llmMessage;
+  })();
   return `
     <section class="panel llm-status llm-status--${escapeHtml(uiState.llmStatus)}">
       <div class="panel__head">
         <h2>${statusIcon} AI 小镇管家</h2>
-        <span class="llm-status-badge llm-status-badge--${escapeHtml(uiState.llmStatus)}">${escapeHtml(uiState.llmStatus)}</span>
+        <span class="llm-status-badge llm-status-badge--${escapeHtml(uiState.llmStatus)}">${badgeLabel[uiState.llmStatus] ?? uiState.llmStatus}</span>
       </div>
       <p>${escapeHtml(friendlyMessage)}</p>
     </section>
@@ -222,7 +237,9 @@ function renderTownStage(state, uiState) {
               style="--x:${location.position.x}%; --y:${location.position.y}%;"
               aria-label="${escapeHtml(location.name)}"
             >
-              <span>${escapeHtml(location.icon)}</span>
+              <span class="place-icon">
+                <img src="${LOCATION_ICONS[location.id] ?? ""}" alt="${escapeHtml(location.name)}" width="44" height="44" />
+              </span>
               <strong>${escapeHtml(location.name)}</strong>
             </article>
           `,
@@ -278,6 +295,10 @@ function renderSpotlight(state, uiState) {
 
   return `
     <section class="panel spotlight">
+      <div class="panel__head panel__head--spotlight">
+        <h2>👤 居民详情</h2>
+        <span class="panel-badge">${escapeHtml(location.name)}</span>
+      </div>
       <div class="spotlight__header">
         <div class="spotlight__avatar" aria-hidden="true">${escapeHtml(selected.avatar)}</div>
         <div class="spotlight__info">
