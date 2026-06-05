@@ -1,0 +1,15 @@
+<svg width="420" height="320" viewBox="0 0 420 320" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Cozy town illustration">
+  <rect width="420" height="320" rx="28" fill="#F7F0E4"/>
+  <path d="M42 242C78 207 103 206 141 232C176 256 207 256 238 229C274 198 315 197 376 240V280H42V242Z" fill="#DDE9D7"/>
+  <path d="M66 130L130 78L194 130V247H66V130Z" fill="#FFFDF8" stroke="#D8CDBB" stroke-width="5"/>
+  <path d="M46 135L130 66L214 135" stroke="#4F8A63" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="94" y="169" width="36" height="78" rx="8" fill="#B66B72"/>
+  <rect x="145" y="160" width="30" height="31" rx="7" fill="#DCE7F4"/>
+  <path d="M236 147L291 99L346 147V247H236V147Z" fill="#FFFDF8" stroke="#D8CDBB" stroke-width="5"/>
+  <path d="M221 151L291 88L361 151" stroke="#B0873E" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="271" y="175" width="42" height="72" rx="8" fill="#577AA8"/>
+  <circle cx="102" cy="232" r="20" fill="#4F8A63"/>
+  <circle cx="330" cy="230" r="23" fill="#527F78"/>
+  <path d="M40 279H382" stroke="#CFC3AF" stroke-width="10" stroke-linecap="round"/>
+  <circle cx="332" cy="67" r="22" fill="#E7C870"/>
+</svg>

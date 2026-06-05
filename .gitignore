@@ -1,0 +1,5 @@
+config.local.json
+config.*.local.json
+.env
+.env.local
+*.log

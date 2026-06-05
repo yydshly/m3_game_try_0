@@ -1,0 +1,15 @@
+console.log("Remote phone access options:");
+console.log("");
+console.log("Best for this project: deploy as a static site.");
+console.log("  Netlify/Vercel/GitHub Pages can host this app because it has no backend dependency.");
+console.log("");
+console.log("Temporary preview option: use a public tunnel.");
+console.log("  1. Start local server: node scripts/server.mjs");
+console.log("  2. In another terminal, expose http://127.0.0.1:4173 with Cloudflare Tunnel, ngrok, or localtunnel.");
+console.log("");
+console.log("Recommended commands after installing a tunnel tool:");
+console.log("  cloudflared tunnel --url http://127.0.0.1:4173");
+console.log("  ngrok http 4173");
+console.log("  npx localtunnel --port 4173");
+console.log("");
+console.log("For a stable public URL, deploy instead of using a tunnel.");

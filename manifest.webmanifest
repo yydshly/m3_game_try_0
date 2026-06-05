@@ -1,0 +1,16 @@
+{
+  "name": "AI Town Life",
+  "short_name": "Town Life",
+  "description": "A cozy multi-agent town simulation prototype.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f5f1e8",
+  "theme_color": "#4f8a63",
+  "icons": [
+    {
+      "src": "./src/assets/town-scene.svg",
+      "sizes": "420x320",
+      "type": "image/svg+xml"
+    }
+  ]
+}

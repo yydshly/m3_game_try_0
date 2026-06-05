@@ -1,0 +1,20 @@
+{
+  "name": "ai-town-life",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/server.mjs",
+    "start": "node scripts/server.mjs",
+    "mobile": "node scripts/server.mjs --host 0.0.0.0",
+    "mobile-info": "node scripts/mobile-info.mjs",
+    "remote-info": "node scripts/remote-info.mjs",
+    "check": "node scripts/check.mjs",
+    "api-check": "node scripts/api-check.mjs",
+    "config-check": "node scripts/config-check.mjs",
+    "minimax-adapter-check": "node scripts/minimax-adapter-check.mjs",
+    "validate": "node scripts/validate.mjs",
+    "smoke": "node scripts/smoke.mjs",
+    "render-check": "node scripts/render-check.mjs"
+  }
+}
