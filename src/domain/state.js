@@ -42,6 +42,7 @@ export function createInitialState() {
       },
     ],
     reports: [],
+    townMemory: [],
   };
 }
 
@@ -49,5 +50,6 @@ export function upgradeState(state) {
   return {
     ...state,
     residents: Array.isArray(state.residents) ? state.residents.map(ensureResidentAgent) : [],
+    townMemory: Array.isArray(state.townMemory) ? state.townMemory : [],
   };
 }

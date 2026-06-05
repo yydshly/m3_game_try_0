@@ -1,5 +1,6 @@
 import { createInitialState, upgradeState } from "./domain/state.js";
 import { advancePhase, applyAgentPlan, assignTask, resetAssignments } from "./domain/simulation.js";
+import { applyChoiceMemory } from "./domain/memory.js";
 import { requestMiniMaxPlan, requestMiniMaxEvent, requestMiniMaxBroadcast } from "./services/minimaxClient.js";
 import { loadState, saveState, clearState } from "./services/persistence.js";
 import { renderApp } from "./ui/render.js";
@@ -132,34 +133,7 @@ function render() {
         if (!choice) return;
 
         const currentPhase = phases[state.phaseIndex];
-
-        const updatedEvents = events.map((e) => {
-          if (e.id !== eventId) return e;
-          return {
-            ...e,
-            chosenChoiceId: choiceId,
-            choiceResultText: choice.resultText,
-          };
-        });
-
-        const playerChoiceEvent = {
-          id: `choice-${eventId}-${choiceId}`,
-          type: "player-choice",
-          day: state.day,
-          phase: currentPhase.label,
-          sourceEventId: eventId,
-          choiceId,
-          title: "你的选择",
-          text: choice.resultText,
-          choiceLabel: choice.label,
-          residentIds: sourceEvent.residentIds,
-          placeId: sourceEvent.placeId,
-        };
-
-        const nextState = {
-          ...state,
-          events: [...updatedEvents, playerChoiceEvent],
-        };
+        const nextState = applyChoiceMemory(state, sourceEvent, choice, currentPhase);
         commit(nextState);
       },
       onMiniMaxBroadcast: async () => {

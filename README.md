@@ -114,6 +114,12 @@ Click `📻 生成小镇广播` in the left panel. The broadcast appears in 小�
 
 M3-generated town events can include two gentle player choices. The first version records the selected choice into the event feed without changing game stats. This keeps the system safe and observable while validating a core game loop: AI creates a situation, the player responds, and the town remembers the response.
 
+## Choice Memory Link
+
+Player choices are recorded beyond the event feed. When a player responds to an M3-generated event, the project records the choice as town memory and, when relevant, as resident memory.
+
+The first version does not change resources, mood, energy, or relationships. It only makes the town remember what happened, so future planning, broadcasts, and events can reference the player's past decisions.
+
 ## 小镇氛围与广播
 
 AI 小镇生活新增了轻量氛围层。MiniMax-M3 可以根据当前天数、阶段、居民状态、小镇资源、最近事件和日报生成一段小镇广播文案。
@@ -123,6 +129,12 @@ AI 小镇生活新增了轻量氛围层。MiniMax-M3 可以根据当前天数、
 ## 事件选择
 
 M3 生成的小镇事件可以带两个温和选择。当前版本只把玩家选择写入小镇动态，不直接修改资源、心情或关系。这样可以先验证一个核心体验：AI 创造情境，玩家做出回应，小镇记住这个回应。
+
+## 选择记忆联动
+
+玩家对 M3 小镇事件做出的选择，不只会出现在小镇动态中，也会写入小镇记忆，并在相关居民的记忆中留下记录。
+
+当前版本不直接改变资源、心情、体力或关系，只先验证一个关键体验：小镇会记住玩家的决定，后续 AI 管家、事件和广播可以基于这些记忆继续生成内容。
 
 ### API Style Configuration
 

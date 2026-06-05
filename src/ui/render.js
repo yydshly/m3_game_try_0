@@ -705,6 +705,60 @@ function renderPlayerChoiceItem(event, residents) {
   `;
 }
 
+const MEMORY_PLACE_NAMES = {
+  garden: "花园", cafe: "咖啡馆", workshop: "工坊", plaza: "广场", forest: "森林",
+};
+
+function renderTownMemory(state) {
+  const memories = [...(state.townMemory ?? [])].reverse().slice(0, 5);
+
+  if (memories.length === 0) {
+    return `
+      <section class="panel town-memory">
+        <div class="panel__head">
+          <h2>🧠 小镇记忆</h2>
+        </div>
+        <p class="town-memory__empty">小镇还没有留下重要记忆。做出选择后，它们会被记录在这里。</p>
+      </section>
+    `;
+  }
+
+  const itemsHtml = memories.map((m) => {
+    const placeName = MEMORY_PLACE_NAMES[m.placeId] ?? "广场";
+    const residentHtml = (m.residentIds ?? [])
+      .map((id) => {
+        const resident = state.residents.find((r) => r.id === id);
+        return resident ? escapeHtml(resident.name) : "";
+      })
+      .filter(Boolean)
+      .join("、");
+
+    return `
+      <div class="town-memory__item">
+        <div class="town-memory__meta">
+          <span class="town-memory__day">第 ${m.day} 天 · ${escapeHtml(m.phase ?? "")}</span>
+          <span class="town-memory__place">📍 ${escapeHtml(placeName)}</span>
+        </div>
+        ${m.title ? `<p class="town-memory__title">${escapeHtml(m.title)}</p>` : ""}
+        <p class="town-memory__text">${escapeHtml(m.text)}</p>
+        ${residentHtml ? `<p class="town-memory__residents">👥 ${residentHtml}</p>` : ""}
+      </div>
+    `;
+  }).join("");
+
+  return `
+    <section class="panel town-memory">
+      <div class="panel__head">
+        <h2>🧠 小镇记忆</h2>
+        <span class="panel-badge">${memories.length} 条</span>
+      </div>
+      <div class="town-memory__list">
+        ${itemsHtml}
+      </div>
+    </section>
+  `;
+}
+
 function renderEventFeed(state) {
   const events = [...state.events].reverse().slice(0, 12);
   const typeIcon = { action: "🏃", social: "💬", system: "🔔", report: "📰", "m3-event": "🎭", "town-broadcast": "📻", "player-choice": "🧭" };
@@ -948,6 +1002,7 @@ export function renderApp(root, state, handlers, uiState = {}) {
           ${renderRelationships(state)}
           ${renderReports(state)}
         </div>
+        ${renderTownMemory(state)}
         <section class="residents-grid">
           <div class="section-head">
             <div>

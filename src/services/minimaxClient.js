@@ -60,6 +60,35 @@ export async function requestMiniMaxBroadcast(state) {
   return payload;
 }
 
+function compactEventForState(event) {
+  const base = {
+    day: event.day,
+    phase: event.phase,
+    type: event.type,
+    text: event.text,
+  };
+  if (event.type === "player-choice") {
+    return {
+      ...base,
+      title: event.title,
+      text: event.text,
+      choiceLabel: event.choiceLabel,
+      residentIds: event.residentIds,
+      placeId: event.placeId,
+    };
+  }
+  if (event.type === "m3-event") {
+    return {
+      ...base,
+      title: event.title,
+      text: event.text,
+      residentIds: event.residentIds,
+      placeId: event.placeId,
+    };
+  }
+  return base;
+}
+
 function compactState(state) {
   return {
     day: state.day,
@@ -89,11 +118,15 @@ function compactState(state) {
         decisionReason: resident.agent?.decisionReason ?? "",
       },
     })),
-    recentEvents: state.events.slice(-8).map((event) => ({
-      day: event.day,
-      phase: event.phase,
-      type: event.type,
-      text: event.text,
+    recentEvents: state.events.slice(-8).map(compactEventForState),
+    townMemory: (state.townMemory ?? []).slice(-8).map((m) => ({
+      day: m.day,
+      phase: m.phase,
+      type: m.type,
+      title: m.title,
+      text: m.text,
+      residentIds: m.residentIds,
+      placeId: m.placeId,
     })),
   };
 }
@@ -116,14 +149,19 @@ function compactEventState(state) {
       locationId: resident.locationId,
       task: resident.assignmentId,
     })),
-    recentEvents: state.events.slice(-8).map((event) => ({
-      day: event.day,
-      type: event.type,
-      text: event.text,
-    })),
+    recentEvents: state.events.slice(-8).map(compactEventForState),
     recentReports: state.reports.slice(-3).map((report) => ({
       title: report.title,
       summary: report.summary,
+    })),
+    townMemory: (state.townMemory ?? []).slice(-8).map((m) => ({
+      day: m.day,
+      phase: m.phase,
+      type: m.type,
+      title: m.title,
+      text: m.text,
+      residentIds: m.residentIds,
+      placeId: m.placeId,
     })),
   };
 }
@@ -152,14 +190,19 @@ function compactBroadcastState(state) {
         needs: resident.agent?.needs ?? { rest: 0, social: 0, achievement: 0 },
       },
     })),
-    recentEvents: state.events.slice(-8).map((event) => ({
-      day: event.day,
-      type: event.type,
-      text: event.text,
-    })),
+    recentEvents: state.events.slice(-8).map(compactEventForState),
     recentReports: state.reports.slice(-2).map((report) => ({
       title: report.title,
       summary: report.summary,
+    })),
+    townMemory: (state.townMemory ?? []).slice(-8).map((m) => ({
+      day: m.day,
+      phase: m.phase,
+      type: m.type,
+      title: m.title,
+      text: m.text,
+      residentIds: m.residentIds,
+      placeId: m.placeId,
     })),
   };
 }
