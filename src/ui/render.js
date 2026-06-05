@@ -152,6 +152,12 @@ function renderGameActions(state, safeUiState) {
         </button>
       </div>
       <div class="game-actions__section">
+        <p class="game-actions__section-label">📻 氛围广播</p>
+        <button class="button button--broadcast" type="button" data-action="minimax-broadcast" ${safeUiState.broadcastStatus === "loading" ? "disabled" : ""}>
+          ${safeUiState.broadcastStatus === "loading" ? "📻 广播中..." : "📻 生成小镇广播"}
+        </button>
+      </div>
+      <div class="game-actions__section">
         <p class="game-actions__section-label">⚙️ 其他</p>
         <button class="button ${safeUiState.autoPlay ? "button--live" : "button--ghost"}" type="button" data-action="toggle-auto">
           ${safeUiState.autoPlay ? "⏸️ 暂停" : "▶️ 自动推进"}
@@ -281,6 +287,54 @@ function renderEventDirectorStatus(uiState) {
       </div>
       <p>${escapeHtml(info.text)}</p>
       ${isError && uiState.eventDirectorMessage ? `<p class="llm-status__hint">💡 检查 MiniMax 配置或稍后重试。</p>` : ""}
+    </section>
+  `;
+}
+
+// ── Atmosphere Panel ─────────────────────────────────────────────────────────────
+
+const MOOD_LABELS = {
+  warm: "温暖",
+  calm: "平静",
+  lively: "活泼",
+  tired: "疲惫",
+  hopeful: "充满希望",
+  tense: "紧张",
+};
+
+function renderAtmospherePanel(state, uiState) {
+  const latestBc = uiState.latestBroadcast;
+  const statusLabels = {
+    idle: "尚未生成",
+    loading: "正在生成……",
+    ready: "已生成",
+    error: "生成失败",
+  };
+  const statusText = statusLabels[uiState.broadcastStatus ?? "idle"] ?? "尚未生成";
+
+  const moodMap = { warm: "温暖", calm: "平静", lively: "活泼", tired: "疲惫", hopeful: "充满希望", tense: "紧张" };
+  const placeMap = { garden: "花园", cafe: "咖啡馆", workshop: "工坊", plaza: "广场", forest: "森林" };
+
+  return `
+    <section class="panel atmosphere-panel">
+      <div class="panel__head">
+        <h2>🎧 小镇氛围</h2>
+        <span class="panel-badge">${escapeHtml(statusText)}</span>
+      </div>
+      ${latestBc ? `
+        <div class="atmosphere-broadcast-preview">
+          <p class="atmosphere-broadcast-preview__title">${escapeHtml(latestBc.title)}</p>
+          <p class="atmosphere-broadcast-preview__script">${escapeHtml(latestBc.script?.slice(0, 120))}${latestBc.script?.length > 120 ? "…" : ""}</p>
+          <div class="atmosphere-broadcast-preview__tags">
+            <span class="atmosphere-tag">${escapeHtml(moodMap[latestBc.mood] ?? latestBc.mood ?? "温暖")}</span>
+            <span class="atmosphere-tag">${escapeHtml(latestBc.musicMood ?? "")}</span>
+            <span class="atmosphere-tag">📍 ${escapeHtml(placeMap[latestBc.placeId] ?? "广场")}</span>
+          </div>
+          ${latestBc.musicPrompt ? `<p class="atmosphere-broadcast-preview__music">🎵 ${escapeHtml(latestBc.musicPrompt.slice(0, 80))}</p>` : ""}
+        </div>
+      ` : `
+        <p class="atmosphere-empty">让 M3 根据今天的小镇状态，写一段早安或晚间广播。</p>
+      `}
     </section>
   `;
 }
@@ -540,9 +594,52 @@ function renderM3EventItem(event, residents) {
   `;
 }
 
+
+function renderTownBroadcastItem(event, residents) {
+  const moodLabel = {
+    warm: "温暖", calm: "平静", lively: "活泼", tired: "疲惫", hopeful: "充满希望", tense: "紧张",
+  }[event.mood] ?? "温暖";
+  const placeName = {
+    garden: "花园", cafe: "咖啡馆", workshop: "工坊", plaza: "广场", forest: "森林",
+  }[event.placeId] ?? "广场";
+
+  const participantHtml = event.residentIds && event.residentIds.length > 0
+    ? event.residentIds
+        .map((id) => {
+          const resident = residents.find((r) => r.id === id);
+          if (!resident) return "";
+          return `<span class="broadcast__resident">${escapeHtml(resident.name)}</span>`;
+        })
+        .join("")
+    : "";
+
+  return `
+    <article class="feed-item feed-item--town-broadcast">
+      <div class="broadcast__header">
+        <span class="feed-item__meta">📻 第 ${event.day} 天 · ${escapeHtml(event.phase)}</span>
+        <span class="broadcast__mood-badge">${escapeHtml(moodLabel)}</span>
+      </div>
+      ${event.title ? `<p class="broadcast__title">${escapeHtml(event.title)}</p>` : ""}
+      <p class="broadcast__script">${escapeHtml(event.text ?? event.script ?? "")}</p>
+      <div class="broadcast__tags">
+        <span class="broadcast__tag">🎵 ${escapeHtml(event.musicMood ?? "")}</span>
+        <span class="broadcast__tag">📍 ${escapeHtml(placeName)}</span>
+        ${event.durationHint ? `<span class="broadcast__tag">⏱ ${escapeHtml(event.durationHint)}</span>` : ""}
+      </div>
+      ${participantHtml ? `<div class="broadcast__residents">👥 ${participantHtml}</div>` : ""}
+      ${event.musicPrompt ? `
+        <details class="broadcast__music-prompt">
+          <summary>🎼 建议音乐提示词</summary>
+          <p>${escapeHtml(event.musicPrompt)}</p>
+        </details>
+      ` : ""}
+    </article>
+  `;
+}
+
 function renderEventFeed(state) {
   const events = [...state.events].reverse().slice(0, 12);
-  const typeIcon = { action: "🏃", social: "💬", system: "🔔", report: "📰", "m3-event": "🎭" };
+  const typeIcon = { action: "🏃", social: "💬", system: "🔔", report: "📰", "m3-event": "🎭", "town-broadcast": "📻" };
 
   return `
     <section class="panel">
@@ -555,6 +652,9 @@ function renderEventFeed(state) {
           .map((event) => {
             if (event.type === "m3-event") {
               return renderM3EventItem(event, state.residents);
+            }
+            if (event.type === "town-broadcast") {
+              return renderTownBroadcastItem(event, state.residents);
             }
             return `
               <article class="feed-item feed-item--${escapeHtml(event.type)}">
@@ -698,6 +798,7 @@ function bindEvents(root, handlers) {
   root.querySelector("[data-action='toggle-auto']").addEventListener("click", handlers.onToggleAutoPlay);
   root.querySelector("[data-action='minimax-plan']").addEventListener("click", handlers.onMiniMaxPlan);
   root.querySelector("[data-action='minimax-event']").addEventListener("click", handlers.onMiniMaxEvent);
+  root.querySelector("[data-action='minimax-broadcast']").addEventListener("click", handlers.onMiniMaxBroadcast);
   root.querySelector("[data-action='reset-assignments']").addEventListener("click", handlers.onResetAssignments);
   root.querySelector("[data-action='new-town']").addEventListener("click", handlers.onNewTown);
   root.querySelectorAll("[data-resident-select]").forEach((button) => {
@@ -728,6 +829,9 @@ export function renderApp(root, state, handlers, uiState = {}) {
     llmMessage: uiState.llmMessage ?? "",
     eventDirectorStatus: uiState.eventDirectorStatus ?? "idle",
     eventDirectorMessage: uiState.eventDirectorMessage ?? "",
+    broadcastStatus: uiState.broadcastStatus ?? "idle",
+    broadcastMessage: uiState.broadcastMessage ?? "",
+    latestBroadcast: uiState.latestBroadcast ?? null,
   };
 
   root.innerHTML = `
@@ -754,6 +858,7 @@ export function renderApp(root, state, handlers, uiState = {}) {
         <aside class="side-panel">
           ${renderLlmStatus(safeUiState)}
           ${renderEventDirectorStatus(safeUiState)}
+          ${renderAtmospherePanel(state, safeUiState)}
           ${renderSpotlight(state, safeUiState)}
         </aside>
       </main>

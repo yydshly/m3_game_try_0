@@ -18,6 +18,7 @@
     "smoke": "node scripts/smoke.mjs",
     "render-check": "node scripts/render-check.mjs",
     "agent-check": "node scripts/agent-check.mjs",
-    "event-check": "node scripts/event-director-check.mjs"
+    "event-check": "node scripts/event-director-check.mjs",
+    "broadcast-check": "node scripts/broadcast-check.mjs"
   }
 }

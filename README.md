@@ -102,6 +102,20 @@ Click `🎭 生成小镇事件` in the left panel. The event appears in 小镇�
 
 除了安排居民任务，AI 小镇生活还可以让 MiniMax-M3 根据当前状态生成一个小镇事件。第一版只把事件写入小镇动态，不直接修改资源或居民数值，用来验证 M3 是否适合作为轻量叙事导演。
 
+## Town Atmosphere and Broadcast
+
+AI Town Life includes a lightweight atmosphere layer. MiniMax-M3 can generate a short town broadcast based on the current day, phase, residents, town resources, recent events, and reports.
+
+The first version only generates text and a suggested music mood. It does not generate real audio or background music yet. This keeps the feature fast, safe, and easy to inspect before adding TTS or music generation.
+
+Click `📻 生成小镇广播` in the left panel. The broadcast appears in 小镇动态 with its title, script, mood, music mood, place, residents, and a music prompt suggestion.
+
+## 小镇氛围与广播
+
+AI 小镇生活新增了轻量氛围层。MiniMax-M3 可以根据当前天数、阶段、居民状态、小镇资源、最近事件和日报生成一段小镇广播文案。
+
+当前版本只生成广播文字和建议音乐氛围，不生成真实音频，这样先验证广播内容是否有游戏魅力，再逐步接入 TTS 和背景音乐生成。
+
 ### API Style Configuration
 
 Two API styles are supported:

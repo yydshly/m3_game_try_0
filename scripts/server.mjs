@@ -400,6 +400,217 @@ async function handleMiniMaxEvent(request, response) {
   }
 }
 
+// ── Town Broadcast ─────────────────────────────────────────────────────────────────
+
+const PHASE_MUSIC_MOOD = {
+  morning: "温暖清晨",
+  afternoon: "轻快午后",
+  evening: "安静夜晚",
+};
+
+function buildBroadcastPrompt(state) {
+  const phaseMap = { morning: "早上", afternoon: "下午", evening: "晚上" };
+  return {
+    system:
+      "You are the town radio host and atmosphere designer for a cozy AI town life simulation game. Generate one short Chinese town broadcast based on the current town state. The broadcast should feel warm, observable, and connected to residents, places, mood, resources, and recent events. Return strict JSON only. No markdown, no explanation.",
+    userContent: JSON.stringify({
+      validResidentIds: ["hua", "yuan", "mimi", "zhou", "seven"],
+      validPlaceIds: ["garden", "cafe", "workshop", "plaza", "forest"],
+      requiredSchema: {
+        broadcast: {
+          type: "town-broadcast",
+          title: "short Chinese title under 16 characters",
+          script: "Chinese broadcast script, 80-180 Chinese characters",
+          mood: "warm | calm | lively | tired | hopeful | tense",
+          musicMood: "short Chinese mood label",
+          musicPrompt: "Chinese music generation prompt under 80 characters",
+          relatedResidentIds: ["valid resident ids"],
+          placeId: "valid place id",
+          durationHint: "15-30s",
+        },
+      },
+      state,
+    }),
+  };
+}
+
+function normalizeMiniMaxBroadcast(rawBroadcast, state) {
+  const validResidents = Array.isArray(state?.residents) ? state.residents : [];
+  const allowedResidentIds = new Set(validResidents.map((r) => r.id));
+  const allowedPlaceIds = new Set(["garden", "cafe", "workshop", "plaza", "forest"]);
+  const allowedMoods = new Set(["warm", "calm", "lively", "tired", "hopeful", "tense"]);
+
+  const raw = rawBroadcast?.broadcast ?? rawBroadcast ?? {};
+
+  const relatedResidentIds = Array.isArray(raw.relatedResidentIds)
+    ? raw.relatedResidentIds.filter((id) => allowedResidentIds.has(id))
+    : [];
+
+  const placeId = allowedPlaceIds.has(raw.placeId) ? raw.placeId : "plaza";
+  const mood = allowedMoods.has(raw.mood) ? raw.mood : "warm";
+  const title = String(raw.title ?? "").trim() || "今日小镇广播";
+  const script = String(raw.script ?? "").trim() ||
+    "今天的小镇安静地运转着，居民们继续着自己的生活。";
+
+  // Determine phase-based musicMood fallback
+  const phaseMap = { morning: "温暖清晨", afternoon: "轻快午后", evening: "安静夜晚" };
+  const phaseKey = state?.phaseIndex === 0 ? "morning" : state?.phaseIndex === 1 ? "afternoon" : "evening";
+  const musicMood = String(raw.musicMood ?? "").trim() || phaseMap[phaseKey] || "温暖清晨";
+  const musicPrompt = String(raw.musicPrompt ?? "").trim() ||
+    "温暖、治愈、轻松的小镇生活背景音乐，适合休闲模拟游戏。";
+  const durationHint = String(raw.durationHint ?? "").trim() || "15-30s";
+
+  return {
+    type: "town-broadcast",
+    title: title.slice(0, 32),
+    script: script.slice(0, 360),
+    mood,
+    musicMood: musicMood.slice(0, 40),
+    musicPrompt: musicPrompt.slice(0, 120),
+    relatedResidentIds,
+    placeId,
+    durationHint: durationHint.slice(0, 20),
+  };
+}
+
+async function requestMiniMaxAnthropicBroadcast({ apiKey, baseUrl, model, state, signal }) {
+  const { system, userContent } = buildBroadcastPrompt(state);
+  const response = await fetch(`${baseUrl}/v1/messages`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${apiKey}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 800,
+      temperature: 0.8,
+      system,
+      messages: [{ role: "user", content: [{ type: "text", text: userContent }] }],
+      thinking: { type: "disabled" },
+    }),
+    signal,
+  });
+  return response;
+}
+
+async function requestMiniMaxOpenAiBroadcast({ apiKey, baseUrl, model, state, signal }) {
+  const { system, userContent } = buildBroadcastPrompt(state);
+  const response = await fetch(`${baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${apiKey}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: userContent },
+      ],
+      temperature: 0.8,
+      max_tokens: 800,
+    }),
+    signal,
+  });
+  return response;
+}
+
+async function handleMiniMaxBroadcast(request, response) {
+  if (!minimaxApiKey || minimaxApiKey === "your_minimax_api_key_here") {
+    sendJson(response, 501, {
+      error: "小镇广播暂时还没准备好，你可以先继续安排居民生活。",
+      technicalError: "MiniMax API key is not configured.",
+      fallback: true,
+    });
+    return;
+  }
+
+  try {
+    const { state } = await readJson(request);
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), minimaxTimeoutMs);
+    let minimaxResponse;
+
+    try {
+      if (minimaxApiStyle === "openai") {
+        minimaxResponse = await requestMiniMaxOpenAiBroadcast({
+          apiKey: minimaxApiKey,
+          baseUrl: minimaxBaseUrl,
+          model: minimaxModel,
+          state,
+          signal: controller.signal,
+        });
+      } else {
+        minimaxResponse = await requestMiniMaxAnthropicBroadcast({
+          apiKey: minimaxApiKey,
+          baseUrl: minimaxAnthropicBaseUrl,
+          model: minimaxModel,
+          state,
+          signal: controller.signal,
+        });
+      }
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    const payload = await minimaxResponse.json().catch(() => ({}));
+
+    if (!minimaxResponse.ok) {
+      sendJson(response, minimaxResponse.status, {
+        error: "小镇广播暂时没有播出，请稍后再试。",
+        technicalError: payload?.error?.message ?? payload?.message ?? `MiniMax returned ${minimaxResponse.status}`,
+        fallback: false,
+      });
+      return;
+    }
+
+    let rawText;
+    let usedStyle = minimaxApiStyle;
+
+    if (minimaxApiStyle === "openai") {
+      rawText = payload?.choices?.[0]?.message?.content;
+    } else {
+      rawText = extractAnthropicText(payload);
+      usedStyle = "anthropic";
+    }
+
+    if (!rawText) {
+      sendJson(response, 502, {
+        error: "小镇广播没有返回有效内容，请稍后重试。",
+        technicalError: "No text content in response.",
+        fallback: false,
+      });
+      return;
+    }
+
+    const parsed = extractJsonObject(rawText);
+    const broadcast = normalizeMiniMaxBroadcast(parsed, state);
+
+    sendJson(response, 200, {
+      broadcast: {
+        id: `broadcast-${Date.now()}`,
+        ...broadcast,
+      },
+      model: payload.model ?? minimaxModel,
+      provider: "minimax",
+      apiStyle: usedStyle,
+    });
+  } catch (error) {
+    const isTimeout = error.name === "AbortError";
+    sendJson(response, isTimeout ? 504 : 500, {
+      error: isTimeout
+        ? `小镇广播超时了（${minimaxTimeoutMs / 1000}s），请稍后重试。`
+        : "小镇广播遇到未知错误，请稍后重试。",
+      technicalError: isTimeout
+        ? `Request timed out after ${minimaxTimeoutMs}ms.`
+        : error.message,
+      fallback: false,
+    });
+  }
+}
+
 function normalizeMiniMaxPlan(rawPlan, state) {
   const residents = Array.isArray(state.residents) ? state.residents : [];
   const allowedResidents = new Set(residents.map((resident) => resident.id));
@@ -552,6 +763,11 @@ const server = createServer((request, response) => {
 
   if (request.method === "POST" && request.url === "/api/minimax/event") {
     handleMiniMaxEvent(request, response);
+    return;
+  }
+
+  if (request.method === "POST" && request.url === "/api/minimax/broadcast") {
+    handleMiniMaxBroadcast(request, response);
     return;
   }
 
