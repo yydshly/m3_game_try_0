@@ -90,40 +90,36 @@ function taskOptions(selectedId) {
     .join("");
 }
 
-function renderHeader(state) {
+// ── Unified Game HUD ────────────────────────────────────────────────────────────
+
+function renderGameHud(state) {
   const phase = getCurrentPhase(state);
   const phaseSteps = phases
     .map((item, index) => `<span class="phase ${index === state.phaseIndex ? "phase--active" : ""}">${escapeHtml(item.label)}</span>`)
     .join("");
 
   return `
-    <header class="hero">
-      <div class="hero__left">
-        <p class="eyebrow">🏡 治愈系小镇模拟</p>
-        <h1>AI 小镇生活</h1>
-        <p class="hero__copy">为居民安排一天的活动，看着小镇的故事慢慢展开~</p>
+    <header class="game-hud">
+      <div class="game-hud__brand">
+        <span class="eyebrow">🏡 治愈系小镇模拟</span>
+        <h1 class="game-hud__title">AI 小镇生活</h1>
+        <a class="game-hud__about-link" href="#project-meaning">了解这个小镇 →</a>
       </div>
-      <figure class="hero-art" aria-hidden="true">
-        <img src="./src/assets/town-scene.svg" alt="" />
-      </figure>
-      <div class="day-card" aria-label="当前天数和阶段">
-        <span class="day-card__label">第 ${state.day} 天</span>
-        <strong class="day-card__phase">${escapeHtml(phase.label)}</strong>
+      <div class="game-hud__time" aria-label="当前天数和阶段">
+        <span class="game-hud__day">第 ${state.day} 天</span>
+        <strong class="game-hud__phase">${escapeHtml(phase.label)}</strong>
         <div class="phase-track">${phaseSteps}</div>
+      </div>
+      <div class="game-hud__resources" aria-label="小镇资源">
+        ${meter("舒适度", state.town.comfort, "green")}
+        <div class="stat-pill"><span>📦 物资</span><strong>${state.town.supplies}</strong></div>
+        ${meter("精神", state.town.spirit, "gold")}
       </div>
     </header>
   `;
 }
 
-function renderTownStats(state) {
-  return `
-    <section class="stats" aria-label="小镇状态">
-      ${meter("舒适度", state.town.comfort, "green")}
-      <div class="stat-pill"><span>📦 物资</span><strong>${state.town.supplies}</strong></div>
-      ${meter("精神", state.town.spirit, "gold")}
-    </section>
-  `;
-}
+// ── Left Column: Game Actions + Compact Goals ───────────────────────────────────
 
 function renderGameActions(state, safeUiState) {
   const nextPhaseLabel = state.phaseIndex === phases.length - 1 ? "🌙 结束今天" : `⏭️ 推进到${phases[state.phaseIndex + 1].label}`;
@@ -161,58 +157,37 @@ function renderGameActions(state, safeUiState) {
   `;
 }
 
-function renderGoals(state) {
+function renderCompactGoals(state) {
   const goals = getTownGoals(state);
   const completedCount = goals.filter((goal) => goal.value >= goal.target).length;
+  const topGoals = goals.slice(0, 3);
   return `
-    <section class="panel goals">
-      <div class="panel__head">
-        <h2>🎯 今日目标</h2>
+    <div class="compact-goals">
+      <div class="compact-goals__head">
+        <span>🎯 今日目标</span>
         <span class="panel-badge">${completedCount}/${goals.length}</span>
       </div>
       <div class="goal-list">
-        ${goals
+        ${topGoals
           .map((goal) => {
             const progress = Math.min(100, Math.round((goal.value / goal.target) * 100));
             return `
-              <article class="goal ${goal.value >= goal.target ? "goal--done" : ""}">
+              <div class="goal goal--compact ${goal.value >= goal.target ? "goal--done" : ""}">
                 <div class="goal__top">
                   <strong>${escapeHtml(goal.label)}</strong>
                   <span>${Math.round(goal.value)}/${goal.target}</span>
                 </div>
                 <div class="goal__bar" aria-hidden="true"><i style="width:${progress}%"></i></div>
-                <p>${escapeHtml(goal.detail)}</p>
-              </article>
+              </div>
             `;
           })
           .join("")}
       </div>
-    </section>
+    </div>
   `;
 }
 
-function renderTips(state) {
-  const tips = getTownTips(state);
-  return `
-    <section class="panel tips">
-      <div class="panel__head">
-        <h2>🏠 管家提示</h2>
-      </div>
-      <div class="tip-list">
-        ${tips
-          .map(
-            (tip) => `
-              <article class="tip">
-                <strong>${escapeHtml(tip.title)}</strong>
-                <p>${escapeHtml(tip.text)}</p>
-              </article>
-            `,
-          )
-          .join("")}
-      </div>
-    </section>
-  `;
-}
+// ── LLM Status ────────────────────────────────────────────────────────────────
 
 function renderLlmStatus(uiState) {
   if (!uiState.llmMessage) return "";
@@ -243,10 +218,8 @@ function renderLlmStatus(uiState) {
 
   let message = uiState.llmMessage;
 
-  // If the backend sends a structured payload with error + technicalError
   let hint = "";
   try {
-    // Message might be a JSON string if the backend sent it as JSON in llmMessage
     const parsed = JSON.parse(uiState.llmMessage);
     if (parsed.error) {
       message = parsed.error;
@@ -258,7 +231,6 @@ function renderLlmStatus(uiState) {
     // Not JSON, use as-is
   }
 
-  // Map network errors to friendly message
   if (uiState.llmStatus === "error" &&
       (uiState.llmMessage.includes("Failed to fetch") ||
        uiState.llmMessage.includes("NetworkError") ||
@@ -282,6 +254,8 @@ function renderLlmStatus(uiState) {
     </section>
   `;
 }
+
+// ── Resident Status helpers ────────────────────────────────────────────────────
 
 function residentStatus(resident) {
   if (resident.energy < 30) return { id: "tired", label: "疲惫 😴" };
@@ -323,6 +297,8 @@ function renderStageResident(state, resident, selectedResidentId) {
     </button>
   `;
 }
+
+// ── Town Stage (Map) ──────────────────────────────────────────────────────────
 
 function renderTownStage(state, uiState) {
   const latestEvent = [...state.events].reverse().find((event) => event.type !== "system");
@@ -398,6 +374,8 @@ function renderLocationCard(state, location) {
   `;
 }
 
+// ── Spotlight (Resident Detail) ────────────────────────────────────────────────
+
 function renderSpotlight(state, uiState) {
   const selected = state.residents.find((resident) => resident.id === uiState.selectedResidentId) ?? state.residents[0];
   if (!selected) return "";
@@ -447,6 +425,8 @@ function renderSpotlight(state, uiState) {
   `;
 }
 
+// ── Resident Card ──────────────────────────────────────────────────────────────
+
 function renderResidentCard(resident, selectedResidentId) {
   const task = getTask(resident.assignmentId);
   const location = getLocation(resident.locationId);
@@ -485,6 +465,8 @@ function renderResidentCard(resident, selectedResidentId) {
   `;
 }
 
+// ── Event Feed ────────────────────────────────────────────────────────────────
+
 function renderEventFeed(state) {
   const events = [...state.events].reverse().slice(0, 12);
   const typeIcon = { action: "🏃", social: "💬", system: "🔔", report: "📰" };
@@ -513,6 +495,8 @@ function renderEventFeed(state) {
   `;
 }
 
+// ── Relationships ──────────────────────────────────────────────────────────────
+
 function renderRelationships(state) {
   const pairs = getTopRelationships(state);
   return `
@@ -538,37 +522,45 @@ function renderRelationships(state) {
   `;
 }
 
+// ── Project Meaning (collapsed details) ───────────────────────────────────────
+
 function renderProjectMeaning() {
   return `
-    <section class="project-meaning" aria-label="为什么是 AI 小镇？">
-      <div class="project-meaning__header">
-        <span class="eyebrow">🌟 项目宣言</span>
-        <h2 class="project-meaning__title">为什么是 AI 小镇？</h2>
-        <p class="project-meaning__lead">这不是一个普通的小镇模拟页面，而是一个用 MiniMax-M3 探索 AI 游戏新形态的原型。</p>
+    <details class="project-meaning" id="project-meaning">
+      <summary class="project-meaning__summary">
+        <span class="project-meaning__summary-title">🌟 为什么是 AI 小镇？</span>
+        <span class="project-meaning__summary-sub">查看这个原型的探索目标</span>
+      </summary>
+      <div class="project-meaning__body">
+        <div class="project-meaning__header">
+          <p class="project-meaning__lead">这不是一个普通的小镇模拟页面，而是一个用 MiniMax-M3 探索 AI 游戏新形态的原型。</p>
+        </div>
+        <div class="project-meaning__grid">
+          <article class="project-meaning__card">
+            <div class="project-meaning__icon" aria-hidden="true">🌿</div>
+            <h3>一个可以被观察的温柔世界</h3>
+            <p>玩家不是在管理冰冷的数据，而是在陪伴一群有心情、有体力、有记忆、有关系的居民度过一天。每一次安排，都会影响他们的状态、互动和小镇的故事。</p>
+          </article>
+          <article class="project-meaning__card">
+            <div class="project-meaning__icon" aria-hidden="true">🤖</div>
+            <h3>一个 M3 Agent 能力实验场</h3>
+            <p>AI 管家不是简单生成一句话，而是根据居民状态、小镇资源、任务目标和最近记忆，尝试为每个居民做出合理安排。这是对大模型规划、结构化输出、角色一致性和多 Agent 协作能力的真实验证。</p>
+          </article>
+          <article class="project-meaning__card">
+            <div class="project-meaning__icon" aria-hidden="true">🎮</div>
+            <h3>一个 AI 游戏方向的产品原型</h3>
+            <p>这个项目的目标不是复制传统游戏，而是探索一种新的体验：玩家提供意图，AI 生成生活，居民持续变化，小镇慢慢形成属于自己的故事。它是游戏、陪伴、Agent 和内容生成之间的交叉实验。</p>
+          </article>
+        </div>
+        <div class="project-meaning__closing">
+          <p>当前版本仍是原型，但它已经验证了一个方向：AI 不只是游戏里的 NPC 台词生成器，也可以成为小镇生活的规划者、叙事者和观察者。</p>
+        </div>
       </div>
-      <div class="project-meaning__grid">
-        <article class="project-meaning__card">
-          <div class="project-meaning__icon" aria-hidden="true">🌿</div>
-          <h3>一个可以被观察的温柔世界</h3>
-          <p>玩家不是在管理冰冷的数据，而是在陪伴一群有心情、有体力、有记忆、有关系的居民度过一天。每一次安排，都会影响他们的状态、互动和小镇的故事。</p>
-        </article>
-        <article class="project-meaning__card">
-          <div class="project-meaning__icon" aria-hidden="true">🤖</div>
-          <h3>一个 M3 Agent 能力实验场</h3>
-          <p>AI 管家不是简单生成一句话，而是根据居民状态、小镇资源、任务目标和最近记忆，尝试为每个居民做出合理安排。这是对大模型规划、结构化输出、角色一致性和多 Agent 协作能力的真实验证。</p>
-        </article>
-        <article class="project-meaning__card">
-          <div class="project-meaning__icon" aria-hidden="true">🎮</div>
-          <h3>一个 AI 游戏方向的产品原型</h3>
-          <p>这个项目的目标不是复制传统游戏，而是探索一种新的体验：玩家提供意图，AI 生成生活，居民持续变化，小镇慢慢形成属于自己的故事。它是游戏、陪伴、Agent 和内容生成之间的交叉实验。</p>
-        </article>
-      </div>
-      <div class="project-meaning__summary">
-        <p>当前版本仍是原型，但它已经验证了一个方向：AI 不只是游戏里的 NPC 台词生成器，也可以成为小镇生活的规划者、叙事者和观察者。</p>
-      </div>
-    </section>
+    </details>
   `;
 }
+
+// ── Reports ────────────────────────────────────────────────────────────────────
 
 function renderReports(state) {
   const [latestReport, ...olderReports] = state.reports;
@@ -622,6 +614,8 @@ function renderReports(state) {
   `;
 }
 
+// ── Event Binding ──────────────────────────────────────────────────────────────
+
 function bindEvents(root, handlers) {
   root.querySelector("[data-action='advance']").addEventListener("click", handlers.onAdvance);
   root.querySelector("[data-action='run-day']").addEventListener("click", handlers.onRunDay);
@@ -647,6 +641,8 @@ function bindEvents(root, handlers) {
   });
 }
 
+// ── Main Render ───────────────────────────────────────────────────────────────
+
 export function renderApp(root, state, handlers, uiState = {}) {
   const safeUiState = {
     selectedResidentId: uiState.selectedResidentId ?? state.residents[0]?.id ?? null,
@@ -657,10 +653,13 @@ export function renderApp(root, state, handlers, uiState = {}) {
 
   root.innerHTML = `
     <div class="shell">
-      ${renderHeader(state)}
-      ${renderTownStats(state)}
+      ${renderGameHud(state)}
+
       <main class="layout">
-        ${renderGameActions(state, safeUiState)}
+        <div class="left-col">
+          ${renderGameActions(state, safeUiState)}
+          ${renderCompactGoals(state)}
+        </div>
         <section class="map-panel">
           <div class="section-head">
             <div>
@@ -673,27 +672,31 @@ export function renderApp(root, state, handlers, uiState = {}) {
             ${locations.map((location) => renderLocationCard(state, location)).join("")}
           </div>
         </section>
-        <aside class="side">
+        <aside class="side-panel">
           ${renderLlmStatus(safeUiState)}
           ${renderSpotlight(state, safeUiState)}
-          ${renderGoals(state)}
-          ${renderTips(state)}
+        </aside>
+      </main>
+
+      <section class="story-section">
+        <div class="story-section__grid">
           ${renderEventFeed(state)}
           ${renderRelationships(state)}
           ${renderReports(state)}
-        </aside>
-      </main>
-      <section class="residents-grid">
-        <div class="section-head">
-          <div>
-            <p class="eyebrow">👥 居民</p>
-            <h2>每日安排</h2>
+        </div>
+        <section class="residents-grid">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">👥 居民</p>
+              <h2>每日安排</h2>
+            </div>
           </div>
-        </div>
-        <div class="resident-list">
-          ${state.residents.map((resident) => renderResidentCard(resident, safeUiState.selectedResidentId)).join("")}
-        </div>
+          <div class="resident-list">
+            ${state.residents.map((resident) => renderResidentCard(resident, safeUiState.selectedResidentId)).join("")}
+          </div>
+        </section>
       </section>
+
       ${renderProjectMeaning()}
     </div>
   `;

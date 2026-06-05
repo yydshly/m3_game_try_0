@@ -30,7 +30,7 @@ const result = {
   actionBadges: root.innerHTML.split('class="char-chip"').length - 1,
   legend: root.innerHTML.includes("stage-legend"),
   spotlightStatus: root.innerHTML.includes("spotlight__status"),
-  goals: root.innerHTML.split('<article class="goal').length - 1,
+  goals: root.innerHTML.split(/<article class="goal|<div class="goal/).length - 1,
   autoPlay: root.innerHTML.includes('data-action="toggle-auto"'),
   minimaxButton: root.innerHTML.includes('data-action="minimax-plan"'),
 };
