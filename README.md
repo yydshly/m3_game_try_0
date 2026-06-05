@@ -148,6 +148,12 @@ Auto play waits for the current travel and task animation cycle to finish before
 
 The lock is controlled by `uiState.isAnimating`. When an animation starts, `isAnimating` is set to `true` and a banner reads "居民正在行动中……". All major buttons (advance, run-day, AI plan, event, broadcast) are disabled until the animation completes. Auto play uses recursive `setTimeout` instead of `setInterval`, scheduling the next phase only after `TASK_ANIMATION_DURATION_MS` (3250ms) plus a buffer.
 
+## Task Completion Feedback
+
+After residents finish their travel and task animations, the town stage shows short completion feedback. Each resident gets a small completion badge (🌸 🍲 🔧 💬 🌿 💤) above their head, the action panel displays "✅ 本阶段行动完成", and the latest event in the feed receives a brief highlight.
+
+This feedback is visual only. It does not change simulation resources, mood, energy, relationships, or MiniMax API behavior.
+
 ## 小镇氛围与广播
 
 AI 小镇生活新增了轻量氛围层。MiniMax-M3 可以根据当前天数、阶段、居民状态、小镇资源、最近事件和日报生成一段小镇广播文案。
@@ -191,6 +197,12 @@ M3 生成的小镇事件可以带两个温和选择。当前版本只把玩家�
 自动推进会等待当前移动与任务动画完成后，再安排下一次推进，使 simulation 状态和视觉舞台保持一致。
 
 锁由 `uiState.isAnimating` 控制。动画开始时 `isAnimating` 设为 `true`，并显示"居民正在行动中……"横幅。在此期间，推进阶段、结束今天、AI 管家、事件导演、氛围广播按钮均被禁用。自动推进从 `setInterval` 改为递归 `setTimeout`，只在 `TASK_ANIMATION_DURATION_MS`（3250ms）加上缓冲后才安排下一次推进。
+
+## 任务完成反馈
+
+居民完成移动和任务动画后，小镇舞台会显示短暂的完成反馈。居民头顶出现小徽章（🌸 🍲 🔧 💬 🌿 💤），操作区显示"✅ 本阶段行动完成"，小镇动态的最新事件会轻微高亮。
+
+当前反馈只属于视觉表现，不改变资源、心情、体力、关系或 MiniMax API 行为。
 
 ### API Style Configuration
 

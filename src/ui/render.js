@@ -171,6 +171,12 @@ function renderGameActions(state, safeUiState) {
     ? `<div class="game-actions__anim-banner" aria-live="polite">🚶 ${escapeHtml(animMsg)}</div>`
     : "";
 
+  // Completion feedback banner after animation finishes
+  const completionFeedback = safeUiState.completionFeedback;
+  const completionBanner = completionFeedback
+    ? `<div class="game-actions__completion-banner" aria-live="polite">✅ ${escapeHtml(completionFeedback.message)}</div>`
+    : "";
+
   // Buttons disabled during animation (except auto-play toggle and new-town)
   const advancingDisabled = isAnimating ? "disabled" : "";
   const aiLoading = safeUiState.llmStatus === "loading" ? "disabled" : "";
@@ -188,6 +194,7 @@ function renderGameActions(state, safeUiState) {
         </span>
       </div>
       ${animBanner}
+      ${completionBanner}
       <div class="game-actions__section">
         <p class="game-actions__section-label">⏭️ 推进</p>
         <button class="button button--primary" type="button" data-action="advance" ${advancingDisabled}>
@@ -429,7 +436,7 @@ function renderPlaceLabel(placeId, isActive, anim) {
   `;
 }
 
-function renderStageCharacter(resident, position, taskLabel, status, isSelected, anim) {
+function renderStageCharacter(resident, position, taskLabel, status, isSelected, anim, completionResult) {
   const toX = position.x;
   const toY = position.y;
   const selectedClass = isSelected ? " stage-character--selected" : "";
@@ -469,6 +476,11 @@ function renderStageCharacter(resident, position, taskLabel, status, isSelected,
     ? `<span class="stage-character__action-bubble">${escapeHtml(anim.bubble)}</span>`
     : "";
 
+  // Completion badge shown after animation
+  const completionBadge = completionResult
+    ? `<span class="stage-character__completion-badge" title="${escapeHtml(completionResult.label)}">${escapeHtml(completionResult.icon)}</span>`
+    : "";
+
   return `
     <button
       class="stage-character${selectedClass}${statusClass}${extraClasses}"
@@ -482,6 +494,7 @@ function renderStageCharacter(resident, position, taskLabel, status, isSelected,
       <span class="stage-character__sprite">
         ${getResidentAvatarImg(resident, 54)}
       </span>
+      ${completionBadge}
       <span class="stage-character__name">${escapeHtml(resident.name)}</span>
       ${task ? `<span class="stage-character__task">${escapeHtml(task)}</span>` : ""}
       ${actionBubble}
@@ -493,6 +506,12 @@ function renderTownStage(state, uiState) {
   const latestEvent = [...state.events].reverse().find((event) => event.type !== "system");
   const phase = getCurrentPhase(state);
   const activeAnimations = uiState.activeTaskAnimations ?? [];
+  const completionFeedback = uiState.completionFeedback;
+
+  // Build a map of completion results by residentId
+  const completionByResidentId = new Map(
+    (completionFeedback?.residentResults ?? []).map((r) => [r.residentId, r])
+  );
 
   // Determine which place has residents (for active labels)
   const activePlaceIds = new Set(state.residents.map((r) => r.locationId));
@@ -522,6 +541,7 @@ function renderTownStage(state, uiState) {
       const task = getTask(resident.assignmentId);
       const status = residentStatus(resident);
       const anim = activeAnimations.find((a) => a.residentId === resident.id);
+      const completionResult = completionByResidentId.get(resident.id) ?? null;
       return renderStageCharacter(
         resident,
         pos,
@@ -529,6 +549,7 @@ function renderTownStage(state, uiState) {
         status,
         resident.id === uiState.selectedResidentId,
         anim,
+        completionResult,
       );
     })
     .join("");
@@ -686,7 +707,7 @@ const TONE_LABELS = {
   memory: "回忆",
 };
 
-function renderM3EventItem(event, residents) {
+function renderM3EventItem(event, residents, latestClass = "") {
   const toneLabel = TONE_LABELS[event.tone] ?? event.tone ?? "温暖";
   const placeName = {
     garden: "花园", cafe: "咖啡馆", workshop: "工坊", plaza: "广场", forest: "森林",
@@ -737,7 +758,7 @@ function renderM3EventItem(event, residents) {
   }
 
   return `
-    <article class="feed-item feed-item--m3-event">
+    <article class="feed-item feed-item--m3-event${latestClass}">
       <div class="m3-event__header">
         <span class="feed-item__meta">
           🎭 第 ${event.day} 天 · ${escapeHtml(event.phase)}
@@ -757,7 +778,7 @@ function renderM3EventItem(event, residents) {
 }
 
 
-function renderTownBroadcastItem(event, residents) {
+function renderTownBroadcastItem(event, residents, latestClass = "") {
   const moodLabel = {
     warm: "温暖", calm: "平静", lively: "活泼", tired: "疲惫", hopeful: "充满希望", tense: "紧张",
   }[event.mood] ?? "温暖";
@@ -776,7 +797,7 @@ function renderTownBroadcastItem(event, residents) {
     : "";
 
   return `
-    <article class="feed-item feed-item--town-broadcast">
+    <article class="feed-item feed-item--town-broadcast${latestClass}">
       <div class="broadcast__header">
         <span class="feed-item__meta">📻 第 ${event.day} 天 · ${escapeHtml(event.phase)}</span>
         <span class="broadcast__mood-badge">${escapeHtml(moodLabel)}</span>
@@ -799,7 +820,7 @@ function renderTownBroadcastItem(event, residents) {
   `;
 }
 
-function renderPlayerChoiceItem(event, residents) {
+function renderPlayerChoiceItem(event, residents, latestClass = "") {
   const placeName = {
     garden: "花园", cafe: "咖啡馆", workshop: "工坊", plaza: "广场", forest: "森林",
   }[event.placeId] ?? "广场";
@@ -815,7 +836,7 @@ function renderPlayerChoiceItem(event, residents) {
     : "";
 
   return `
-    <article class="feed-item feed-item--player-choice">
+    <article class="feed-item feed-item--player-choice${latestClass}">
       <div class="player-choice__header">
         <span class="feed-item__meta">
           🧭 第 ${event.day} 天 · ${escapeHtml(event.phase)}
@@ -886,8 +907,9 @@ function renderTownMemory(state) {
   `;
 }
 
-function renderEventFeed(state) {
+function renderEventFeed(state, completionFeedback) {
   const events = [...state.events].reverse().slice(0, 12);
+  const isLatest = completionFeedback != null;
   const typeIcon = { action: "🏃", social: "💬", system: "🔔", report: "📰", "m3-event": "🎭", "town-broadcast": "📻", "player-choice": "🧭" };
 
   return `
@@ -898,18 +920,19 @@ function renderEventFeed(state) {
       </div>
       <div class="feed" aria-live="polite">
         ${events
-          .map((event) => {
+          .map((event, index) => {
+            const latestClass = isLatest && index === 0 ? " feed-item--latest" : "";
             if (event.type === "m3-event") {
-              return renderM3EventItem(event, state.residents);
+              return renderM3EventItem(event, state.residents, latestClass);
             }
             if (event.type === "town-broadcast") {
-              return renderTownBroadcastItem(event, state.residents);
+              return renderTownBroadcastItem(event, state.residents, latestClass);
             }
             if (event.type === "player-choice") {
-              return renderPlayerChoiceItem(event, state.residents);
+              return renderPlayerChoiceItem(event, state.residents, latestClass);
             }
             return `
-              <article class="feed-item feed-item--${escapeHtml(event.type)}">
+              <article class="feed-item feed-item--${escapeHtml(event.type)}${latestClass}">
                 <span class="feed-item__meta">
                   ${typeIcon[event.type] ?? "📌"} 第 ${event.day} 天 · ${escapeHtml(event.phase)}
                 </span>
@@ -1100,6 +1123,7 @@ export function renderApp(root, state, handlers, uiState = {}) {
     activeTaskAnimations: uiState.activeTaskAnimations ?? [],
     isAnimating: Boolean(uiState.isAnimating),
     animationMessage: uiState.animationMessage ?? "",
+    completionFeedback: uiState.completionFeedback ?? null,
   };
 
   root.innerHTML = `
@@ -1133,7 +1157,7 @@ export function renderApp(root, state, handlers, uiState = {}) {
 
       <section class="story-section">
         <div class="story-section__grid">
-          ${renderEventFeed(state)}
+          ${renderEventFeed(state, safeUiState.completionFeedback)}
           ${renderRelationships(state)}
           ${renderReports(state)}
         </div>

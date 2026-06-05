@@ -19,6 +19,7 @@ const TRAVEL_ANIMATION_MS = 1150;
 const TASK_ACTION_MS = 2100;
 const TASK_ANIMATION_DURATION_MS = TRAVEL_ANIMATION_MS + TASK_ACTION_MS; // 3250ms
 const AUTO_PLAY_DELAY_MS = TASK_ANIMATION_DURATION_MS + 700; // ~4000ms
+const COMPLETION_FEEDBACK_MS = 2200;
 
 // ── UI State ──────────────────────────────────────────────────────────────────────
 
@@ -35,9 +36,11 @@ let uiState = {
   activeTaskAnimations: [],
   isAnimating: false,
   animationMessage: "",
+  completionFeedback: null,
 };
 let autoPlayTimer = null;
 let animationTimer = null;
+let completionTimer = null;
 
 // ── Task Animation Layer ────────────────────────────────────────────────────────────
 
@@ -49,6 +52,37 @@ const TASK_STAGE_EFFECTS = {
   forage:  { action: "work", effect: "leaf",   bubble: "森林里传来树叶沙沙声。", gait: "run" },
   rest:    { action: "rest", effect: "rest",   bubble: "有人在安静地休息。", gait: "slow" },
 };
+
+const TASK_COMPLETION_ICONS = {
+  plant:   "🌸",
+  cook:    "🍲",
+  repair:  "🔧",
+  chat:    "💬",
+  forage:  "🌿",
+  rest:    "💤",
+};
+
+const TASK_COMPLETION_LABELS = {
+  plant:   "完成照看花园",
+  cook:    "完成准备餐点",
+  repair:  "完成工坊维护",
+  chat:    "完成邻里交流",
+  forage:  "完成森林采集",
+  rest:    "完成休息恢复",
+};
+
+function buildCompletionFeedback(nextState) {
+  return {
+    id: `completion-${Date.now()}`,
+    message: "本阶段行动完成",
+    startedAt: Date.now(),
+    residentResults: nextState.residents.map((resident) => ({
+      residentId: resident.id,
+      icon: TASK_COMPLETION_ICONS[resident.assignmentId] ?? "✓",
+      label: TASK_COMPLETION_LABELS[resident.assignmentId] ?? "已完成",
+    })),
+  };
+}
 
 function getGait(taskId, resident) {
   if (taskId === "forage") return "run";
@@ -89,25 +123,35 @@ function buildTaskAnimations(prevState, nextState) {
 
 function showTaskAnimations(prevState, nextState, options = {}) {
   if (animationTimer) clearTimeout(animationTimer);
+  if (completionTimer) { clearTimeout(completionTimer); completionTimer = null; }
   uiState = {
     ...uiState,
     activeTaskAnimations: buildTaskAnimations(prevState, nextState),
     isAnimating: true,
     animationMessage: "居民正在行动中……",
+    completionFeedback: null,
   };
   render();
   animationTimer = setTimeout(() => {
+    // Animation done — show completion feedback
     uiState = {
       ...uiState,
       activeTaskAnimations: [],
       isAnimating: false,
       animationMessage: "",
+      completionFeedback: buildCompletionFeedback(nextState),
     };
     animationTimer = null;
     render();
-    if (typeof options.afterComplete === "function") {
-      options.afterComplete();
-    }
+    // Clear completion feedback after a short display
+    completionTimer = setTimeout(() => {
+      uiState = { ...uiState, completionFeedback: null };
+      completionTimer = null;
+      render();
+      if (typeof options.afterComplete === "function") {
+        options.afterComplete();
+      }
+    }, COMPLETION_FEEDBACK_MS);
   }, TASK_ANIMATION_DURATION_MS);
 }
 
@@ -292,6 +336,7 @@ function render() {
       onNewTown: () => {
         stopAutoPlay();
         if (animationTimer) { clearTimeout(animationTimer); animationTimer = null; }
+        if (completionTimer) { clearTimeout(completionTimer); completionTimer = null; }
         clearState();
         uiState = {
           selectedResidentId: null,
@@ -306,6 +351,7 @@ function render() {
           activeTaskAnimations: [],
           isAnimating: false,
           animationMessage: "",
+          completionFeedback: null,
         };
         commit(createInitialState());
       },

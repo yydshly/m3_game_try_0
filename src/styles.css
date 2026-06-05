@@ -375,6 +375,26 @@ button, select {
   to   { opacity: 1; transform: translateY(0); }
 }
 
+/* Completion feedback banner — shown after animation finishes */
+.game-actions__completion-banner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--green-soft), var(--panel));
+  border: 1.5px solid var(--green);
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: var(--green-deep);
+  animation: completionBannerIn 350ms cubic-bezier(.34,1.56,.64,1) both;
+}
+
+@keyframes completionBannerIn {
+  from { opacity: 0; transform: translateY(6px) scale(.92); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
 /* Primary action buttons in left panel */
 .game-actions .button--primary,
 .game-actions .button--ai {
@@ -705,6 +725,32 @@ button, select {
   50%       { transform: scale(1.04); }
 }
 
+/* ── Completion Badge ────────────────────────────────────── */
+.stage-character__completion-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--panel);
+  border: 2px solid var(--green);
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  line-height: 1;
+  box-shadow: 0 2px 6px rgba(61,48,39,.18);
+  animation: completionBadgePop .45s cubic-bezier(.34,1.56,.64,1) both;
+  z-index: 12;
+  pointer-events: none;
+}
+
+@keyframes completionBadgePop {
+  0%   { opacity: 0; transform: scale(.4) translateY(4px); }
+  55%  { opacity: 1; transform: scale(1.15) translateY(-3px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
 /* ── Location Codex (downgraded below-map location cards) ── */
 .location-codex {
   display: flex;
@@ -895,7 +941,10 @@ button, select {
   .stage-character--traveling,
   .stage-character__sprite,
   .stage-effect-anchor,
-  .stage-character__action-bubble {
+  .stage-character__action-bubble,
+  .stage-character__completion-badge,
+  .game-actions__completion-banner,
+  .feed-item--latest {
     animation: none !important;
   }
 }
@@ -2108,6 +2157,18 @@ button, select {
 .feed-item--social { border-left-color: var(--green); background: var(--green-soft); }
 .feed-item--system { border-left-color: var(--gold); background: var(--gold-soft); }
 .feed-item--report { border-left-color: var(--purple); background: var(--purple-soft); }
+
+/* Latest event highlight — shown briefly after phase completion */
+.feed-item--latest {
+  border-left-color: var(--green) !important;
+  background: var(--green-soft) !important;
+  animation: latestEventHighlight 2.5s ease-out both;
+}
+
+@keyframes latestEventHighlight {
+  0%   { box-shadow: 0 0 0 3px rgba(90,158,111,.35); }
+  100% { box-shadow: none; }
+}
 
 .feed-item__meta {
   display: inline-flex;
