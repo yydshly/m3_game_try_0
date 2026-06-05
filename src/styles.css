@@ -453,7 +453,7 @@ button, select {
   transform: translate(-50%, -50%);
   transition: transform 200ms ease, box-shadow 200ms ease;
   cursor: default;
-  z-index: 2;
+  z-index: 3;
 }
 
 .stage-place:hover {
@@ -491,7 +491,7 @@ button, select {
   position: absolute;
   left: var(--x);
   top: var(--y);
-  z-index: 3;
+  z-index: 4;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -591,7 +591,7 @@ button, select {
   position: absolute;
   right: 14px;
   bottom: 14px;
-  z-index: 4;
+  z-index: 5;
   max-width: 320px;
   padding: 12px 14px;
   border-radius: 14px;
@@ -624,7 +624,7 @@ button, select {
   position: absolute;
   left: 12px;
   bottom: 12px;
-  z-index: 4;
+  z-index: 5;
   display: flex;
   gap: 6px;
 }
@@ -1334,15 +1334,30 @@ button, select {
 }
 
 .report__summary {
-  margin: 0 0 14px;
-  padding: 14px;
+  margin: 0;
+  padding: 12px;
   border-radius: 10px;
   background: var(--panel-soft);
   color: var(--ink);
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   line-height: 1.7;
   border: 1px solid var(--line);
-  box-shadow: inset 0 1px 3px rgba(0,0,0,0.04);
+}
+
+.report__summary-wrap {
+  margin-bottom: 12px;
+  padding: 12px 12px 0;
+  background: var(--gold-soft);
+  border-radius: 10px 10px 0 0;
+  border: 1px solid var(--gold);
+  border-bottom: none;
+}
+
+.report__summary-wrap .report__summary {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0 0 12px;
 }
 
 .report__highlights {
@@ -1367,11 +1382,150 @@ button, select {
   line-height: 1.8;
 }
 
+.report-history {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line-strong);
+}
+
+.report-history summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 4px 0;
+}
+
+.report-history__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.report-history__item {
+  border-radius: 10px;
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+
+.report-history__item summary {
+  padding: 8px 12px;
+  font-size: 0.75rem;
+  color: var(--muted);
+  cursor: pointer;
+  background: var(--bg-alt);
+}
+
+.report-history__item[open] summary {
+  color: var(--ink);
+  font-weight: 800;
+  border-bottom: 1px dashed var(--line-strong);
+}
+
+.report-history__item .report__summary {
+  margin: 8px;
+  font-size: 0.8rem;
+}
+
+.report-history__item .report__highlights {
+  margin: 0 8px 8px;
+  padding: 8px;
+}
+
 .report__empty {
   text-align: center;
   padding: 20px;
   color: var(--muted);
   font-size: 0.85rem;
+}
+
+/* ============================================================
+   Town Path Overlay
+   ============================================================ */
+
+.town-path-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* ============================================================
+   Resident Avatar SVG Images
+   ============================================================ */
+
+.resident-avatar-img {
+  border-radius: inherit;
+  object-fit: cover;
+  display: block;
+}
+
+.mini-avatar .resident-avatar-img {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+}
+
+.resident__avatar .resident-avatar-img {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+}
+
+.spotlight__avatar .resident-avatar-img {
+  width: 72px;
+  height: 72px;
+  border-radius: 16px;
+}
+
+.resident-icon-wrap .resident-avatar-img {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  box-shadow: var(--shadow-md);
+}
+
+/* ============================================================
+   Spotlight — Warm Glow & Role Badge
+   ============================================================ */
+
+.spotlight__glow {
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(201, 164, 85, 0.18) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.spotlight {
+  position: relative;
+  overflow: hidden;
+}
+
+.spotlight__avatar {
+  position: relative;
+  z-index: 1;
+}
+
+.spotlight__role-badge {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--purple-soft);
+  color: var(--purple);
+  font-size: 0.7rem;
+  font-weight: 700;
 }
 
 /* ============================================================
@@ -1533,9 +1687,26 @@ details summary {
 }
 
 @media (max-width: 900px) {
+  .shell { overflow-x: hidden; }
   .locations, .resident-list { grid-template-columns: repeat(2, 1fr); }
   .day-card { flex-direction: row; min-width: auto; }
   .phase-track { flex: 1; }
+  .hero { flex-wrap: wrap; }
+  .stats { flex-wrap: wrap; gap: 8px; }
+  .stats .meter { min-width: 45%; }
+  .actions { flex-direction: column; }
+  .button { min-height: 44px; width: 100%; }
+  .section-head { flex-direction: column; align-items: flex-start; }
+  .side { gap: 10px; }
+  .spotlight__role-card { grid-template-columns: 1fr; }
+  .town-stage { min-height: 360px; }
+  .stage-legend { flex-wrap: wrap; gap: 4px; }
+  .feed { max-height: 200px; }
+  .relations, .goal-list, .tip-list { gap: 6px; }
+  /* Prevent horizontal scroll */
+  body { overflow-x: hidden; }
+  .layout { gap: 12px; }
+  .report--active { margin-top: 0; }
 }
 
 @media (max-width: 720px) {

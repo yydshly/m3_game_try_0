@@ -7,6 +7,33 @@ const LOCATION_ICONS = {
   plaza: "./src/assets/ui/plaza.svg",
   forest: "./src/assets/ui/forest.svg",
 };
+
+const residentAvatarSrc = {
+  hua: "./src/assets/residents/hua.svg",
+  yuan: "./src/assets/residents/yuan.svg",
+  mimi: "./src/assets/residents/mimi.svg",
+  zhou: "./src/assets/residents/zhou.svg",
+  seven: "./src/assets/residents/seven.svg",
+};
+
+const decisionReasonLabels = {
+  "energy low, needs rest": "体力偏低，今天更适合先休息一下。",
+  "supplies low, help town forage": "小镇物资不多了，适合去森林采集。",
+  "follows current assignment": "正在按照当前安排行动中。",
+  "follows preferred task": "选择了自己更擅长也更喜欢的事情。",
+  "social need high, seeks company": "社交需求较高，想和小伙伴聊聊天。",
+  "achievement need high, seeks challenge": "成就需求较高，渴望有所突破。",
+  "town comfort low, helps improve": "小镇舒适度不足，想为小镇出一份力。",
+};
+
+function getResidentAvatarImg(resident, size = 40) {
+  const src = residentAvatarSrc[resident.id];
+  const fallback = escapeHtml(resident.avatar);
+  if (src) {
+    return `<img class="resident-avatar-img" src="${src}" alt="${escapeHtml(resident.name)}" width="${size}" height="${size}" onerror="this.replaceWith(document.createTextNode('${fallback}'))" />`;
+  }
+  return fallback;
+}
 import { getCurrentPhase, getLocation, getResidentsAtLocation, getTask, getTopRelationships, getTownGoals, getTownTips } from "../domain/selectors.js";
 
 function escapeHtml(value) {
@@ -41,15 +68,17 @@ function meter(label, value, tone = "green") {
 function renderAgentSummary(agent) {
   if (!agent) return "";
   const needs = agent.needs ?? { rest: 0, social: 0, achievement: 0 };
+  const rawReason = agent.decisionReason ?? "";
+  const chineseReason = decisionReasonLabels[rawReason] ?? rawReason;
   return `
     <div class="agent-summary">
       <p class="agent-reason">
-        <span class="agent-reason__label">💭 想法：</span>${escapeHtml(agent.decisionReason)}
+        <span class="agent-reason__label">💭 想法：</span>${escapeHtml(chineseReason)}
       </p>
       <div class="agent-needs-row">
-        <span class="agent-need-badge agent-need-badge--rest" title="休息需求">🌙 ${Math.round(needs.rest)}</span>
-        <span class="agent-need-badge agent-need-badge--social" title="社交需求">💬 ${Math.round(needs.social)}</span>
-        <span class="agent-need-badge agent-need-badge--achievement" title="成就需求">⭐ ${Math.round(needs.achievement)}</span>
+        <span class="agent-need-badge agent-need-badge--rest" title="休息需求">🌙 休息 ${Math.round(needs.rest)}</span>
+        <span class="agent-need-badge agent-need-badge--social" title="社交需求">💬 社交 ${Math.round(needs.social)}</span>
+        <span class="agent-need-badge agent-need-badge--achievement" title="成就需求">⭐ 成就 ${Math.round(needs.achievement)}</span>
       </div>
     </div>
   `;
@@ -206,7 +235,7 @@ function renderStageResident(state, resident, selectedResidentId) {
       aria-pressed="${resident.id === selectedResidentId ? "true" : "false"}"
     >
       <em>${escapeHtml(task.icon)}</em>
-      <span>${escapeHtml(resident.avatar)}</span>
+      <span class="resident-icon-wrap">${getResidentAvatarImg(resident, 40)}</span>
       <i>${escapeHtml(resident.name)}</i>
       <b>${escapeHtml(task.label)}</b>
     </button>
@@ -229,6 +258,7 @@ function renderTownStage(state, uiState) {
       </div>
       <div class="stage-path stage-path--one" aria-hidden="true"></div>
       <div class="stage-path stage-path--two" aria-hidden="true"></div>
+      <img class="town-path-overlay" src="./src/assets/ui/town-paths.svg" alt="" aria-hidden="true" />
       ${locations
         .map(
           (location) => `
@@ -269,7 +299,7 @@ function renderLocationCard(state, location) {
   const residentList = residents.length
     ? residents.map((resident) => {
         const task = getTask(resident.assignmentId);
-        return `<span class="mini-avatar" title="${escapeHtml(resident.name)} - ${escapeHtml(task?.label ?? "")}">${escapeHtml(resident.avatar)}</span>`;
+        return `<span class="mini-avatar" title="${escapeHtml(resident.name)} - ${escapeHtml(task?.label ?? "")}">${getResidentAvatarImg(resident, 24)}</span>`;
       }).join("")
     : `<span class="empty-note">暂无居民</span>`;
 
@@ -295,15 +325,17 @@ function renderSpotlight(state, uiState) {
 
   return `
     <section class="panel spotlight">
+      <div class="spotlight__glow" aria-hidden="true"></div>
       <div class="panel__head panel__head--spotlight">
         <h2>👤 居民详情</h2>
         <span class="panel-badge">${escapeHtml(location.name)}</span>
       </div>
       <div class="spotlight__header">
-        <div class="spotlight__avatar" aria-hidden="true">${escapeHtml(selected.avatar)}</div>
+        <div class="spotlight__avatar" aria-hidden="true">${getResidentAvatarImg(selected, 72)}</div>
         <div class="spotlight__info">
           <h3>${escapeHtml(selected.name)}</h3>
           <p>${escapeHtml(selected.role)} · ${escapeHtml(selected.skill)}</p>
+          <span class="spotlight__role-badge">${escapeHtml(selected.personality)}</span>
         </div>
       </div>
 
@@ -338,7 +370,7 @@ function renderResidentCard(resident, selectedResidentId) {
   return `
     <article class="resident ${resident.id === selectedResidentId ? "resident--selected" : ""}" data-resident-card="${escapeHtml(resident.id)}">
       <div class="resident__head">
-        <div class="resident__avatar" aria-hidden="true">${escapeHtml(resident.avatar)}</div>
+        <div class="resident__avatar" aria-hidden="true">${getResidentAvatarImg(resident, 40)}</div>
         <div class="resident__info">
           <h3>${escapeHtml(resident.name)}</h3>
           <p>${escapeHtml(resident.role)} · ${escapeHtml(resident.skill)}</p>
@@ -422,8 +454,8 @@ function renderRelationships(state) {
 }
 
 function renderReports(state) {
-  const report = state.reports[0];
-  if (!report) {
+  const [latestReport, ...olderReports] = state.reports;
+  if (!latestReport) {
     return `
       <section class="panel report">
         <div class="panel__head"><h2>📰 小镇日报</h2></div>
@@ -432,20 +464,43 @@ function renderReports(state) {
     `;
   }
 
+  const olderReportsHtml = olderReports.length > 0
+    ? `
+      <details class="report-history">
+        <summary>📜 历史日报（${olderReports.length} 份）</summary>
+        <div class="report-history__list">
+          ${olderReports.map((r) => `
+            <details class="report-history__item">
+              <summary>📰 ${escapeHtml(r.title)} · ${escapeHtml(r.phase)}</summary>
+              <p class="report__summary">${escapeHtml(r.summary)}</p>
+              <div class="report__highlights">
+                <p class="report__highlights-label">📝 今日大事：</p>
+                <ul>${r.highlights.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+              </div>
+            </details>
+          `).join("")}
+        </div>
+      </details>
+    `
+    : "";
+
   return `
     <section class="panel report report--active">
       <div class="report__header">
         <span class="report__badge">📰 小镇日报</span>
-        <h2>${escapeHtml(report.title)}</h2>
-        <span class="report__phase-tag">${escapeHtml(report.phase)}</span>
+        <h2>${escapeHtml(latestReport.title)}</h2>
+        <span class="report__phase-tag">${escapeHtml(latestReport.phase)}</span>
       </div>
-      <p class="report__summary">${escapeHtml(report.summary)}</p>
+      <div class="report__summary-wrap">
+        <p class="report__summary">${escapeHtml(latestReport.summary)}</p>
+      </div>
       <div class="report__highlights">
         <p class="report__highlights-label">📝 今日大事：</p>
         <ul>
-          ${report.highlights.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+          ${latestReport.highlights.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
         </ul>
       </div>
+      ${olderReportsHtml}
     </section>
   `;
 }

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 620" preserveAspectRatio="none" role="img" aria-label="小镇路径装饰">
+  <defs>
+    <filter id="blur"><feGaussianBlur stdDeviation="1.6"/></filter>
+  </defs>
+  <path d="M170 210 C310 170 390 230 510 315 C620 395 720 370 850 250" fill="none" stroke="#f8df9a" stroke-width="54" stroke-linecap="round" stroke-linejoin="round" opacity=".64" filter="url(#blur)"/>
+  <path d="M250 500 C360 410 430 390 510 315 C580 250 630 180 720 105" fill="none" stroke="#f8df9a" stroke-width="46" stroke-linecap="round" stroke-linejoin="round" opacity=".54" filter="url(#blur)"/>
+  <path d="M120 430 C240 410 380 360 510 315 C640 270 760 310 910 430" fill="none" stroke="#f8df9a" stroke-width="42" stroke-linecap="round" stroke-linejoin="round" opacity=".45" filter="url(#blur)"/>
+  <path d="M170 210 C310 170 390 230 510 315 C620 395 720 370 850 250" fill="none" stroke="#fff3c3" stroke-width="16" stroke-linecap="round" stroke-dasharray="7 16" opacity=".86"/>
+  <path d="M250 500 C360 410 430 390 510 315 C580 250 630 180 720 105" fill="none" stroke="#fff3c3" stroke-width="13" stroke-linecap="round" stroke-dasharray="7 14" opacity=".72"/>
+</svg>
