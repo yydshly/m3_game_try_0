@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      { "tool": "Bash", "prompt": "run dev server" },
+      { "tool": "Bash", "prompt": "run validation scripts (check, agent-check, smoke, render-check)" }
+    ]
+  },
+  "hooks": {}
+}
