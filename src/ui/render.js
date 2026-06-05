@@ -26,6 +26,45 @@ const decisionReasonLabels = {
   "town comfort low, helps improve": "小镇舒适度不足，想为小镇出一份力。",
 };
 
+// ── Stage Coordinate System ──────────────────────────────────────────────────────
+
+const stagePlaces = {
+  garden: { label: "花园", x: 24, y: 34, icon: "🌸" },
+  cafe:   { label: "餐厅", x: 52, y: 25, icon: "🍲" },
+  workshop: { label: "工坊", x: 72, y: 43, icon: "🔨" },
+  plaza:  { label: "广场", x: 48, y: 58, icon: "⛲" },
+  forest: { label: "森林", x: 24, y: 70, icon: "🌲" },
+};
+
+// Offsets so multiple residents at same place don't overlap
+const CHARACTER_OFFSETS = [
+  { dx: -4.5, dy: 7 },
+  { dx: 4.5,  dy: 7 },
+  { dx: -7,   dy: -2 },
+  { dx: 7,    dy: -2 },
+  { dx: 0,    dy: 10 },
+];
+
+function getResidentStagePosition(resident, indexAtLocation) {
+  const base = stagePlaces[resident.locationId] ?? stagePlaces.plaza;
+  const offset = CHARACTER_OFFSETS[indexAtLocation % CHARACTER_OFFSETS.length];
+  return {
+    x: base.x + offset.dx,
+    y: base.y + offset.dy,
+  };
+}
+
+// ── Task Stage Effects (for future animation — currently used for task bubbles) ──
+
+const taskStageEffects = {
+  plant:   { effect: "bloom", bubble: "花园变得更有精神了。" },
+  cook:    { effect: "steam",  bubble: "餐厅飘出了热气。" },
+  repair:  { effect: "spark",  bubble: "工坊传来轻轻的敲打声。" },
+  chat:    { effect: "chat",   bubble: "广场上的聊天声多了起来。" },
+  forage:  { effect: "leaf",   bubble: "森林里传来树叶沙沙声。" },
+  rest:    { effect: "rest",   bubble: "有人在安静地休息。" },
+};
+
 function getResidentAvatarImg(resident, size = 40) {
   const src = residentAvatarSrc[resident.id];
   const fallback = escapeHtml(resident.avatar);
@@ -348,76 +387,100 @@ function residentStatus(resident) {
   return { id: "steady", label: "平稳 🙂" };
 }
 
-function renderStageResident(state, resident, selectedResidentId) {
-  const residentsAtLocation = getResidentsAtLocation(state, resident.locationId);
-  const index = residentsAtLocation.findIndex((item) => item.id === resident.id);
-  const offsets = [
-    { x: -3, y: -5 }, { x: 3, y: -4 }, { x: -5, y: 3 }, { x: 5, y: 4 }, { x: 0, y: 7 }
-  ];
-  const offset = offsets[index % offsets.length];
-  const getLocationPos = (locId) => getLocation(locId)?.position ?? { x: 50, y: 50 };
-  const current = getLocationPos(resident.locationId);
-  const previous = getLocationPos(resident.previousLocationId ?? resident.locationId);
-  const task = getTask(resident.assignmentId);
-  const status = residentStatus(resident);
+// ── Town Stage (Map) ──────────────────────────────────────────────────────────
 
+function renderPlaceLabel(placeId, isActive) {
+  const place = stagePlaces[placeId];
+  if (!place) return "";
+  const activeClass = isActive ? " stage-place-label--active" : "";
   return `
-    <button
-      class="stage-resident stage-resident--${escapeHtml(status.id)}${resident.id === selectedResidentId ? " stage-resident--selected" : ""}"
-      data-resident-select="${escapeHtml(resident.id)}"
-      type="button"
-      title="${escapeHtml(resident.name)} / ${escapeHtml(task.label)} / ${escapeHtml(status.label)}"
-      style="--x:${current.x + offset.x}%; --y:${current.y + offset.y}%; --from-x:${previous.x + offset.x}%; --from-y:${previous.y + offset.y}%;"
-      aria-label="${escapeHtml(resident.name)} 在 ${escapeHtml(getLocation(resident.locationId).name)} / ${escapeHtml(task.label)}"
-      aria-pressed="${resident.id === selectedResidentId ? "true" : "false"}"
-    >
-      <span class="char-chip">
-        <span class="char-avatar">${getResidentAvatarImg(resident, 36)}</span>
-        <span class="char-text">
-          <span class="char-name">${escapeHtml(resident.name)}</span>
-          <span class="char-task">${escapeHtml(task.label)}</span>
-        </span>
-      </span>
-    </button>
+    <div class="stage-place-label stage-place-label--${escapeHtml(placeId)}${activeClass}"
+         style="left:${place.x}%; top:${place.y}%;"
+         aria-label="${escapeHtml(place.label)}">
+      <span class="stage-place-label__icon">${place.icon}</span>
+      <span class="stage-place-label__name">${escapeHtml(place.label)}</span>
+    </div>
   `;
 }
 
-// ── Town Stage (Map) ──────────────────────────────────────────────────────────
+function renderStageCharacter(resident, position, taskLabel, status, isSelected) {
+  const posX = position.x;
+  const posY = position.y;
+  const selectedClass = isSelected ? " stage-character--selected" : "";
+  const statusClass = ` stage-character--${status.id}`;
+  const task = taskLabel ? escapeHtml(taskLabel) : "";
+
+  return `
+    <button
+      class="stage-character${selectedClass}${statusClass}"
+      style="left:${posX}%; top:${posY}%;"
+      data-action="select-resident"
+      data-resident-id="${escapeHtml(resident.id)}"
+      type="button"
+      title="${escapeHtml(resident.name)} / ${escapeHtml(task)}"
+      aria-label="${escapeHtml(resident.name)}在${escapeHtml(stagePlaces[resident.locationId]?.label ?? "广场")}"
+    >
+      <span class="stage-character__sprite">
+        ${getResidentAvatarImg(resident, 54)}
+      </span>
+      <span class="stage-character__name">${escapeHtml(resident.name)}</span>
+      ${task ? `<span class="stage-character__task">${escapeHtml(task)}</span>` : ""}
+    </button>
+  `;
+}
 
 function renderTownStage(state, uiState) {
   const latestEvent = [...state.events].reverse().find((event) => event.type !== "system");
   const phase = getCurrentPhase(state);
 
+  // Determine which place has residents (for active labels)
+  const activePlaceIds = new Set(state.residents.map((r) => r.locationId));
+
+  // Build place labels
+  const placeLabelsHtml = Object.keys(stagePlaces)
+    .map((placeId) => renderPlaceLabel(placeId, activePlaceIds.has(placeId)))
+    .join("");
+
+  // Build stage characters — group residents by location for offsetting
+  const residentsByLocation = {};
+  for (const resident of state.residents) {
+    if (!residentsByLocation[resident.locationId]) {
+      residentsByLocation[resident.locationId] = [];
+    }
+    residentsByLocation[resident.locationId].push(resident);
+  }
+
+  const charactersHtml = state.residents
+    .map((resident, globalIndex) => {
+      const locals = residentsByLocation[resident.locationId] ?? [];
+      const localIndex = locals.indexOf(resident);
+      const pos = getResidentStagePosition(resident, localIndex);
+      const task = getTask(resident.assignmentId);
+      const status = residentStatus(resident);
+      return renderStageCharacter(
+        resident,
+        pos,
+        task?.label ?? "",
+        status,
+        resident.id === uiState.selectedResidentId,
+      );
+    })
+    .join("");
+
   return `
-    <div class="town-stage town-stage--${escapeHtml(phase.id)}" aria-label="小镇地图 - ${escapeHtml(phase.label)}">
-      <div class="stage-sky" aria-hidden="true">
-        <span class="cloud cloud--one"></span>
-        <span class="cloud cloud--two"></span>
-        <span class="sun"></span>
+    <section class="town-stage town-stage--${escapeHtml(phase.id)}" aria-label="小镇地图 - ${escapeHtml(phase.label)}">
+      <img
+        class="town-stage__background"
+        src="./src/assets/map/town-stage-day.svg"
+        alt=""
+        aria-hidden="true"
+      />
+      <div class="town-stage__labels" aria-hidden="true">
+        ${placeLabelsHtml}
       </div>
-      <div class="stage-particles" aria-hidden="true">
-        <span></span><span></span><span></span><span></span><span></span>
+      <div class="town-stage__characters">
+        ${charactersHtml}
       </div>
-      <div class="stage-path stage-path--one" aria-hidden="true"></div>
-      <div class="stage-path stage-path--two" aria-hidden="true"></div>
-      <img class="town-path-overlay" src="./src/assets/ui/town-paths.svg" alt="" aria-hidden="true" />
-      ${locations
-        .map(
-          (location) => `
-            <article
-              class="stage-place stage-place--${escapeHtml(location.tone)}"
-              style="--x:${location.position.x}%; --y:${location.position.y}%;"
-              aria-label="${escapeHtml(location.name)}"
-            >
-              <span class="place-icon">
-                <img src="${LOCATION_ICONS[location.id] ?? ""}" alt="${escapeHtml(location.name)}" width="44" height="44" />
-              </span>
-              <strong>${escapeHtml(location.name)}</strong>
-            </article>
-          `,
-        )
-        .join("")}
-      ${state.residents.map((resident) => renderStageResident(state, resident, uiState.selectedResidentId)).join("")}
       ${
         latestEvent
           ? `
@@ -432,29 +495,27 @@ function renderTownStage(state, uiState) {
         <span class="stage-legend__item"><i class="status-dot status-dot--steady"></i>平稳</span>
         <span class="stage-legend__item"><i class="status-dot status-dot--tired"></i>疲惫</span>
       </div>
-    </div>
+    </section>
   `;
 }
 
 function renderLocationCard(state, location) {
+  const place = stagePlaces[location.id];
   const residents = getResidentsAtLocation(state, location.id);
-  const residentList = residents.length
-    ? residents.map((resident) => {
-        const task = getTask(resident.assignmentId);
-        return `<span class="mini-avatar" title="${escapeHtml(resident.name)} - ${escapeHtml(task?.label ?? "")}">${getResidentAvatarImg(resident, 22)}</span>`;
-      }).join("")
+  const residentAvatars = residents.length
+    ? residents
+        .map((resident) =>
+          `<span class="mini-avatar" title="${escapeHtml(resident.name)}">${getResidentAvatarImg(resident, 20)}</span>`
+        )
+        .join("")
     : "";
 
   return `
-    <article class="location location--${escapeHtml(location.tone)}">
-      <div class="location__icon">
-        <img src="${LOCATION_ICONS[location.id] ?? ""}" alt="${escapeHtml(location.name)}" />
-      </div>
-      <div class="location__info">
-        <h3>${escapeHtml(location.name)}</h3>
-        <div class="location__residents" aria-label="这里的居民">${residentList || '<span class="empty-note">-</span>'}</div>
-      </div>
-    </article>
+    <div class="location-codex__item">
+      <span class="location-codex__icon">${place ? place.icon : "📍"}</span>
+      <span class="location-codex__name">${escapeHtml(place ? place.label : location.name)}</span>
+      <div class="location-codex__residents">${residentAvatars || '<span class="empty-note">-</span>'}</div>
+    </div>
   `;
 }
 
@@ -926,6 +987,11 @@ function bindEvents(root, handlers) {
   root.querySelector("[data-action='minimax-broadcast']").addEventListener("click", handlers.onMiniMaxBroadcast);
   root.querySelector("[data-action='reset-assignments']").addEventListener("click", handlers.onResetAssignments);
   root.querySelector("[data-action='new-town']").addEventListener("click", handlers.onNewTown);
+  root.querySelectorAll("[data-action='select-resident']").forEach((button) => {
+    button.addEventListener("click", () => {
+      handlers.onSelectResident(button.dataset.residentId);
+    });
+  });
   root.querySelectorAll("[data-resident-select]").forEach((button) => {
     button.addEventListener("click", (event) => {
       handlers.onSelectResident(event.currentTarget.dataset.residentSelect);
@@ -984,7 +1050,7 @@ export function renderApp(root, state, handlers, uiState = {}) {
             </div>
           </div>
           ${renderTownStage(state, safeUiState)}
-          <div class="locations">
+          <div class="location-codex">
             ${locations.map((location) => renderLocationCard(state, location)).join("")}
           </div>
         </section>

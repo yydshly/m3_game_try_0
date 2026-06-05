@@ -120,6 +120,12 @@ Player choices are recorded beyond the event feed. When a player responds to an 
 
 The first version does not change resources, mood, energy, or relationships. It only makes the town remember what happened, so future planning, broadcasts, and events can reference the player's past decisions.
 
+## Illustrated Town Stage
+
+The central map has been upgraded into an illustrated town stage. The stage uses a layered SVG background with a painted grass field, winding paths, buildings, a fountain, trees, and decorative elements. Place labels float on the scene as game-style wooden plaques, and residents appear as illustrated character tokens with task bubbles overhead.
+
+This stage does not implement full walking animation yet. It prepares the project for the next step: task animation, where residents can move between places, play task effects, and show action bubbles.
+
 ## 小镇氛围与广播
 
 AI 小镇生活新增了轻量氛围层。MiniMax-M3 可以根据当前天数、阶段、居民状态、小镇资源、最近事件和日报生成一段小镇广播文案。
@@ -135,6 +141,12 @@ M3 生成的小镇事件可以带两个温和选择。当前版本只把玩家�
 玩家对 M3 小镇事件做出的选择，不只会出现在小镇动态中，也会写入小镇记忆，并在相关居民的记忆中留下记录。
 
 当前版本不直接改变资源、心情、体力或关系，只先验证一个关键体验：小镇会记住玩家的决定，后续 AI 管家、事件和广播可以基于这些记忆继续生成内容。
+
+## 插画式小镇舞台
+
+中央地图已经从卡片式地图升级为插画式小镇舞台。舞台使用分层 SVG 背景，包含草地、弯曲道路、建筑、喷泉、树木和装饰元素。地点以游戏风格木牌悬浮在场景中，居民以角色令牌形式出现，头顶显示任务气泡。
+
+当前版本还不实现完整行走动画，而是为下一步任务动画层做准备：居民可以在地点之间移动、播放任务特效，并显示行动气泡。
 
 ### API Style Configuration
 

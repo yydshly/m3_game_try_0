@@ -21,6 +21,7 @@
     "event-check": "node scripts/event-director-check.mjs",
     "broadcast-check": "node scripts/broadcast-check.mjs",
     "choice-check": "node scripts/event-choice-check.mjs",
-    "memory-check": "node scripts/memory-link-check.mjs"
+    "memory-check": "node scripts/memory-link-check.mjs",
+    "stage-check": "node scripts/stage-check.mjs"
   }
 }
