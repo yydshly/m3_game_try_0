@@ -67,11 +67,12 @@ function render() {
       },
       onMiniMaxPlan: async () => {
         stopAutoPlay();
-        uiState = { ...uiState, llmStatus: "loading", llmMessage: "Asking MiniMax to plan the next phase..." };
+        uiState = { ...uiState, llmStatus: "loading", llmMessage: "正在观察居民状态和小镇资源……" };
         render();
         try {
           const plan = await requestMiniMaxPlan(state);
-          uiState = { ...uiState, llmStatus: "ready", llmMessage: plan.model ? `Plan from ${plan.model}` : "MiniMax plan applied" };
+          const townNote = plan.townNote ? `✨ ${plan.townNote}` : "✨ AI 管家已完成本轮安排~";
+          uiState = { ...uiState, llmStatus: "ready", llmMessage: townNote };
           commit(applyAgentPlan(state, plan));
         } catch (error) {
           uiState = { ...uiState, llmStatus: "error", llmMessage: error.message };

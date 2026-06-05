@@ -8,9 +8,34 @@ const root = normalize(join(dirname(fileURLToPath(import.meta.url)), ".."));
 const config = loadConfig();
 const port = Number(envValue("PORT") ?? config.server?.port ?? 4173);
 const host = getArgValue("--host") ?? envValue("HOST") ?? config.server?.host ?? "127.0.0.1";
-const minimaxApiKey = envValue("MINIMAX_API_KEY") ?? config.minimax?.apiKey ?? "";
-const minimaxBaseUrl = envValue("MINIMAX_BASE_URL") ?? config.minimax?.baseUrl ?? "https://api.minimax.io/v1";
-const minimaxModel = envValue("MINIMAX_MODEL") ?? config.minimax?.model ?? "MiniMax-M2.1";
+
+const minimaxApiStyle =
+  envValue("MINIMAX_API_STYLE") ??
+  config.minimax?.apiStyle ??
+  "anthropic";
+
+const minimaxApiKey =
+  envValue("MINIMAX_API_KEY") ??
+  envValue("ANTHROPIC_API_KEY") ??
+  config.minimax?.apiKey ??
+  "";
+
+const minimaxAnthropicBaseUrl =
+  envValue("ANTHROPIC_BASE_URL") ??
+  envValue("MINIMAX_ANTHROPIC_BASE_URL") ??
+  config.minimax?.anthropicBaseUrl ??
+  "https://api.minimaxi.com/anthropic";
+
+const minimaxBaseUrl =
+  envValue("MINIMAX_BASE_URL") ??
+  config.minimax?.baseUrl ??
+  "https://api.minimax.io/v1";
+
+const minimaxModel =
+  envValue("MINIMAX_MODEL") ??
+  config.minimax?.model ??
+  "MiniMax-M3";
+
 const minimaxTimeoutMs = Number(envValue("MINIMAX_TIMEOUT_MS") ?? config.minimax?.timeoutMs ?? 30_000);
 
 const mimeTypes = {
@@ -78,32 +103,82 @@ function sendJson(response, status, payload) {
 }
 
 function buildMiniMaxPrompt(state) {
-  return [
-    {
-      role: "system",
-      content:
-        "You are the planning brain for a cozy multi-agent town simulation game. Choose one valid task for each resident. Keep choices practical, varied, and consistent with mood, energy, personality, memory, and town needs. Return strict JSON only.",
+  return {
+    system:
+      "You are the planning brain for a cozy multi-agent town simulation game. Choose one valid task for each resident. Keep choices practical, varied, and consistent with mood, energy, personality, memory, and town needs. Return strict JSON only.",
+    userContent: JSON.stringify({
+      validTaskIds: ["plant", "cook", "repair", "chat", "forage", "rest"],
+      taskMeanings: {
+        plant: "care for garden, improves comfort",
+        cook: "prepare food at cafe, improves mood but uses supplies",
+        repair: "repair facilities, improves comfort but uses supplies and energy",
+        chat: "socialize at plaza, improves mood and relationship chance",
+        forage: "gather supplies in forest, uses energy",
+        rest: "recover at cafe",
+      },
+      requiredSchema: {
+        assignments: [{ residentId: "string", taskId: "validTaskId", reason: "short reason under 24 words" }],
+        townNote: "one short sentence for the player",
+      },
+      state,
+    }),
+  };
+}
+
+function extractAnthropicText(payload) {
+  return (payload?.content ?? [])
+    .filter((block) => block?.type === "text")
+    .map((block) => block.text ?? "")
+    .join("\n")
+    .trim();
+}
+
+async function requestMiniMaxAnthropicPlan({ apiKey, baseUrl, model, state, signal }) {
+  const { system, userContent } = buildMiniMaxPrompt(state);
+  const response = await fetch(`${baseUrl}/v1/messages`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${apiKey}`,
+      "content-type": "application/json",
     },
-    {
-      role: "user",
-      content: JSON.stringify({
-        validTaskIds: ["plant", "cook", "repair", "chat", "forage", "rest"],
-        taskMeanings: {
-          plant: "care for garden, improves comfort",
-          cook: "prepare food at cafe, improves mood but uses supplies",
-          repair: "repair facilities, improves comfort but uses supplies and energy",
-          chat: "socialize at plaza, improves mood and relationship chance",
-          forage: "gather supplies in forest, uses energy",
-          rest: "recover at cafe",
+    body: JSON.stringify({
+      model,
+      max_tokens: 800,
+      temperature: 0.7,
+      thinking: { type: "disabled" },
+      system,
+      messages: [
+        {
+          role: "user",
+          content: [{ type: "text", text: userContent }],
         },
-        requiredSchema: {
-          assignments: [{ residentId: "string", taskId: "validTaskId", reason: "short reason under 24 words" }],
-          townNote: "one short sentence for the player",
-        },
-        state,
-      }),
+      ],
+    }),
+    signal,
+  });
+  return response;
+}
+
+async function requestMiniMaxOpenAiPlan({ apiKey, baseUrl, model, state, signal }) {
+  const { system, userContent } = buildMiniMaxPrompt(state);
+  const response = await fetch(`${baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${apiKey}`,
+      "content-type": "application/json",
     },
-  ];
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: userContent },
+      ],
+      temperature: 0.7,
+      max_tokens: 800,
+    }),
+    signal,
+  });
+  return response;
 }
 
 function stripThinkTags(text) {
@@ -168,7 +243,8 @@ function normalizeMiniMaxPlan(rawPlan, state) {
 async function handleMiniMaxPlan(request, response) {
   if (!minimaxApiKey || minimaxApiKey === "your_minimax_api_key_here") {
     sendJson(response, 501, {
-      error: "MiniMax API key is not configured. Set MINIMAX_API_KEY or add minimax.apiKey to config.local.json, then restart the server.",
+      error: "AI 管家暂时还没准备好，你可以先手动安排居民今天的生活。",
+      technicalError: "MiniMax API key is not configured. Set MINIMAX_API_KEY / ANTHROPIC_API_KEY or config.minimax.apiKey.",
       fallback: true,
     });
     return;
@@ -177,55 +253,90 @@ async function handleMiniMaxPlan(request, response) {
   try {
     const { state } = await readJson(request);
     if (!state || !Array.isArray(state.residents)) {
-      sendJson(response, 400, { error: "Request state must include a residents array." });
+      sendJson(response, 400, {
+        error: "AI 管家收不到小镇状态，请刷新页面后重试。",
+        technicalError: "Request state must include a residents array.",
+        fallback: false,
+      });
       return;
     }
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), minimaxTimeoutMs);
     let minimaxResponse;
+
     try {
-      minimaxResponse = await fetch(`${minimaxBaseUrl}/chat/completions`, {
-        method: "POST",
-        headers: {
-          authorization: `Bearer ${minimaxApiKey}`,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
+      if (minimaxApiStyle === "openai") {
+        minimaxResponse = await requestMiniMaxOpenAiPlan({
+          apiKey: minimaxApiKey,
+          baseUrl: minimaxBaseUrl,
           model: minimaxModel,
-          messages: buildMiniMaxPrompt(state),
-          temperature: 0.7,
-          max_tokens: 800,
-        }),
-        signal: controller.signal,
-      });
+          state,
+          signal: controller.signal,
+        });
+      } else {
+        // Default: anthropic
+        minimaxResponse = await requestMiniMaxAnthropicPlan({
+          apiKey: minimaxApiKey,
+          baseUrl: minimaxAnthropicBaseUrl,
+          model: minimaxModel,
+          state,
+          signal: controller.signal,
+        });
+      }
     } finally {
       clearTimeout(timeout);
     }
 
     const payload = await minimaxResponse.json().catch(() => ({}));
+
     if (!minimaxResponse.ok) {
       sendJson(response, minimaxResponse.status, {
-        error: payload?.error?.message ?? payload?.message ?? `MiniMax returned ${minimaxResponse.status}`,
+        error: "AI 管家遇到了一点问题，暂时无法安排居民活动。",
+        technicalError: payload?.error?.message ?? payload?.message ?? `MiniMax returned ${minimaxResponse.status}`,
+        fallback: false,
       });
       return;
     }
 
-    const content = payload?.choices?.[0]?.message?.content;
-    if (!content) {
-      sendJson(response, 502, { error: "MiniMax response did not include message content." });
+    let rawText;
+    let usedStyle = minimaxApiStyle;
+
+    if (minimaxApiStyle === "openai") {
+      rawText = payload?.choices?.[0]?.message?.content;
+    } else {
+      rawText = extractAnthropicText(payload);
+      usedStyle = "anthropic";
+    }
+
+    if (!rawText) {
+      sendJson(response, 502, {
+        error: "AI 管家没有返回有效内容，请稍后重试。",
+        technicalError: usedStyle === "anthropic"
+          ? "Anthropic response did not include text content."
+          : "OpenAI response did not include message content.",
+        fallback: false,
+      });
       return;
     }
 
-    const parsed = extractJsonObject(content);
+    const parsed = extractJsonObject(rawText);
     sendJson(response, 200, {
       ...normalizeMiniMaxPlan(parsed, state),
       model: payload.model ?? minimaxModel,
       provider: "minimax",
+      apiStyle: usedStyle,
     });
   } catch (error) {
-    sendJson(response, 500, {
-      error: error.name === "AbortError" ? `MiniMax request timed out after ${minimaxTimeoutMs}ms.` : error.message,
+    const isTimeout = error.name === "AbortError";
+    sendJson(response, isTimeout ? 504 : 500, {
+      error: isTimeout
+        ? `AI 管家思考超时了（${minimaxTimeoutMs / 1000}s），请稍后重试。`
+        : "AI 管家遇到未知错误，请稍后重试。",
+      technicalError: isTimeout
+        ? `Request timed out after ${minimaxTimeoutMs}ms.`
+        : error.message,
+      fallback: false,
     });
   }
 }

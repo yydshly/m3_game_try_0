@@ -4,8 +4,10 @@
     "port": 4173
   },
   "minimax": {
+    "apiStyle": "anthropic",
     "apiKey": "your_minimax_api_key_here",
-    "model": "MiniMax-M2.1",
+    "model": "MiniMax-M3",
+    "anthropicBaseUrl": "https://api.minimaxi.com/anthropic",
     "baseUrl": "https://api.minimax.io/v1",
     "timeoutMs": 30000
   }

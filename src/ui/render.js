@@ -216,26 +216,69 @@ function renderTips(state) {
 
 function renderLlmStatus(uiState) {
   if (!uiState.llmMessage) return "";
-  const statusIcon = uiState.llmStatus === "error" ? "⚠️" : uiState.llmStatus === "loading" ? "🤖" : "✨";
-  const badgeLabel = { idle: "待机", loading: "思考中", ready: "就绪", error: "异常" };
-  const friendlyMessage = (() => {
-    if (uiState.llmStatus === "loading") return "🤖 AI 管家正在观察小镇状态……";
-    if (uiState.llmStatus === "ready") return "✨ AI 管家已给出今天的安排建议~";
-    if (uiState.llmStatus === "error") {
-      if (uiState.llmMessage.includes("Failed to fetch") || uiState.llmMessage.includes("NetworkError") || uiState.llmMessage.includes("fetch")) {
-        return "🤖 AI 管家暂时还没准备好，你可以先手动安排居民今天的生活~";
+
+  const statusIcon = {
+    idle: "🤖",
+    loading: "🤖",
+    ready: "✨",
+    error: "⚠️",
+    unconfigured: "⚙️",
+  }[uiState.llmStatus] ?? "🤖";
+
+  const title = {
+    idle: "AI 小镇管家",
+    loading: "AI 管家思考中",
+    ready: "AI 管家已安排",
+    error: "AI 管家遇到问题",
+    unconfigured: "AI 管家待配置",
+  }[uiState.llmStatus] ?? "AI 小镇管家";
+
+  const badgeLabel = {
+    idle: "待机",
+    loading: "思考中",
+    ready: "已就绪",
+    error: "异常",
+    unconfigured: "待配置",
+  }[uiState.llmStatus] ?? uiState.llmStatus;
+
+  let message = uiState.llmMessage;
+
+  // If the backend sends a structured payload with error + technicalError
+  let hint = "";
+  try {
+    // Message might be a JSON string if the backend sent it as JSON in llmMessage
+    const parsed = JSON.parse(uiState.llmMessage);
+    if (parsed.error) {
+      message = parsed.error;
+      if (parsed.technicalError && parsed.fallback) {
+        hint = "在 config.local.json 中配置 MiniMax-M3 后即可启用。";
       }
-      return "🤖 AI 管家遇到了一点问题：" + uiState.llmMessage;
     }
-    return uiState.llmMessage;
-  })();
+  } catch {
+    // Not JSON, use as-is
+  }
+
+  // Map network errors to friendly message
+  if (uiState.llmStatus === "error" &&
+      (uiState.llmMessage.includes("Failed to fetch") ||
+       uiState.llmMessage.includes("NetworkError") ||
+       uiState.llmMessage.includes("fetch") ||
+       uiState.llmMessage.includes("AI 管家遇到了一点问题") ||
+       uiState.llmMessage.includes("AI 管家没有返回") ||
+       uiState.llmMessage.includes("AI 管家思考超时"))) {
+    // Already friendly
+  } else if (uiState.llmStatus === "error" && !message.includes("AI 管家")) {
+    message = "AI 管家遇到了一点问题，请稍后重试。";
+  }
+
   return `
     <section class="panel llm-status llm-status--${escapeHtml(uiState.llmStatus)}">
       <div class="panel__head">
-        <h2>${statusIcon} AI 小镇管家</h2>
-        <span class="llm-status-badge llm-status-badge--${escapeHtml(uiState.llmStatus)}">${badgeLabel[uiState.llmStatus] ?? uiState.llmStatus}</span>
+        <h2>${statusIcon} ${escapeHtml(title)}</h2>
+        <span class="llm-status-badge llm-status-badge--${escapeHtml(uiState.llmStatus)}">${escapeHtml(badgeLabel)}</span>
       </div>
-      <p>${escapeHtml(friendlyMessage)}</p>
+      <p>${escapeHtml(message)}</p>
+      ${hint ? `<p class="llm-status__hint">💡 ${escapeHtml(hint)}</p>` : ""}
     </section>
   `;
 }

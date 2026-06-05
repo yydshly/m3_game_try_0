@@ -21,7 +21,7 @@ Any static file server can also host this directory.
 
 ## Enable MiniMax Agent Mode
 
-The UI works without MiniMax, but the `MiniMax Plan` button needs a server-side API key.
+The UI works without MiniMax, but the `🤖 AI 管家安排` button needs a server-side API key.
 
 Recommended local setup:
 
@@ -39,9 +39,10 @@ Edit `config.local.json`:
     "port": 4173
   },
   "minimax": {
-    "apiKey": "your_minimax_api_key_here",
-    "model": "MiniMax-M2.1",
-    "baseUrl": "https://api.minimax.io/v1",
+    "apiStyle": "anthropic",
+    "apiKey": "your_real_key_here",
+    "model": "MiniMax-M3",
+    "anthropicBaseUrl": "https://api.minimaxi.com/anthropic",
     "timeoutMs": 30000
   }
 }
@@ -61,8 +62,9 @@ PowerShell example:
 
 ```powershell
 cd ai-town-life
-$env:MINIMAX_API_KEY="your_key_here"
-$env:MINIMAX_MODEL="MiniMax-M2.1"
+$env:ANTHROPIC_API_KEY="your_real_key_here"
+$env:MINIMAX_MODEL="MiniMax-M3"
+$env:MINIMAX_API_STYLE="anthropic"
 node scripts/server.mjs
 ```
 
@@ -72,17 +74,31 @@ Then open:
 http://127.0.0.1:4173
 ```
 
-Click `MiniMax Plan`. The server sends the current town state to MiniMax and applies the returned resident task plan.
+Click `🤖 AI 管家安排`. The server sends the current town state to MiniMax and applies the returned resident task plan.
 
-Optional environment variables:
+### API Style Configuration
+
+Two API styles are supported:
+
+| Style | Endpoint | Use Case |
+|-------|----------|----------|
+| `anthropic` (default) | `${anthropicBaseUrl}/v1/messages` | MiniMax-M3 with Anthropic Messages API |
+| `openai` | `${baseUrl}/chat/completions` | MiniMax-M2.1 OpenAI-compatible API |
+
+Set via `MINIMAX_API_STYLE` environment variable or `minimax.apiStyle` in config.
+
+### Environment Variables
 
 ```text
-MINIMAX_API_KEY   required for MiniMax Plan
-MINIMAX_MODEL     defaults to MiniMax-M2.1
-MINIMAX_BASE_URL  defaults to https://api.minimax.io/v1
+ANTHROPIC_API_KEY        MiniMax API key (takes priority)
+MINIMAX_API_KEY          MiniMax API key (fallback)
+MINIMAX_API_STYLE        "anthropic" or "openai" (default: anthropic)
+MINIMAX_MODEL            Model name (default: MiniMax-M3)
+ANTHROPIC_BASE_URL       Anthropic endpoint (default: https://api.minimaxi.com/anthropic)
+MINIMAX_BASE_URL         OpenAI endpoint (default: https://api.minimax.io/v1)
 ```
 
-Do not put `MINIMAX_API_KEY` in frontend files. The local Node server keeps it server-side.
+Do not put real API keys in frontend files, config.example.json, or README. Keep them only in `config.local.json` or environment variables.
 
 ## Open On Phone
 

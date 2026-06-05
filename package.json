@@ -13,6 +13,7 @@
     "api-check": "node scripts/api-check.mjs",
     "config-check": "node scripts/config-check.mjs",
     "minimax-adapter-check": "node scripts/minimax-adapter-check.mjs",
+    "anthropic-check": "node scripts/minimax-adapter-check.mjs",
     "validate": "node scripts/validate.mjs",
     "smoke": "node scripts/smoke.mjs",
     "render-check": "node scripts/render-check.mjs",
