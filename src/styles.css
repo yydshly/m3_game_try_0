@@ -620,6 +620,71 @@ button, select {
   50%       { transform: scale(1.04); }
 }
 
+/* ── Travel Animation ─────────────────────────────────────── */
+.stage-character--traveling {
+  animation: characterTravel 1.1s ease-in-out both;
+}
+
+@keyframes characterTravel {
+  from { left: var(--from-x); top: var(--from-y); }
+  to   { left: var(--to-x);   top: var(--to-y);   }
+}
+
+/* Stop idle breathing during travel */
+.stage-character--traveling .stage-character__sprite {
+  animation: none;
+}
+
+/* Direction flip — apply to inner img */
+.stage-character--face-left .stage-character__sprite {
+  transform: scaleX(-1);
+}
+
+/* During travel: delay action bubble until character arrives (~1.1s travel) */
+.stage-character--traveling .stage-character__action-bubble {
+  animation-delay: 1.05s;
+}
+
+/* Effect anchors delay slightly so character can arrive first */
+.stage-place-label--traveling .stage-effect-anchor {
+  animation-delay: .95s;
+}
+
+/* Gait sprite animations */
+.stage-character--gait-walk .stage-character__sprite {
+  animation: characterWalkSprite 0.55s ease-in-out infinite;
+}
+
+.stage-character--gait-run .stage-character__sprite {
+  animation: characterRunSprite 0.35s ease-in-out infinite;
+}
+
+.stage-character--gait-slow .stage-character__sprite {
+  animation: characterSlowSprite 0.9s ease-in-out infinite;
+}
+
+@keyframes characterWalkSprite {
+  0%, 100% { transform: scaleX(1) translateY(0); }
+  25%       { transform: scaleX(1) translateY(-3px); }
+  75%       { transform: scaleX(1) translateY(2px); }
+}
+
+@keyframes characterRunSprite {
+  0%, 100% { transform: translateY(0); }
+  30%       { transform: translateY(-5px); }
+  60%       { transform: translateY(2px); }
+}
+
+@keyframes characterSlowSprite {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%       { transform: scale(1.05); opacity: 0.85; }
+}
+
+@keyframes characterBreathe {
+  0%, 100% { transform: scale(1); }
+  50%       { transform: scale(1.04); }
+}
+
 /* ── Location Codex (downgraded below-map location cards) ── */
 .location-codex {
   display: flex;
@@ -807,6 +872,7 @@ button, select {
 
 /* ── Reduced Motion ── */
 @media (prefers-reduced-motion: reduce) {
+  .stage-character--traveling,
   .stage-character__sprite,
   .stage-effect-anchor,
   .stage-character__action-bubble {
@@ -2687,6 +2753,7 @@ details summary {
   .stage-character__task { display: none; }
   .stage-character__action-bubble { display: none; }
   .stage-effect-anchor { transform: translateX(-50%) scale(0.75); }
+  .stage-character--traveling { animation-duration: 0.85s; }
   .stage-legend { flex-wrap: wrap; gap: 4px; }
   .actions { flex-direction: column; }
   .button { width: 100%; }

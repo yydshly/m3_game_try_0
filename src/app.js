@@ -31,40 +31,61 @@ let animationTimer = null;
 // ── Task Animation Layer ────────────────────────────────────────────────────────────
 
 const TASK_STAGE_EFFECTS = {
-  plant:   { action: "work", effect: "bloom", bubble: "花园变得更有精神了。" },
-  cook:    { action: "work", effect: "steam",  bubble: "餐厅飘出了热气。" },
-  repair:  { action: "work", effect: "spark",  bubble: "工坊传来轻轻的敲打声。" },
-  chat:    { action: "chat", effect: "chat",   bubble: "广场上的聊天声多了起来。" },
-  forage:  { action: "work", effect: "leaf",   bubble: "森林里传来树叶沙沙声。" },
-  rest:    { action: "rest", effect: "rest",   bubble: "有人在安静地休息。" },
+  plant:   { action: "work", effect: "bloom", bubble: "花园变得更有精神了。", gait: "walk" },
+  cook:    { action: "work", effect: "steam",  bubble: "餐厅飘出了热气。", gait: "walk" },
+  repair:  { action: "work", effect: "spark",  bubble: "工坊传来轻轻的敲打声。", gait: "walk" },
+  chat:    { action: "chat", effect: "chat",   bubble: "广场上的聊天声多了起来。", gait: "walk" },
+  forage:  { action: "work", effect: "leaf",   bubble: "森林里传来树叶沙沙声。", gait: "run" },
+  rest:    { action: "rest", effect: "rest",   bubble: "有人在安静地休息。", gait: "slow" },
 };
 
-function buildTaskAnimations(nextState) {
+function getGait(taskId, resident) {
+  if (taskId === "forage") return "run";
+  if (taskId === "rest") return "slow";
+  if ((resident?.energy ?? 100) < 30) return "slow";
+  return "walk";
+}
+
+function buildTaskAnimations(prevState, nextState) {
+  const prevById = new Map((prevState?.residents ?? []).map((r) => [r.id, r]));
+
   return nextState.residents.map((resident) => {
     const taskId = resident.assignmentId;
     const effect = TASK_STAGE_EFFECTS[taskId] ?? TASK_STAGE_EFFECTS.rest;
+    const gait = getGait(taskId, resident);
+
+    const fromResident = prevById.get(resident.id);
+    const fromPlaceId = fromResident?.locationId ?? null;
+    const toPlaceId = resident.locationId ?? effect.placeId ?? null;
+    const traveling = fromPlaceId != null && toPlaceId !== fromPlaceId;
+
     return {
       id: `anim-${Date.now()}-${resident.id}`,
       residentId: resident.id,
       taskId,
-      placeId: resident.locationId,
+      fromPlaceId: fromPlaceId ?? toPlaceId,
+      toPlaceId,
+      placeId: toPlaceId,
       action: effect.action,
       effect: effect.effect,
       bubble: effect.bubble,
+      gait,
+      traveling,
       startedAt: Date.now(),
     };
   });
 }
 
-function showTaskAnimations(nextState) {
+function showTaskAnimations(prevState, nextState) {
   if (animationTimer) clearTimeout(animationTimer);
-  uiState = { ...uiState, activeTaskAnimations: buildTaskAnimations(nextState) };
+  const animations = buildTaskAnimations(prevState, nextState);
+  uiState = { ...uiState, activeTaskAnimations: animations };
   render();
   animationTimer = setTimeout(() => {
     uiState = { ...uiState, activeTaskAnimations: [] };
     animationTimer = null;
     render();
-  }, 3200);
+  }, 3800);
 }
 
 function stopAutoPlay() {
@@ -97,18 +118,20 @@ function render() {
   try {
     renderApp(root, state, {
       onAdvance: () => {
+        const prev = state;
         const next = advancePhase(state);
         commit(next);
-        showTaskAnimations(next);
+        showTaskAnimations(prev, next);
       },
       onRunDay: () => {
+        let prev = state;
         let next = state;
         const steps = 3 - state.phaseIndex;
         for (let index = 0; index < steps; index += 1) {
           next = advancePhase(next);
         }
         commit(next);
-        showTaskAnimations(next);
+        showTaskAnimations(prev, next);
       },
       onToggleAutoPlay: () => {
         if (autoPlayTimer) {

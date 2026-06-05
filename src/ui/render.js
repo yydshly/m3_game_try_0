@@ -393,13 +393,14 @@ function renderPlaceLabel(placeId, isActive, anim) {
   const place = stagePlaces[placeId];
   if (!place) return "";
   const activeClass = isActive ? " stage-place-label--active" : "";
+  const travelingClass = anim?.traveling ? " stage-place-label--traveling" : "";
   const taskClass = anim ? ` stage-place-label--task stage-place-label--effect-${escapeHtml(anim.effect)}` : "";
   const effectAnchor = anim
     ? `<span class="stage-effect-anchor stage-effect-anchor--${escapeHtml(anim.effect)}" aria-hidden="true"></span>`
     : "";
 
   return `
-    <div class="stage-place-label stage-place-label--${escapeHtml(placeId)}${activeClass}${taskClass}"
+    <div class="stage-place-label stage-place-label--${escapeHtml(placeId)}${activeClass}${travelingClass}${taskClass}"
          style="left:${place.x}%; top:${place.y}%;"
          aria-label="${escapeHtml(place.label)}">
       <span class="stage-place-label__icon">${place.icon}</span>
@@ -410,18 +411,49 @@ function renderPlaceLabel(placeId, isActive, anim) {
 }
 
 function renderStageCharacter(resident, position, taskLabel, status, isSelected, anim) {
-  const posX = position.x;
-  const posY = position.y;
+  const toX = position.x;
+  const toY = position.y;
   const selectedClass = isSelected ? " stage-character--selected" : "";
-  const statusClass = ` stage-character--${status.id}`;
-  const activeClass = anim ? ` stage-character--active stage-character--${escapeHtml(anim.action)}` : "";
+  const statusClass = ` stage-character--${escapeHtml(status.id)}`;
+
+  let extraClasses = "";
+  let extraStyles = "";
+
+  if (anim) {
+    const fromPlace = stagePlaces[anim.fromPlaceId ?? anim.toPlaceId];
+    const toPlace = stagePlaces[anim.toPlaceId];
+    const fromX = fromPlace?.x ?? toX;
+    const fromY = fromPlace?.y ?? toY;
+
+    // Determine direction based on horizontal movement
+    let faceDir = "none";
+    if (anim.traveling && fromX !== toX) {
+      faceDir = toX > fromX ? "right" : "left";
+    }
+
+    const gaitClass = anim.gait ? ` stage-character--gait-${escapeHtml(anim.gait)}` : "";
+    const faceClass = faceDir !== "none" ? ` stage-character--face-${escapeHtml(faceDir)}` : "";
+    const travelClass = anim.traveling ? " stage-character--traveling" : "";
+    const actionClass = ` stage-character--${escapeHtml(anim.action)}`;
+    const activeClass = " stage-character--active";
+
+    extraClasses = `${activeClass}${travelClass}${gaitClass}${faceClass}${actionClass}`;
+    extraStyles = anim.traveling
+      ? `--from-x:${fromX}%; --from-y:${fromY}%; --to-x:${toX}%; --to-y:${toY}%; left:${toX}%; top:${toY}%;`
+      : `left:${toX}%; top:${toY}%;`;
+  } else {
+    extraStyles = `left:${toX}%; top:${toY}%;`;
+  }
+
   const task = taskLabel ? escapeHtml(taskLabel) : "";
-  const actionBubble = anim ? `<span class="stage-character__action-bubble">${escapeHtml(anim.bubble)}</span>` : "";
+  const actionBubble = anim
+    ? `<span class="stage-character__action-bubble">${escapeHtml(anim.bubble)}</span>`
+    : "";
 
   return `
     <button
-      class="stage-character${selectedClass}${statusClass}${activeClass}"
-      style="left:${posX}%; top:${posY}%;"
+      class="stage-character${selectedClass}${statusClass}${extraClasses}"
+      style="${extraStyles}"
       data-action="select-resident"
       data-resident-id="${escapeHtml(resident.id)}"
       type="button"

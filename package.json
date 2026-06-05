@@ -23,6 +23,7 @@
     "choice-check": "node scripts/event-choice-check.mjs",
     "memory-check": "node scripts/memory-link-check.mjs",
     "stage-check": "node scripts/stage-check.mjs",
-    "animation-check": "node scripts/animation-check.mjs"
+    "animation-check": "node scripts/animation-check.mjs",
+    "travel-check": "node scripts/travel-animation-check.mjs"
   }
 }

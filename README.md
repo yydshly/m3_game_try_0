@@ -130,6 +130,16 @@ The illustrated town stage now supports a lightweight task animation layer. When
 
 This prepares the project for future walking animation, sprite sheets, and richer scene choreography.
 
+## Resident Travel Animation
+
+The task animation layer now supports lightweight resident travel. When the player advances the phase, residents can visually move from their previous place to their new task place using CSS-based position animation.
+
+Before moving, the system records each resident's `locationId` before the phase advances. After `advancePhase()` runs, the new `locationId` becomes the `toPlaceId`. The difference produces a `traveling: true` flag and CSS custom properties (`--from-x`, `--from-y`, `--to-x`, `--to-y`) that drive a `characterTravel` keyframe animation.
+
+Gait is inferred from the task: `forage` = run, `rest` = slow, everything else = walk. Low-energy residents (<30) also move slowly. Direction is computed from horizontal coordinates: if `toX > fromX` the character faces right, otherwise left.
+
+This is still not a full pathfinding or sprite-sheet system. It is a DOM/CSS travel layer that prepares the town stage for future walking sprites, directional movement, and richer scene choreography.
+
 ## 小镇氛围与广播
 
 AI 小镇生活新增了轻量氛围层。MiniMax-M3 可以根据当前天数、阶段、居民状态、小镇资源、最近事件和日报生成一段小镇广播文案。
@@ -155,6 +165,16 @@ M3 生成的小镇事件可以带两个温和选择。当前版本只把玩家�
 插画式小镇舞台新增了轻量任务动画层。玩家推进阶段时，居民会显示临时行动状态（work / chat / rest）、头顶任务反馈气泡，所在地点播放轻量特效（bloom / steam / spark / chat / leaf / rest）。动画持续约 3 秒，纯 DOM/CSS 实现，无需游戏引擎。
 
 当前版本为后续行走动画、角色帧动画和更复杂的场景调度做准备。
+
+## 居民移动动画
+
+任务动画层新增了轻量居民移动能力。玩家推进阶段时，居民可以从上一阶段所在地点移动到当前任务地点，然后再显示任务气泡和地点特效。
+
+实现方式是：在 `advancePhase()` 推进前记录居民 `locationId`，推进后对比新旧地点得到 `fromPlaceId` → `toPlaceId`，产生 `traveling: true` 标志和 CSS 变量（`--from-x`、`--from-y`、`--to-x`、`--to-y`），驱动 `characterTravel` 关键帧动画。
+
+步态根据任务推断：采集 = run，休息 = slow，其余 = walk。体力低于 30 的居民也会慢走。方向根据水平坐标计算：目标在右侧则面朝右，否则面朝左。
+
+当前版本仍不是完整寻路或帧动画系统，而是基于 DOM/CSS 的位置移动层，为后续行走帧动画、方向动作和更复杂的场景调度做准备。
 
 ### API Style Configuration
 
