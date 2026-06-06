@@ -60,8 +60,25 @@ assert(
   "template-based conversation lines exist"
 );
 assert(
+  appContent.includes("for (let i = 0; i < Math.min(lines.length, 5); i++)") ||
   appContent.includes("for (let i = 0; i < lines.length; i++)"),
-  "queue iterates over template lines"
+  "queue iterates over template lines (max 5)"
+);
+// 5b. templates are flat strings (not nested arrays)
+assert(
+  appContent.includes('"speaker.name，') ||
+  appContent.includes("speaker.name，"),
+  "templates are flat string arrays (not nested)"
+);
+// 5c. rawText has String() guard
+assert(
+  appContent.includes("const rawText = String(lines[i] ?? \"\")"),
+  "rawText protected with String() before .replace"
+);
+// 5d. activeScenario read from state.activeScenario
+assert(
+  appContent.includes("state.activeScenario"),
+  "activeScenario read from state.activeScenario (not state.residentConversation)"
 );
 
 // 6. each line has speakerId, text, audioKey

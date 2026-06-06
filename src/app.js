@@ -167,7 +167,7 @@ function buildResidentConversationQueue(state, conversationState) {
   const residents = state.residents ?? [];
   if (residents.length < 2) return [];
 
-  const activeScenario = state.residentConversation?.activeScenario ?? null;
+  const activeScenario = state.activeScenario ?? null;
   const beats = state.residentSceneBeats ?? [];
 
   // Collect pairs: prefer same-location pairs, then scenario-relevant residents
@@ -203,57 +203,62 @@ function buildResidentConversationQueue(state, conversationState) {
     ];
   }
 
-  // Scene-based templates
+  // Scene-based templates (flat array of strings)
   const TEMPLATES = {
     garden_day: [
-      ["speaker.name，花园这边的架子有点松了。", "target.name，浇水的时候小心点。"],
-      ["target.name，你看这棵发芽了！", "真的呢，要好好照顾。"],
+      "speaker.name，花园这边的架子有点松了。",
+      "target.name，浇水的时候小心点。",
+      "target.name，你看这棵发芽了！",
+      "真的呢，要好好照顾。",
     ],
     repair_moment: [
-      ["speaker.name，这个工具放哪里？", "target.name，在那边的架子上。"],
-      ["谢谢 target.name！", "不客气，一起加油。"],
+      "speaker.name，这个工具放哪里？",
+      "target.name，在那边的架子上。",
+      "谢谢 target.name！",
+      "不客气，一起加油。",
     ],
     market_errand: [
-      ["speaker.name，食材准备好了吗？", "target.name，还差一点点。"],
-      ["那我去采购吧。", "好的，辛苦 target.name 了。"],
+      "speaker.name，食材准备好了吗？",
+      "target.name，还差一点点。",
+      "那我去采购吧。",
+      "好的，辛苦 target.name 了。",
     ],
     quiet_reading: [
-      ["speaker.name，这本书真不错。", "target.name，是啊，很安静的感觉。"],
-      ["target.name，借你看一下。", "好的，谢谢 speaker.name。"],
+      "speaker.name，这本书真不错。",
+      "target.name，是啊，很安静的感觉。",
+      "target.name，借你看一下。",
+      "好的，谢谢 speaker.name。",
     ],
     neighbor_help: [
-      ["speaker.name，需要帮忙吗？", "target.name，太好了，一起吧。"],
-      ["target.name，分工合作更快。", "嗯，有伴真好。"],
+      "speaker.name，需要帮忙吗？",
+      "target.name，太好了，一起吧。",
+      "target.name，分工合作更快。",
+      "嗯，有伴真好。",
     ],
     festival_prepare: [
-      ["speaker.name，节日布置好了吗？", "target.name，快了，一起看看。"],
-      ["target.name，这个位置不错。", "嗯，很温馨。"],
+      "speaker.name，节日布置好了吗？",
+      "target.name，快了，一起看看。",
+      "target.name，这个位置不错。",
+      "嗯，很温馨。",
     ],
     weather_shift: [
-      ["speaker.name，好像要下雨了。", "target.name，那我们赶紧回去吧。"],
-      ["好的，去收东西。", "嗯，target.name 带把伞吧。"],
+      "speaker.name，好像要下雨了。",
+      "target.name，那我们赶紧回去吧。",
+      "好的，去收东西。",
+      "嗯，target.name 带把伞吧。",
     ],
     resident_mood: [
-      ["speaker.name，今天感觉怎么样？", "target.name，还不错，你呢？"],
-      ["我也挺好的。", "那就好，一起加油。"],
+      "speaker.name，今天感觉怎么样？",
+      "target.name，还不错，你呢？",
+      "我也挺好的。",
+      "那就好，一起加油。",
     ],
   };
 
-  const SCENARIO_MAP = {
-    neighbor互助: "neighbor_help",
-    garden花园: "garden_day",
-    market采购: "market_errand",
-    repair修理: "repair_moment",
-    reading阅读: "quiet_reading",
-    festival节日: "festival_prepare",
-    weather天气: "weather_shift",
-    resident_mood心情: "resident_mood",
-  };
-
+  // Direct mapping: activeScenario.id === template key (English ids)
   let templateKey = "resident_mood";
-  if (activeScenario?.id) {
-    const mapped = SCENARIO_MAP[activeScenario.id];
-    if (mapped && TEMPLATES[mapped]) templateKey = mapped;
+  if (activeScenario?.id && TEMPLATES[activeScenario.id]) {
+    templateKey = activeScenario.id;
   }
 
   const lines = TEMPLATES[templateKey] ?? TEMPLATES.resident_mood;
@@ -267,14 +272,16 @@ function buildResidentConversationQueue(state, conversationState) {
   }
 
   const queue = [];
-  for (let i = 0; i < lines.length; i++) {
+  for (let i = 0; i < Math.min(lines.length, 5); i++) {
     const pairIdx = i % pairs.length;
     const { speaker, target } = pairs[pairIdx];
     const beat = beatMap[speaker.id];
     const speakerName = beat?.residentName ?? speaker.name ?? "居民";
     const targetName = beat?.targetName ?? target.name ?? "邻居";
-    const rawText = lines[i] ?? "";
-    const text = rawText.replace(/speaker\.name/g, speakerName).replace(/target\.name/g, targetName);
+    const rawText = String(lines[i] ?? "");
+    const text = rawText
+      .replace(/speaker\.name/g, speakerName)
+      .replace(/target\.name/g, targetName);
     const lineId = `conv-line-${i + 1}`;
     const audioKey = `conversation:${speaker.id}:${lineId}`;
 
