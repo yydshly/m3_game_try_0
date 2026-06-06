@@ -90,6 +90,7 @@ let uiState = {
     autoPlayVoice: true,
     error: "",
     runId: "",      // unique id to invalidate old timers after stop/restart
+    startedCount: 0, // increments each time conversation starts (for template rotation)
   },
 };
 let autoPlayTimer = null;
@@ -204,55 +205,56 @@ function buildResidentConversationQueue(state, conversationState) {
     ];
   }
 
-  // Scene-based templates (flat array of strings)
+  // Scene-based templates (structured turns: each turn knows who says it)
+  // from/target are relative to the template pair — "speaker" = first person of the pair, "target" = second
   const TEMPLATES = {
     garden_day: [
-      "speaker.name，花园这边的架子有点松了。",
-      "target.name，浇水的时候小心点。",
-      "target.name，你看这棵发芽了！",
-      "真的呢，要好好照顾。",
+      { from: "speaker", to: "target", text: "花园这边的架子有点松了。" },
+      { from: "target", to: "speaker", text: "浇水的时候小心点。" },
+      { from: "target", to: "speaker", text: "你看这棵发芽了！" },
+      { from: "speaker", to: "target", text: "真的呢，要好好照顾。" },
     ],
     repair_moment: [
-      "speaker.name，这个工具放哪里？",
-      "target.name，在那边的架子上。",
-      "谢谢 target.name！",
-      "不客气，一起加油。",
+      { from: "speaker", to: "target", text: "这个工具放哪里？" },
+      { from: "target", to: "speaker", text: "在那边的架子上。" },
+      { from: "speaker", to: "target", text: "谢谢！" },
+      { from: "target", to: "speaker", text: "不客气，一起加油。" },
     ],
     market_errand: [
-      "speaker.name，食材准备好了吗？",
-      "target.name，还差一点点。",
-      "那我去采购吧。",
-      "好的，辛苦 target.name 了。",
+      { from: "speaker", to: "target", text: "食材准备好了吗？" },
+      { from: "target", to: "speaker", text: "还差一点点。" },
+      { from: "speaker", to: "target", text: "那我去采购吧。" },
+      { from: "target", to: "speaker", text: "好的，辛苦了。" },
     ],
     quiet_reading: [
-      "speaker.name，这本书真不错。",
-      "target.name，是啊，很安静的感觉。",
-      "target.name，借你看一下。",
-      "好的，谢谢 speaker.name。",
+      { from: "speaker", to: "target", text: "这本书真不错。" },
+      { from: "target", to: "speaker", text: "是啊，很安静的感觉。" },
+      { from: "speaker", to: "target", text: "借你看一下。" },
+      { from: "target", to: "speaker", text: "好的，谢谢。" },
     ],
     neighbor_help: [
-      "speaker.name，需要帮忙吗？",
-      "target.name，太好了，一起吧。",
-      "target.name，分工合作更快。",
-      "嗯，有伴真好。",
+      { from: "speaker", to: "target", text: "需要帮忙吗？" },
+      { from: "target", to: "speaker", text: "太好了，一起吧。" },
+      { from: "target", to: "speaker", text: "分工合作更快。" },
+      { from: "speaker", to: "target", text: "嗯，有伴真好。" },
     ],
     festival_prepare: [
-      "speaker.name，节日布置好了吗？",
-      "target.name，快了，一起看看。",
-      "target.name，这个位置不错。",
-      "嗯，很温馨。",
+      { from: "speaker", to: "target", text: "节日布置好了吗？" },
+      { from: "target", to: "speaker", text: "快了，一起看看。" },
+      { from: "target", to: "speaker", text: "这个位置不错。" },
+      { from: "speaker", to: "target", text: "嗯，很温馨。" },
     ],
     weather_shift: [
-      "speaker.name，好像要下雨了。",
-      "target.name，那我们赶紧回去吧。",
-      "好的，去收东西。",
-      "嗯，target.name 带把伞吧。",
+      { from: "speaker", to: "target", text: "好像要下雨了。" },
+      { from: "target", to: "speaker", text: "那我们赶紧回去吧。" },
+      { from: "speaker", to: "target", text: "好的，去收东西。" },
+      { from: "target", to: "speaker", text: "带把伞吧。" },
     ],
     resident_mood: [
-      "speaker.name，今天感觉怎么样？",
-      "target.name，还不错，你呢？",
-      "我也挺好的。",
-      "那就好，一起加油。",
+      { from: "speaker", to: "target", text: "今天感觉怎么样？" },
+      { from: "target", to: "speaker", text: "还不错，你呢？" },
+      { from: "speaker", to: "target", text: "我也挺好的。" },
+      { from: "target", to: "speaker", text: "那就好，一起加油。" },
     ],
   };
 
@@ -262,7 +264,7 @@ function buildResidentConversationQueue(state, conversationState) {
     templateKey = activeScenario.id;
   }
 
-  const lines = TEMPLATES[templateKey] ?? TEMPLATES.resident_mood;
+  const turns = TEMPLATES[templateKey] ?? TEMPLATES.resident_mood;
 
   // Use beats for dynamic names if available
   const beatMap = {};
@@ -272,27 +274,39 @@ function buildResidentConversationQueue(state, conversationState) {
     }
   }
 
+  // Rotation seed: vary template start based on day + phaseIndex + startedCount
+  const startedCount = conversationState?.startedCount ?? 0;
+  const seed = (state.day * 17 + state.phaseIndex * 7 + startedCount) % turns.length;
+
+  // Rotate turns so we don't always start from the same line
+  const rotateArray = (arr, n) => {
+    n = ((n % arr.length) + arr.length) % arr.length;
+    return [...arr.slice(n), ...arr.slice(0, n)];
+  };
+  const rotatedTurns = rotateArray(turns, seed);
+
   const queue = [];
-  for (let i = 0; i < Math.min(lines.length, 5); i++) {
+  const maxLines = Math.min(rotatedTurns.length, 5);
+  for (let i = 0; i < maxLines; i++) {
+    const turn = rotatedTurns[i];
+    // Determine actual speaker/target from the pair
     const pairIdx = i % pairs.length;
-    const { speaker, target } = pairs[pairIdx];
-    const beat = beatMap[speaker.id];
-    const speakerName = beat?.residentName ?? speaker.name ?? "居民";
-    const targetName = beat?.targetName ?? target.name ?? "邻居";
-    const rawText = String(lines[i] ?? "");
-    const text = rawText
-      .replace(/speaker\.name/g, speakerName)
-      .replace(/target\.name/g, targetName);
+    const pair = pairs[pairIdx];
+    const fromResident = turn.from === "target" ? pair.target : pair.speaker;
+    const toResident = turn.to === "target" ? pair.target : pair.speaker;
+    const beat = beatMap[fromResident.id];
+    const speakerName = beat?.residentName ?? fromResident.name ?? "居民";
+    const targetName = beat?.targetName ?? toResident.name ?? "邻居";
     const lineId = `conv-line-${i + 1}`;
-    const audioKey = `conversation:${speaker.id}:${lineId}`;
+    const audioKey = `conversation:${fromResident.id}:${lineId}`;
 
     queue.push({
       id: lineId,
-      speakerId: speaker.id,
-      targetId: target.id,
+      speakerId: fromResident.id,
+      targetId: toResident.id,
       speakerName,
       targetName,
-      text: text.slice(0, 50),
+      text: turn.text.slice(0, 50),
       scene: "resident_dialogue",
       audioKey,
       status: "idle",
@@ -392,7 +406,7 @@ function playConversationLine(line) {
     ...uiState,
     ttsAudios: {
       ...uiState.ttsAudios,
-      [line.audioKey]: { status: "loading", audioUrl: null, textHash: currentHash, textPreview: line.text.slice(0, 40), error: null },
+      [line.audioKey]: { status: "loading", audioUrl: null, textHash: currentHash, textPreview: line.text.slice(0, 40), error: null, sourceType: "conversation", speakerName: line.speakerName, targetName: line.targetName },
     },
     currentVoicePlayback: makeVoicePlaybackState({
       key: line.audioKey,
@@ -433,7 +447,7 @@ function playConversationLine(line) {
             ...uiState,
             ttsAudios: {
               ...uiState.ttsAudios,
-              [line.audioKey]: { status: "ready", audioUrl: result.audioUrl, textHash: currentHash, textPreview: line.text.slice(0, 40), error: null },
+              [line.audioKey]: { status: "ready", audioUrl: result.audioUrl, textHash: currentHash, textPreview: line.text.slice(0, 40), error: null, sourceType: "conversation", speakerName: line.speakerName, targetName: line.targetName },
             },
           };
           render();
@@ -545,9 +559,11 @@ function startResidentConversation() {
 
   const firstLine = queue[0];
   const runId = `conv-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+  const prevStartedCount = uiState.residentConversation?.startedCount ?? 0;
   uiState = {
     ...uiState,
     residentConversation: {
+      ...uiState.residentConversation,
       enabled: true,
       status: "playing",
       queue,
@@ -558,6 +574,7 @@ function startResidentConversation() {
       autoPlayVoice: true,
       error: "",
       runId,
+      startedCount: prevStartedCount + 1,
     },
   };
   render();

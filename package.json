@@ -52,6 +52,7 @@
     "voice-lifecycle-check": "node scripts/voice-lifecycle-check.mjs",
     "resident-conversation-check": "node scripts/resident-conversation-check.mjs",
     "resident-conversation-refresh-check": "node scripts/resident-conversation-refresh-check.mjs",
+    "resident-conversation-semantics-check": "node scripts/resident-conversation-semantics-check.mjs",
     "layout-stability-check": "node scripts/layout-stability-check.mjs",
     "mimo-tts-param-probe": "node scripts/mimo-tts-param-probe.mjs",
     "tts-official-contract-check": "node scripts/tts-official-contract-check.mjs"

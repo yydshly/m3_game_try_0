@@ -968,8 +968,33 @@ function renderChoiceAftermathStageIndicator(aftermath) {
   `;
 }
 
+/**
+ * Build a stable stage digest based on current phase and scenario.
+ * Does NOT change based on events or conversation state — ensures stable layout.
+ */
+function buildStageDigest(state) {
+  const phases = ["早上", "下午", "晚上"];
+  const phaseLabel = phases[state.phaseIndex ?? 0] ?? "早上";
+  const scenario = state.activeScenario;
+  let base = scenario?.label
+    ? `${phaseLabel} · ${scenario.label}`
+    : (() => {
+        const defaults = [
+          "清晨的小镇慢慢醒来，居民们开始各自忙碌",
+          "午后阳光正好，小镇热闹而温馨",
+          "傍晚时分，居民们陆续回到休息的地方",
+        ];
+        return defaults[state.phaseIndex ?? 0] ?? defaults[0];
+      })();
+  // Truncate at 120 chars + ellipsis (same as old latestEvent behavior)
+  if (base.length > 120) {
+    base = base.slice(0, 120) + "…";
+  }
+  return base;
+}
+
 function renderTownStage(state, uiState) {
-  const latestEvent = [...state.events].reverse().find((event) => event.type !== "system");
+  const digest = buildStageDigest(state);
   const phase = getCurrentPhase(state);
   const activeAnimations = uiState.activeTaskAnimations ?? [];
   const completionFeedback = uiState.completionFeedback;
@@ -1050,15 +1075,10 @@ function renderTownStage(state, uiState) {
       <div class="town-stage__characters">
         ${charactersHtml}
       </div>
-      ${
-        latestEvent
-          ? `
-          <aside class="stage-bubble" aria-live="polite">
-            <span class="stage-bubble__tag">📌 最新动态</span>
-            <p>${escapeHtml(latestEvent.text.slice(0, 120))}${latestEvent.text.length > 120 ? "…" : ""}</p>
-          </aside>`
-          : ""
-      }
+      <aside class="stage-bubble" aria-live="polite">
+        <span class="stage-bubble__tag">📌 今日动态</span>
+        <p>${escapeHtml(digest)}</p>
+      </aside>
       <div class="stage-legend" aria-hidden="true">
         <span class="stage-legend__item"><i class="status-dot status-dot--happy"></i>开心</span>
         <span class="stage-legend__item"><i class="status-dot status-dot--steady"></i>平稳</span>
@@ -1711,7 +1731,7 @@ export function renderApp(root, state, handlers, uiState = {}) {
     dayOpeningReflection: uiState.dayOpeningReflection ?? null,
     residentVoiceInteraction: uiState.residentVoiceInteraction ?? { enabled: false, recommendedClipKey: "", lastTriggeredAt: 0, hint: "" },
     residentVoiceClips: Array.isArray(uiState.residentVoiceClips) ? uiState.residentVoiceClips : [],
-    residentConversation: uiState.residentConversation ?? { enabled: false, status: "idle", queue: [], currentIndex: 0, currentLineId: "", visibleText: "", typingTimerId: null, autoPlayVoice: true, error: "", runId: "" },
+    residentConversation: uiState.residentConversation ?? { enabled: false, status: "idle", queue: [], currentIndex: 0, currentLineId: "", visibleText: "", typingTimerId: null, autoPlayVoice: true, error: "", runId: "", startedCount: 0 },
   };
 
   const safeHandlers = {
@@ -1862,6 +1882,7 @@ function renderVoiceDebugPanel() {
 const VOICE_PLAYBACK_LABELS = {
   town_broadcast:       { title: "小镇广播",    icon: "📻" },
   resident_dialogue:    { title: "居民对白",    icon: "💬" },
+  conversation:        { title: "居民对话",    icon: "💬" },
   event_prompt:        { title: "事件提示",    icon: "🎭" },
   completion_feedback: { title: "任务完成",    icon: "✅" },
   day_opening:        { title: "今日场景",    icon: "🏠" },
@@ -1879,7 +1900,8 @@ function renderVoicePlaybackBar(cvp, handlers) {
 
   const label = VOICE_PLAYBACK_LABELS[cvp?.sourceType] || { title: cvp?.title || cvp?.scene || "语音", icon: "🔊" };
   const icon = label.icon;
-  const titleText = label.title;
+  // Prefer cvp.title (speakerName for conversation) over label.title
+  const titleText = (cvp?.title && cvp.title !== cvp?.scene) ? cvp.title : label.title;
 
   const statusClass = isIdle ? "voice-playback-bar--idle" : ({
     loading: "voice-playback-bar--loading",
@@ -1898,11 +1920,11 @@ function renderVoicePlaybackBar(cvp, handlers) {
   const showStop = status === "playing" || status === "paused";
 
   const statusTitle = {
-    loading: `${icon} ${loadingLabel}`,
-    playing: `${icon} 正在播放：${titleText}`,
-    paused:  `${icon} 已暂停：${titleText}`,
-    error:   `${icon} ${errorLabel}`,
-  }[status] ?? `${icon} ${titleText}`;
+    loading: loadingLabel,
+    playing: "正在播放",
+    paused:  "已暂停",
+    error:   errorLabel,
+  }[status] ?? titleText;
 
   return `
     <div class="voice-playback-slot" aria-live="polite">

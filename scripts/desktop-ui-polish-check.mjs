@@ -80,14 +80,13 @@ console.log("\n── Map stage bubble: max 120 char truncation ──");
 
   // Extract the text inside the bubble
   const bubbleText = bubbleMatch?.[0] ?? "";
-  // Should contain "…" since original text > 120 chars
-  assert(bubbleText.includes("…"), "long text truncated with ellipsis");
-  // Check the text between <p> tags is <= 121 chars (120 + 1 ellipsis char)
+  // Check the bubble contains "今日动态" tag (not "最新动态")
+  assert(bubbleText.includes("今日动态"), "stage-bubble shows '今日动态' (stable digest, not latest event)");
+  // Extract text from <p> and verify reasonable length (digest is short text, not event)
   const pMatch = bubbleText.match(/<p>([\s\S]*?)<\/p>/);
   const pText = pMatch?.[1] ?? "";
-  // Strip HTML entities
   const cleanText = pText.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"');
-  assert(cleanText.length <= 121, `bubble text length is <= 121 (got ${cleanText.length})`);
+  assert(cleanText.length >= 4 && cleanText.length <= 121, `bubble digest text is reasonable length (got ${cleanText.length})`);
 }
 
 // ── Test: Right panel atmosphere broadcast still shows content (truncated to 120) ─
