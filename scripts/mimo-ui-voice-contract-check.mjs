@@ -63,14 +63,14 @@ assert(
   "server: wav format preserved"
 );
 
-// 5. Playback bar error label: no "正在播放" for error status
-// The old bug was: ${status === "loading" ? ... : `${icon} 正在播放：${titleText}`}
-// which showed "正在播放" even when status === "error"
-const errorTitleFix = renderContent.includes('error:   `${icon} ${errorLabel}`') ||
-  (renderContent.includes("error:") && renderContent.includes("errorLabel"));
+// 5. Playback chip error rendering: uses cvp.error not '正在播放'
+// The chip uses: status === "error" ? (cvp.error || "播放失败") : ""
+// The old bug was showing "正在播放" even when status === "error"
+const chipErrorPattern = renderContent.includes("cvp.error || \"播放失败\"") ||
+  renderContent.includes("cvp.error || '播放失败'");
 assert(
-  errorTitleFix,
-  "render.js: error status uses errorLabel instead of '正在播放'"
+  chipErrorPattern,
+  "render.js: chip uses cvp.error for error status (not '正在播放')"
 );
 assert(
   !renderContent.match(/正在播放[：:]/)?.[0] || renderContent.includes("paused:"),

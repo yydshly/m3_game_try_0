@@ -332,9 +332,8 @@ function renderGameActions(state, safeUiState, handlers = {}) {
       </div>
       <div class="game-actions__section">
         <p class="game-actions__section-label">💬 居民对话演出</p>
-        ${safeUiState.residentConversation?.status === "playing" ? `<button class="button button--conversation-pause" type="button" data-action="toggle-conversation">⏸️ 暂停</button>` : ""}
-        ${safeUiState.residentConversation?.status === "paused" ? `<button class="button button--conversation-resume" type="button" data-action="toggle-conversation">▶️ 继续</button>` : ""}
-        ${(safeUiState.residentConversation?.status === "playing" || safeUiState.residentConversation?.status === "paused") ? `<button class="button button--ghost" type="button" data-action="stop-conversation">⏹️ 停止</button>` : ""}
+        ${safeUiState.residentConversation?.status === "playing" ? `<span class="conversation-status conversation-status--playing">🔊 对话演出中</span>` : ""}
+        ${safeUiState.residentConversation?.status === "paused" ? `<span class="conversation-status conversation-status--paused">⏸️ 对话已暂停</span>` : ""}
         ${(!safeUiState.residentConversation?.enabled || safeUiState.residentConversation?.status === "idle" || safeUiState.residentConversation?.status === "completed" || safeUiState.residentConversation?.status === "error") ? `<button class="button button--conversation-start" type="button" data-action="toggle-conversation">💬 开启对话演出</button>` : ""}
       </div>
       <div class="game-actions__section">
@@ -380,13 +379,14 @@ function renderDayOpeningReflection(openingReflection) {
  * @param {object} ttsAudios - tts audio cache
  * @returns {string} HTML or empty string
  */
-function renderRecommendedVoiceClip(voiceState, clips, ttsAudios) {
+function renderRecommendedVoiceClip(voiceState, clips, ttsAudios, conversationStatus) {
   if (!voiceState?.enabled) return "";
   const recommendedKey = voiceState.recommendedClipKey ?? "";
   const clip = clips.find((c) => c.key === recommendedKey) ?? clips[0];
 
   // Always render container — empty state uses --empty modifier class
   const hasClip = Boolean(clip);
+  const isConversationActive = conversationStatus === "playing" || conversationStatus === "paused";
 
   const ta = hasClip ? (ttsAudios[clip.key] ?? {}) : {};
   const isLoading = ta.status === "loading";
@@ -396,7 +396,7 @@ function renderRecommendedVoiceClip(voiceState, clips, ttsAudios) {
   const hasError = ta.status === "error";
 
   let btn = "";
-  if (hasClip) {
+  if (hasClip && !isConversationActive) {
     if (isLoading) {
       btn = `<button class="mimo-tts-btn mimo-tts-btn--loading" disabled>🔊…</button>`;
     } else if (isPlaying) {
@@ -410,8 +410,12 @@ function renderRecommendedVoiceClip(voiceState, clips, ttsAudios) {
     }
   }
 
+  const actionsHtml = isConversationActive
+    ? `<p class="recommended-voice__hint">💬 对话进行中</p>`
+    : (btn ? `<div class="recommended-voice__actions">${btn}</div>` : "");
+
   return `
-    <div class="recommended-voice ${!hasClip ? "recommended-voice--empty" : ""}" aria-label="推荐收听" aria-live="polite">
+    <div class="recommended-voice ${!hasClip ? "recommended-voice--empty" : ""} ${isConversationActive ? "recommended-voice--muted" : ""}" aria-label="推荐收听" aria-live="polite">
       ${hasClip ? `
       <div class="recommended-voice__header">
         <span>🎧</span>
@@ -420,7 +424,7 @@ function renderRecommendedVoiceClip(voiceState, clips, ttsAudios) {
       </div>
       <p class="recommended-voice__text">${escapeHtml(clip.text ?? "")}</p>
       ${clip.reason ? `<p class="recommended-voice__reason">${escapeHtml(clip.reason)}</p>` : ""}
-      <div class="recommended-voice__actions">${btn}</div>
+      ${actionsHtml}
       ` : `
       <p class="recommended-voice__empty">${escapeHtml(voiceState.hint ?? "暂无推荐")}</p>
       `}
@@ -726,7 +730,7 @@ function renderAtmospherePanel(state, uiState) {
           <span class="atmosphere-scenario__tone">${escapeHtml(uiState.activeScenario.tone)}</span>
         </div>
       ` : ""}
-      ${renderRecommendedVoiceClip(uiState.residentVoiceInteraction, uiState.residentVoiceClips, uiState.ttsAudios)}
+      ${renderRecommendedVoiceClip(uiState.residentVoiceInteraction, uiState.residentVoiceClips, uiState.ttsAudios, uiState.residentConversation?.status)}
       ${latestBc ? `
         <div class="atmosphere-broadcast-preview">
           <p class="atmosphere-broadcast-preview__title">${escapeHtml(latestBc.title)}</p>
@@ -2033,31 +2037,28 @@ function renderVoicePlaybackChip(viewModel, handlers) {
 
   const icon = VOICE_PLAYBACK_ICONS[type] ?? VOICE_PLAYBACK_ICONS.default;
 
-  const subtitleHtml = targetName
-    ? `<span class="voice-playback-chip__subtitle">对 ${escapeHtml(targetName)} 说：</span>`
-    : `<span class="voice-playback-chip__subtitle">${speakerName ? "" : "语音播放中"}</span>`;
-
-  const textHtml = text
-    ? `<span class="voice-playback-chip__text">${escapeHtml(text)}</span>`
-    : "";
-
-  const titleHtml = speakerName && type !== "town_broadcast"
-    ? `<span class="voice-playback-chip__title">${escapeHtml(speakerName)}</span>`
-    : "";
+  // Compact single-line format: 💬 小花 → 阿远：台词…
+  let mainHtml = "";
+  if (status === "error") {
+    mainHtml = `<span class="voice-playback-chip__error">${escapeHtml(error)}</span>`;
+  } else if (type === "town_broadcast") {
+    mainHtml = `<span class="voice-playback-chip__broadcast">📻 小镇广播：${escapeHtml(text ?? "语音播放中")}</span>`;
+  } else {
+    const speaker = speakerName ? `<strong>${escapeHtml(speakerName)}</strong>` : "";
+    const arrow = targetName ? ` → ` : "";
+    const target = targetName ? `<em>${escapeHtml(targetName)}</em>` : "";
+    const colon = (speaker || target) ? "：" : "";
+    const lineText = text ? escapeHtml(text) : "";
+    mainHtml = `<span class="voice-playback-chip__compact">${icon} ${speaker}${arrow}${target}${colon}${lineText}</span>`;
+  }
 
   return `
     <div class="voice-playback-chip ${statusClass}" aria-live="polite" role="status">
-      <span class="voice-playback-chip__icon">${icon}</span>
-      <div class="voice-playback-chip__main">
-        ${titleHtml}
-        ${subtitleHtml}
-        ${textHtml}
-        ${status === "error" ? `<span class="voice-playback-chip__error">${escapeHtml(error)}</span>` : ""}
-      </div>
+      ${mainHtml}
       <div class="voice-playback-chip__actions">
-        ${canPause  ? `<button class="btn-chip" data-action="voice-pause">⏸️</button>` : ""}
-        ${canResume ? `<button class="btn-chip" data-action="voice-resume">▶️</button>` : ""}
-        ${canStop   ? `<button class="btn-chip" data-action="voice-stop">⏹️</button>` : ""}
+        ${canPause  ? `<button class="btn-chip" data-action="voice-pause">暂停</button>` : ""}
+        ${canResume ? `<button class="btn-chip" data-action="voice-resume">继续</button>` : ""}
+        ${canStop   ? `<button class="btn-chip" data-action="voice-stop">停止</button>` : ""}
       </div>
     </div>
   `;

@@ -183,8 +183,8 @@ assert(
   "toggle-conversation button exists in UI"
 );
 assert(
-  renderContent.includes('data-action="stop-conversation"'),
-  "stop-conversation button exists in UI"
+  renderContent.includes('data-action="voice-stop"') || renderContent.includes('data-action="stop-conversation"'),
+  "stop control exists in UI (via chip voice-stop or legacy stop-conversation)"
 );
 
 // 17. bindEvents wiring
