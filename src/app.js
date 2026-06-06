@@ -795,13 +795,25 @@ function pauseMimoAudio(audioKey) {
  */
 function resumeMimoAudio(audioKey) {
   const existing = uiState.ttsAudios[audioKey];
-  if (!existing || existing.status !== "paused" || !existing.audioUrl) return;
+  if (!existing || !existing.audioUrl) {
+    voiceLog("mimo:resume:skip", { audioKey, reason: "missing-audio-url", status: existing?.status ?? "missing" });
+    return;
+  }
+  if (existing.status !== "paused" && existing.status !== "ready") {
+    voiceLog("mimo:resume:skip", { audioKey, reason: "invalid-status", status: existing.status });
+    return;
+  }
+
+  stopBroadcastAudio({ reason: "resume-mimo" });
+  stopAllMimoAudio({ exceptKey: audioKey, reason: "resume-mimo" });
 
   // Update playback state to playing first
   uiState = {
     ...uiState,
     currentVoicePlayback: {
-      ...uiState.currentVoicePlayback,
+      ...(uiState.currentVoicePlayback?.key ? uiState.currentVoicePlayback : makeVoicePlaybackState()),
+      key: audioKey,
+      provider: "mimo",
       status: "playing",
       error: "",
       updatedAt: Date.now(),
@@ -813,8 +825,22 @@ function resumeMimoAudio(audioKey) {
   };
   render();
 
-  // If Audio instance is gone, recreate it
-  if (!activeMimoAudios.has(audioKey)) {
+  // If Audio instance exists, play it; otherwise recreate it
+  if (activeMimoAudios.has(audioKey)) {
+    const audio = activeMimoAudios.get(audioKey);
+    audio.play().catch((error) => {
+      voiceLog("mimo:resume:error", { audioKey, errorName: error?.name, errorMessageSafe: String(error?.message ?? "").slice(0, 80) });
+      const currentEntry = uiState.ttsAudios[audioKey];
+      if (currentEntry) {
+        uiState = {
+          ...uiState,
+          ttsAudios: { ...uiState.ttsAudios, [audioKey]: { ...currentEntry, status: "paused", debugCode: "MIMO_TTS_AUDIO_PLAY_FAILED" } },
+          currentVoicePlayback: { ...uiState.currentVoicePlayback, status: "paused", debugCode: "MIMO_TTS_AUDIO_PLAY_FAILED", updatedAt: Date.now() },
+        };
+        render();
+      }
+    });
+  } else {
     playMimoAudio(audioKey, existing.audioUrl);
   }
 }
@@ -1997,11 +2023,15 @@ function render() {
       },
       onResumeMimoTts: (audioKey) => {
         const existing = uiState.ttsAudios[audioKey];
-        if (existing && existing.status === "paused" && existing.audioUrl) {
+        if (existing && (existing.status === "paused" || existing.status === "ready") && existing.audioUrl) {
+          stopBroadcastAudio({ reason: "resume-mimo-tts" });
+          stopAllMimoAudio({ exceptKey: audioKey, reason: "resume-mimo-tts" });
           uiState = {
             ...uiState,
             currentVoicePlayback: {
-              ...uiState.currentVoicePlayback,
+              ...(uiState.currentVoicePlayback?.key ? uiState.currentVoicePlayback : makeVoicePlaybackState()),
+              key: audioKey,
+              provider: "mimo",
               status: "playing",
               error: "",
               updatedAt: Date.now(),

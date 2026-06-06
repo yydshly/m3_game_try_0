@@ -20,36 +20,42 @@ function assert(condition, message) {
 
 console.log("\n── Voice lifecycle checks ──");
 
-// Helper: extract function body by name
+// Helper: extract full function body by name
+// Strategy: find "function name(", then advance past all nested () to the matching
+// closing ), then skip whitespace and find the function body's opening {.
 function getFnBody(name) {
-  const fnStart = appContent.indexOf(`function ${name}(`);
+  const fnKeyword = `function ${name}(`;
+  const fnStart = appContent.indexOf(fnKeyword);
   if (fnStart === -1) return "";
-  // Skip to after the opening parenthesis
-  let i = fnStart + `function ${name}(`.length;
-  // Track depth through parentheses (handles default params like options = {})
-  let parenDepth = 0;
-  for (; i < appContent.length; i++) {
+  // fnStart + fnKeyword.length is the position right after "function name("
+  // Now scan forward tracking paren depth to find the matching )
+  let i = fnStart + fnKeyword.length;
+  let parenDepth = 1; // we're inside the opening ( of the param list
+  while (i < appContent.length) {
     if (appContent[i] === "(") parenDepth++;
     else if (appContent[i] === ")") {
       parenDepth--;
-      if (parenDepth === 0) { i++; break; }
-    }
-  }
-  // Now count braces from the position after the closing )
-  let braceDepth = 0;
-  let bodyStart = i;
-  for (; i < appContent.length; i++) {
-    if (appContent[i] === "{") {
-      if (braceDepth === 0) bodyStart = i + 1;
-      braceDepth++;
-    } else if (appContent[i] === "}") {
-      braceDepth--;
-      if (braceDepth === 0) {
-        return appContent.slice(fnStart, i + 1);
+      if (parenDepth === 0) {
+        // We're at the closing ) of the parameter list
+        i++;
+        while (i < appContent.length && /\s/.test(appContent[i])) i++;
+        if (i < appContent.length && appContent[i] === "{") {
+          const bodyOpen = i;
+          let bodyDepth = 0;
+          for (let j = bodyOpen; j < appContent.length; j++) {
+            if (appContent[j] === "{") bodyDepth++;
+            else if (appContent[j] === "}") {
+              bodyDepth--;
+              if (bodyDepth <= 0) return appContent.slice(fnStart, j + 1);
+            }
+          }
+        }
+        return "";
       }
     }
+    i++;
   }
-  return appContent.slice(fnStart, bodyStart + 400);
+  return "";
 }
 
 // Helper: extract handler body by name (arrow function in handlers object)
@@ -57,22 +63,19 @@ function getHandlerBody(name) {
   const marker = `${name}: (`;
   const start = appContent.indexOf(marker);
   if (start === -1) return "";
-  // Find the opening brace of the arrow function body
-  let braceStart = -1;
   let depth = 0;
-  for (let i = start + marker.length; i < appContent.length; i++) {
-    if (appContent[i] === "{") { braceStart = i + 1; break; }
-  }
-  if (braceStart === -1) return "";
-  let end = braceStart;
-  for (let i = braceStart; i < appContent.length; i++) {
-    if (appContent[i] === "{") depth++;
-    else if (appContent[i] === "}") {
-      if (depth === 0) { end = i; break; }
+  let braceStart = -1;
+  for (let i = start; i < appContent.length; i++) {
+    if (appContent[i] === "{") {
+      if (braceStart === -1) braceStart = i + 1;
+      depth++;
+    } else if (appContent[i] === "}") {
       depth--;
+      if (depth === 0) return appContent.slice(braceStart, i);
+      if (depth < 0) return "";
     }
   }
-  return appContent.slice(braceStart, end);
+  return "";
 }
 
 // 1-3. stopAllMimoAudio updates ttsAudios
@@ -167,6 +170,37 @@ assert(resumeMimoFn.includes("playMimoAudio"), "resumeMimoAudio: calls playMimoA
 assert(
   resumeMimoFn.includes("activeMimoAudios.has") || resumeMimoFn.includes("!activeMimoAudios.has"),
   "resumeMimoAudio: checks if Audio instance exists before recreating"
+);
+
+// 12b. resumeMimoAudio supports ready status (not just paused)
+assert(
+  resumeMimoFn.includes('"ready"') || resumeMimoFn.includes("'ready'"),
+  "resumeMimoAudio: handles status === ready (not only paused)"
+);
+
+// 12c. resumeMimoAudio does NOT skip when Audio instance exists
+assert(
+  resumeMimoFn.includes("audio.play()") || resumeMimoFn.includes("audio.play"),
+  "resumeMimoAudio: calls audio.play() when Audio instance exists"
+);
+
+// 12d. resumeMimoAudio has proper guard for both paused and ready
+assert(
+  resumeMimoFn.includes('"paused"') && resumeMimoFn.includes('"ready"'),
+  "resumeMimoAudio: guards against invalid status (ready+paused both allowed)"
+);
+
+// 12e. resumeMimoAudio does not spread empty currentVoicePlayback
+assert(
+  resumeMimoFn.includes("makeVoicePlaybackState()") || resumeMimoFn.includes("key:"),
+  "resumeMimoAudio: sets currentVoicePlayback key/provider (not empty spread)"
+);
+
+// 13. onResumeMimoTts supports ready status
+const onResumeBody = getHandlerBody("onResumeMimoTts");
+assert(
+  onResumeBody.includes('"ready"') || onResumeBody.includes("'ready'"),
+  "onResumeMimoTts: handler handles status === ready"
 );
 
 // 13. MiniMax playBroadcastAudio stops MiMo
