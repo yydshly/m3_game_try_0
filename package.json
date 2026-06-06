@@ -38,6 +38,7 @@
     "broadcast-tts-check": "node scripts/broadcast-tts-check.mjs",
     "memory-continuity-check": "node scripts/memory-continuity-check.mjs",
     "ai-director-check": "node scripts/ai-director-check.mjs",
-    "resident-dialogue-check": "node scripts/resident-dialogue-check.mjs"
+    "resident-dialogue-check": "node scripts/resident-dialogue-check.mjs",
+    "mimo-tts-integration-check": "node scripts/mimo-tts-integration-check.mjs"
   }
 }

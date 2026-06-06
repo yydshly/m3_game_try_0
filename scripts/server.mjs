@@ -1137,6 +1137,63 @@ function buildMimoStyleInstruction(emotion, speed) {
   return parts.join("");
 }
 
+/**
+ * Try multiple possible audio field paths from MiMo Token Plan responses.
+ * Returns the first non-empty base64 string found, or null.
+ * Does NOT log the audio data itself.
+ */
+function parseMimoTtsAudio(payload) {
+  const candidates = [
+    // Chat Completions with audio output (Token Plan primary)
+    payload?.choices?.[0]?.message?.audio?.data,
+    payload?.choices?.[0]?.message?.audio?.base64,
+    payload?.choices?.[0]?.message?.audio_data,
+    // Alternative nested paths
+    payload?.choices?.[0]?.audio?.data,
+    payload?.choices?.[0]?.audio?.base64,
+    payload?.choices?.[0]?.audio_data,
+    // Top-level audio object
+    payload?.audio?.data,
+    payload?.audio?.base64,
+    payload?.audio_data,
+    // data wrapper
+    payload?.data?.audio,
+    payload?.data?.audio_data,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim().length > 0) {
+      return candidate.trim();
+    }
+  }
+  return null;
+}
+
+/**
+ * Return a safe, user-friendly error message without exposing internal details.
+ * Strips API keys, tokens, base64 audio, trace IDs, and stack traces.
+ */
+function sanitizeMimoError(error, fallback) {
+  if (!error || typeof error !== "object") {
+    return fallback ?? "MiMo 语音生成失败，请检查 Token Plan 配置。";
+  }
+  const msg = String(error.message ?? "");
+  // Strip known sensitive patterns
+  const sanitized = msg
+    .replace(/tp-[A-Za-z0-9._-]{10,}/g, "tp-***")
+    .replace(/sk-[A-Za-z0-9._-]{10,}/g, "sk-***")
+    .replace(/api-key["\s:]+[A-Za-z0-9._-]+/gi, "api-key: ***")
+    .replace(/api_key["\s:]+[A-Za-z0-9._-]+/gi, "api_key: ***")
+    .replace(/Bearer [A-Za-z0-9._-]+/g, "Bearer ***")
+    .replace(/trace[_-]?id["\s:]+[A-Za-z0-9._-]+/gi, "trace_id: ***")
+    .replace(/[A-Za-z0-9+/]{80,}={0,2}/g, "***")
+    .replace(/stack["\s:]+.+/gi, "***");
+  if (sanitized === "***" || !sanitized.trim()) {
+    return fallback ?? "MiMo 语音生成失败，请检查 Token Plan 配置。";
+  }
+  return sanitized;
+}
+
 async function handleMimoTts(request, response) {
   // Support ?dryRun=1 to validate request construction without calling MiMo
   const url = new URL(request.url, `http://localhost:${port}`);
@@ -1197,6 +1254,7 @@ async function handleMimoTts(request, response) {
     return;
   }
 
+  const scene = String(body?.scene ?? "resident_dialogue").trim();
   const emotion = String(body?.emotion ?? "neutral").trim();
   const voice = String(body?.voice ?? mimoVoiceId).trim();
   const speed = Number(body?.speed ?? mimoSpeed);
@@ -1238,20 +1296,20 @@ async function handleMimoTts(request, response) {
     const payload = await ttsResponse.json().catch(() => ({}));
 
     if (!ttsResponse.ok) {
+      const safeMsg = sanitizeMimoError(
+        { message: payload?.error?.message ?? payload?.msg ?? "" },
+        "MiMo 语音生成失败，请检查 Token Plan 配置。"
+      );
       sendJson(response, ttsResponse.status, {
         ok: false,
-        error: "MiMo 语音生成失败，请检查 Token Plan 配置。",
+        error: safeMsg,
       });
       return;
     }
 
-    // Token Plan returns base64 audio in choices[].message.audio or similar
-    const audioBase64 =
-      payload?.choices?.[0]?.message?.audio?.data ??
-      payload?.audio?.data ??
-      null;
+    const audioBase64 = parseMimoTtsAudio(payload);
 
-    if (!audioBase64 || typeof audioBase64 !== "string" || audioBase64.length === 0) {
+    if (!audioBase64) {
       sendJson(response, 502, {
         ok: false,
         error: "MiMo 未返回音频数据。",
@@ -1259,22 +1317,33 @@ async function handleMimoTts(request, response) {
       return;
     }
 
+    // Simple hash of the text for client-side dedup (not cryptographic)
+    const textHash = String(text.trim())
+      .split("")
+      .reduce((acc, c) => ((acc << 5) - acc + c.charCodeAt(0)) | 0, 0)
+      .toString(16);
+
     const audioUrl = `data:audio/wav;base64,${audioBase64}`;
 
     sendJson(response, 200, {
       ok: true,
       audioUrl,
       provider: "mimo",
+      format: "wav",
+      model: mimoModel,
+      scene,
+      textHash,
       durationMs: 0,
       text,
     });
   } catch (error) {
     const isTimeout = error.name === "AbortError";
+    const safeMsg = sanitizeMimoError(error, null);
     sendJson(response, isTimeout ? 504 : 500, {
       ok: false,
       error: isTimeout
         ? "MiMo 语音生成超时了，请稍后重试。"
-        : "MiMo 语音生成遇到未知错误，请稍后重试。",
+        : safeMsg,
     });
   }
 }
@@ -1290,27 +1359,30 @@ function resolvePath(url) {
 }
 
 const server = createServer((request, response) => {
-  if (request.method === "POST" && request.url === "/api/minimax/plan") {
+  // Strip query string for route matching
+  const pathname = request.url.split("?")[0];
+
+  if (request.method === "POST" && pathname === "/api/minimax/plan") {
     handleMiniMaxPlan(request, response);
     return;
   }
 
-  if (request.method === "POST" && request.url === "/api/minimax/event") {
+  if (request.method === "POST" && pathname === "/api/minimax/event") {
     handleMiniMaxEvent(request, response);
     return;
   }
 
-  if (request.method === "POST" && request.url === "/api/minimax/broadcast") {
+  if (request.method === "POST" && pathname === "/api/minimax/broadcast") {
     handleMiniMaxBroadcast(request, response);
     return;
   }
 
-  if (request.method === "POST" && request.url === "/api/minimax/tts") {
+  if (request.method === "POST" && pathname === "/api/minimax/tts") {
     handleMiniMaxTts(request, response);
     return;
   }
 
-  if (request.method === "POST" && request.url === "/api/mimo/tts") {
+  if (request.method === "POST" && pathname === "/api/mimo/tts") {
     handleMimoTts(request, response);
     return;
   }

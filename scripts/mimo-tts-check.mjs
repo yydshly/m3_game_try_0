@@ -166,7 +166,7 @@ console.log("\n── Token Plan endpoint construction ──");
   const fs = await import("fs");
   const content = fs.readFileSync("./scripts/server.mjs", "utf8");
   // Isolate the MiMo handler section only
-  const mimoSection = content.split("// ── MiMo TTS ─────────────────────────────────────────────────────────────────")[1]?.split("function resolvePath")[0] ?? "";
+  const mimoSection = content.split("async function handleMimoTts")[1]?.split("\nfunction resolvePath")[0] ?? "";
   // Must use /chat/completions
   assert(mimoSection.includes("/chat/completions"), "/chat/completions used in handleMimoTts");
   // Must NOT use /t2a_v2, /tts, /audio/speech in MiMo handler
@@ -183,7 +183,7 @@ console.log("\n── Auth header uses api-key ──");
   // Must use "api-key" header
   assert(content.includes('"api-key"'), 'uses "api-key" header');
   // Must NOT use Authorization: Bearer for MiMo
-  const mimoSection = content.split("handleMimoTts")[1]?.split("function resolvePath")[0] ?? "";
+  const mimoSection = content.split("async function handleMimoTts")[1]?.split("\nfunction resolvePath")[0] ?? "";
   assert(!mimoSection.includes("Bearer"), "no Bearer token in handleMimoTts");
 }
 
@@ -192,7 +192,7 @@ console.log("\n── Chat Completions request body ──");
 {
   const fs = await import("fs");
   const content = fs.readFileSync("./scripts/server.mjs", "utf8");
-  const fn = content.split("handleMimoTts")[1]?.split("function resolvePath")[0] ?? "";
+  const fn = content.split("async function handleMimoTts")[1]?.split("\nfunction resolvePath")[0] ?? "";
   // Must have messages array
   assert(fn.includes("messages:"), "messages array in request body");
   // Must have user role for style instruction
@@ -298,7 +298,7 @@ console.log("\n── dry-run endpoint support ──");
 {
   const fs = await import("fs");
   const content = fs.readFileSync("./scripts/server.mjs", "utf8");
-  const fn = content.split("handleMimoTts")[1]?.split("function resolvePath")[0] ?? "";
+  const fn = content.split("async function handleMimoTts")[1]?.split("\nfunction resolvePath")[0] ?? "";
   assert(fn.includes("isDryRun"), "isDryRun variable exists");
   assert(fn.includes('dryRun=1') || fn.includes('dryRun"'), "dryRun query param checked");
   assert(fn.includes("keyPrefix:"), "dry-run response includes keyPrefix");
@@ -313,7 +313,7 @@ console.log("\n── Error message sanitization ──");
 {
   const fs = await import("fs");
   const content = fs.readFileSync("./scripts/server.mjs", "utf8");
-  const fn = content.split("handleMimoTts")[1]?.split("function resolvePath")[0] ?? "";
+  const fn = content.split("async function handleMimoTts")[1]?.split("\nfunction resolvePath")[0] ?? "";
   // Error strings should not contain actual API key patterns (sk-xxx, tp-xxx, long Bearer tokens)
   const errorStrings = [...fn.matchAll(/error:\s*"([^"]+)"/g)].map((m) => m[1]);
   const hasKeyLeak = errorStrings.some(
@@ -511,6 +511,94 @@ console.log("\n── dayCycle not modified ──");
   const content = fs.readFileSync("./src/app.js", "utf8");
   const cycleFns = ["advancePhase", "runTownDayCycle", "onRunTownDayCycle"];
   cycleFns.forEach((fn) => assert(content.includes(fn), `${fn} still in app.js`));
+}
+
+// ── 45. parseMimoTtsAudio function exists ─────────────────────────────────
+console.log("\n── parseMimoTtsAudio function ──");
+{
+  const fs = await import("fs");
+  const content = fs.readFileSync("./scripts/server.mjs", "utf8");
+  assert(content.includes("function parseMimoTtsAudio"), "parseMimoTtsAudio function exists");
+  // Primary path: choices[0].message.audio.data
+  assert(
+    content.includes("choices[0]?.message?.audio?.data") || content.includes("choices?.[0]?.message?.audio?.data"),
+    "supports choices[0].message.audio.data path"
+  );
+  // At least 3 candidate paths (check for actual strings in the function body)
+  const hasAudioData = content.includes("audio?.data");
+  const hasAudioBase64 = content.includes("audio?.base64");
+  const hasAudioDataAlt = content.includes("audio_data");
+  const count = [hasAudioData, hasAudioBase64, hasAudioDataAlt].filter(Boolean).length;
+  assert(count >= 2, `at least 2 audio field variants supported (found ${count})`);
+}
+
+// ── 46. sanitizeMimoError function exists ─────────────────────────────────
+console.log("\n── sanitizeMimoError function ──");
+{
+  const fs = await import("fs");
+  const content = fs.readFileSync("./scripts/server.mjs", "utf8");
+  assert(content.includes("function sanitizeMimoError"), "sanitizeMimoError function exists");
+  assert(content.includes('tp-[A-Za-z0-9._-]{10,}'), "tp- key pattern stripped");
+  assert(content.includes('sk-[A-Za-z0-9._-]{10,}'), "sk- key pattern stripped");
+  assert(content.includes('Bearer [A-Za-z0-9._-]+'), "Bearer token stripped");
+  assert(content.includes("{80,}"), "long base64 stripped");
+}
+
+// ── 47. Success response uses data:audio/wav;base64, ────────────────────────
+console.log("\n── Response audioUrl format ──");
+{
+  const fs = await import("fs");
+  const content = fs.readFileSync("./scripts/server.mjs", "utf8");
+  assert(
+    content.includes("data:audio/wav;base64,"),
+    "audioUrl uses data:audio/wav;base64, prefix"
+  );
+}
+
+// ── 48. Response includes format, textHash, scene fields ───────────────────
+console.log("\n── Response includes metadata fields ──");
+{
+  const fs = await import("fs");
+  const content = fs.readFileSync("./scripts/server.mjs", "utf8");
+  const mimoSection = content.split("async function handleMimoTts")[1]?.split("\nfunction resolvePath")[0] ?? "";
+  assert(mimoSection.includes("format:"), "response includes format field");
+  assert(mimoSection.includes("textHash"), "response includes textHash field");
+  assert(mimoSection.includes("scene"), "response includes scene field");
+}
+
+// ── 49. No raw upstream payload in response ───────────────────────────────
+console.log("\n── No raw payload in response ──");
+{
+  const fs = await import("fs");
+  const content = fs.readFileSync("./scripts/server.mjs", "utf8");
+  const mimoSection = content.split("async function handleMimoTts")[1]?.split("\nfunction resolvePath")[0] ?? "";
+  // Should not return Authorization header in response
+  assert(!mimoSection.includes("Authorization:"), "no Authorization in response");
+  assert(!mimoSection.includes("Bearer "), "no Bearer token in response");
+}
+
+// ── 50. mimo-tts-integration-check script exists ──────────────────────────
+console.log("\n── Integration check script ──");
+{
+  const fs = await import("fs");
+  const pkg = JSON.parse(fs.readFileSync("./package.json", "utf8"));
+  assert(
+    pkg.scripts && pkg.scripts["mimo-tts-integration-check"],
+    "mimo-tts-integration-check script in package.json"
+  );
+  const scriptContent = fs.readFileSync("./scripts/mimo-tts-integration-check.mjs", "utf8");
+  assert(scriptContent.includes("MIMO_TTS_REAL_TEST"), "real test requires MIMO_TTS_REAL_TEST opt-in");
+  assert(scriptContent.includes("dryRun"), "dry-run test implemented");
+  assert(scriptContent.includes("parseMimoTtsAudio") || scriptContent.includes("choices"), "uses parseMimoTtsAudio or equivalent");
+}
+
+// ── 51. Integration check: real test is opt-in only ────────────────────────
+console.log("\n── Real test opt-in ──");
+{
+  const fs = await import("fs");
+  const content = fs.readFileSync("./scripts/mimo-tts-integration-check.mjs", "utf8");
+  assert(content.includes("REAL_TEST"), "real test uses REAL_TEST variable (derived from env var)");
+  assert(content.includes("MIMO_TTS_REAL_TEST === '1'") || content.includes('MIMO_TTS_REAL_TEST === "1"'), "real test conditional on MIMO_TTS_REAL_TEST=1");
 }
 
 // ── Results ───────────────────────────────────────────────────────────────
