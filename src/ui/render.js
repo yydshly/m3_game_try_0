@@ -86,6 +86,7 @@ function getResidentAvatarImg(resident, size = 40) {
   return fallback;
 }
 import { getCurrentPhase, getLocation, getResidentsAtLocation, getTask, getTopRelationships, getTownGoals, getTownTips } from "../domain/selectors.js";
+import { buildChoiceWorldEffectView } from "../domain/choiceWorldEffect.js";
 
 function escapeHtml(value) {
   return String(value)
@@ -891,19 +892,20 @@ function residentStatus(resident) {
 
 // ── Town Stage (Map) ──────────────────────────────────────────────────────────
 
-function renderPlaceLabel(placeId, isActive, anim) {
+function renderPlaceLabel(placeId, isActive, anim, choiceAffected) {
   const place = stagePlaces[placeId];
   if (!place) return "";
   const activeClass = isActive ? " stage-place-label--active" : "";
   const travelingClass = anim?.traveling ? " stage-place-label--traveling" : "";
   const taskClass = anim ? ` stage-place-label--task stage-place-label--effect-${escapeHtml(anim.effect)}` : "";
   const placeEffectClass = anim?.placeEffect ? ` stage-place-label--place-effect-${escapeHtml(anim.placeEffect)}` : "";
+  const choiceAffectedClass = choiceAffected ? " stage-place-label--choice-affected" : "";
   const effectAnchor = anim
     ? `<span class="stage-effect-anchor stage-effect-anchor--${escapeHtml(anim.effect)} stage-effect-anchor--${escapeHtml(anim.placeEffect ?? anim.effect)}" aria-hidden="true"></span>`
     : "";
 
   return `
-    <div class="stage-place-label stage-place-label--${escapeHtml(placeId)}${activeClass}${travelingClass}${taskClass}${placeEffectClass}"
+    <div class="stage-place-label stage-place-label--${escapeHtml(placeId)}${activeClass}${travelingClass}${taskClass}${placeEffectClass}${choiceAffectedClass}"
          style="left:${place.x}%; top:${place.y}%;"
          aria-label="${escapeHtml(place.label)}">
       <span class="stage-place-label__icon">${place.icon}</span>
@@ -938,7 +940,7 @@ function renderCharacterVoiceIndicator(resident, beat, voiceState, ttsAudios) {
   return `<button class="stage-character__voice-btn stage-character__voice-btn--idle" type="button" data-action="play-mimo-tts" data-audio-key="${escapeHtml(audioKey)}" data-text="${escapeHtml(beat.dialogue ?? '')}" data-scene="resident_dialogue" data-resident-id="${escapeHtml(resident.id)}" data-beat-id="${escapeHtml(beat.id ?? '')}" title="播放 ${escapeHtml(resident.name)} 的对白">🔈</button>`;
 }
 
-function renderStageCharacter(resident, position, taskLabel, status, isSelected, anim, completionResult, moodView, activeScenario, beat, residentVoiceInteraction = null, ttsAudios = {}, residentConversation = null, conversationRole = null) {
+function renderStageCharacter(resident, position, taskLabel, status, isSelected, anim, completionResult, moodView, activeScenario, beat, residentVoiceInteraction = null, ttsAudios = {}, residentConversation = null, conversationRole = null, choiceReaction = null) {
   const toX = position.x;
   const toY = position.y;
   const selectedClass = isSelected ? " stage-character--selected" : "";
@@ -1011,6 +1013,12 @@ function renderStageCharacter(resident, position, taskLabel, status, isSelected,
   const listenerClass = (isConversationActive && conversationRole?.isListener) ? " stage-character--listening" : "";
   const participantClass = isParticipant ? " stage-character--conversation-participant" : "";
 
+  // Choice reaction: shown on residents affected by a player choice
+  const choiceAffectedClass = choiceReaction ? " stage-character--choice-affected" : "";
+  const choiceReactionBubble = choiceReaction
+    ? `<span class="stage-character__choice-reaction">${escapeHtml(choiceReaction.reactionText)}</span>`
+    : "";
+
   // Completion badge shown after animation
   const completionBadge = completionResult
     ? `<span class="stage-character__completion-badge" title="${escapeHtml(completionResult.label)}">${escapeHtml(completionResult.icon)}</span>`
@@ -1023,7 +1031,7 @@ function renderStageCharacter(resident, position, taskLabel, status, isSelected,
 
   return `
     <button
-      class="stage-character${selectedClass}${statusClass}${extraClasses}${speakerClass}${listenerClass}${participantClass}"
+      class="stage-character${selectedClass}${statusClass}${extraClasses}${speakerClass}${listenerClass}${participantClass}${choiceAffectedClass}"
       style="${extraStyles}"
       data-action="select-resident"
       data-resident-id="${escapeHtml(resident.id)}"
@@ -1042,6 +1050,7 @@ function renderStageCharacter(resident, position, taskLabel, status, isSelected,
       ${actionBubble}
       ${dialogueBubble}
       ${conversationBubble}
+      ${choiceReactionBubble}
       ${renderCharacterVoiceIndicator(resident, beat, residentVoiceInteraction, ttsAudios)}
     </button>
   `;
@@ -1066,10 +1075,10 @@ function renderChoiceAftermath(aftermath, residentVoiceInteraction = null) {
   }).join("");
 
   return `
-    <div class="choice-aftermath" aria-label="刚刚的选择影响" aria-live="polite">
+    <div class="choice-aftermath" aria-label="居民反应" aria-live="polite">
       <div class="choice-aftermath__header">
-        <span>✨</span>
-        <span>刚刚的选择</span>
+        <span>👥</span>
+        <span>居民反应</span>
       </div>
       <div class="choice-aftermath__choice-label">
         你选择了：${escapeHtml(choiceLabel ?? "")}
@@ -1108,6 +1117,35 @@ function renderChoiceAftermathStageIndicator(aftermath) {
     <div class="stage-choice-aftermath" aria-label="选择影响" aria-live="polite">
       <span class="stage-choice-aftermath__icon">${icon}</span>
       <span class="stage-choice-aftermath__label">${escapeHtml(label)}</span>
+    </div>
+  `;
+}
+
+/**
+ * Render a place-level marker for the player's choice world effect.
+ * Positioned above the specific place on the map (not centered).
+ * @param {object} choiceWorldEffect - output of buildChoiceWorldEffectView()
+ * @returns {string} HTML or empty string
+ */
+function renderChoiceWorldMarker(choiceWorldEffect) {
+  if (!choiceWorldEffect?.visible) return "";
+  // Only show if the aftermath is recent (within 30 seconds)
+  const age = Date.now() - (choiceWorldEffect.createdAt ?? 0);
+  if (age > 30_000) return "";
+
+  const { placeId, markerIcon, markerLabel } = choiceWorldEffect;
+  const place = stagePlaces[placeId];
+  if (!place) return "";
+
+  return `
+    <div
+      class="stage-choice-marker stage-choice-marker--warm stage-choice-marker--recent"
+      style="left:${place.x}%; top:${place.y - 12}%;"
+      aria-label="选择影响"
+      aria-live="polite"
+    >
+      <span class="stage-choice-marker__icon">${escapeHtml(markerIcon)}</span>
+      <span class="stage-choice-marker__label">${escapeHtml(markerLabel)}</span>
     </div>
   `;
 }
@@ -1187,6 +1225,14 @@ function renderTownStage(state, uiState, handlers = {}) {
   // Build task completion feedback view model
   const taskFeedback = buildTaskCompletionFeedback(state, completionFeedback);
 
+  // Build choice world effect view model
+  const choiceWorldEffect = buildChoiceWorldEffectView(state, uiState);
+
+  // Build affected resident lookup map
+  const affectedResidentIds = new Set(
+    (choiceWorldEffect.affectedResidents ?? []).map((r) => r.residentId)
+  );
+
   // Determine which place has residents (for active labels)
   const activePlaceIds = new Set(state.residents.map((r) => r.locationId));
 
@@ -1194,7 +1240,8 @@ function renderTownStage(state, uiState, handlers = {}) {
   const placeLabelsHtml = Object.keys(stagePlaces)
     .map((placeId) => {
       const placeAnim = activeAnimations.find((a) => a.placeId === placeId);
-      return renderPlaceLabel(placeId, activePlaceIds.has(placeId), placeAnim);
+      const choiceAffected = choiceWorldEffect.visible && choiceWorldEffect.placeId === placeId;
+      return renderPlaceLabel(placeId, activePlaceIds.has(placeId), placeAnim, choiceAffected);
     })
     .join("");
 
@@ -1233,6 +1280,8 @@ function renderTownStage(state, uiState, handlers = {}) {
       const conversationForChar = conversationActive && isSpeaker
         ? uiState.residentConversation
         : null;
+      // Choice reaction for this resident (if affected and not in an active conversation)
+      const choiceReaction = (!isParticipant && !anim) ? (choiceWorldEffect.affectedResidents ?? []).find((r) => r.residentId === resident.id) ?? null : null;
       return renderStageCharacter(
         resident,
         pos,
@@ -1248,6 +1297,7 @@ function renderTownStage(state, uiState, handlers = {}) {
         uiState.ttsAudios,
         conversationForChar,
         { isConversationActive: conversationActive, isSpeaker, isListener, isParticipant },
+        choiceReaction,
       );
     })
     .join("");
@@ -1294,7 +1344,7 @@ function renderTownStage(state, uiState, handlers = {}) {
           <span class="stage-broadcast-indicator__text">广播播放中…</span>
         </div>
       ` : ""}
-      ${renderChoiceAftermathStageIndicator(uiState.choiceAftermath)}
+      ${renderChoiceWorldMarker(choiceWorldEffect)}
     </section>
   `;
 }
@@ -1512,8 +1562,8 @@ function renderM3EventItem(event, residents, latestClass = "", ttsAudios = {}, h
   } else if (hasChoices && isChosen && chosenChoice) {
     choicesHtml = `
       <div class="m3-event__chosen">
-        <p class="m3-event__chosen-label">已选择：${escapeHtml(chosenChoice.label)}</p>
-        <p class="m3-event__chosen-result">结果：${escapeHtml(chosenChoice.resultText)}</p>
+        <p class="m3-event__chosen-label">已选择：${escapeHtml(chosenChoice.label ?? "")}</p>
+        <p class="m3-event__chosen-result">结果：${escapeHtml(chosenChoice.resultText ?? "")}</p>
       </div>
     `;
   }

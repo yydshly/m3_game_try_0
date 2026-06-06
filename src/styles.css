@@ -4441,6 +4441,104 @@ details summary {
   font-weight: 600;
 }
 
+/* ── Choice World Effect Markers ─────────────────────────────────────────── */
+
+.stage-choice-marker {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  pointer-events: none;
+  z-index: 15;
+  animation: choiceMarkerFadeIn 0.35s ease-out;
+}
+
+@keyframes choiceMarkerFadeIn {
+  from { opacity: 0; transform: translateY(-6px) scale(0.85); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.stage-choice-marker__icon {
+  font-size: 1.4rem;
+  line-height: 1;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15));
+}
+
+.stage-choice-marker__label {
+  background: rgba(255, 253, 248, 0.92);
+  border: 1.5px solid var(--gold);
+  border-radius: 10px;
+  padding: 2px 8px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  box-shadow: var(--shadow-sm);
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stage-choice-marker--warm .stage-choice-marker__label {
+  border-color: var(--gold);
+  background: var(--gold-soft);
+}
+
+.stage-choice-marker--recent {
+  animation: choiceMarkerFadeIn 0.35s ease-out, choiceMarkerPulse 0.5s ease-in-out 0.35s;
+}
+
+@keyframes choiceMarkerPulse {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+/* ── Place Label Choice Affected ─────────────────────────────────────────── */
+
+.stage-place-label--choice-affected .stage-place-label__name {
+  color: var(--gold-deep, #b8892a);
+  font-weight: 700;
+}
+
+.stage-place-label--choice-affected .stage-place-label__icon {
+  filter: drop-shadow(0 0 4px rgba(201, 164, 85, 0.6));
+}
+
+/* ── Stage Character Choice Affected ─────────────────────────────────────── */
+
+.stage-character--choice-affected .stage-character__sprite {
+  box-shadow: 0 0 0 3px rgba(201, 164, 85, 0.5), 0 2px 8px rgba(0,0,0,0.12);
+  border-radius: 50%;
+}
+
+.stage-character__choice-reaction {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--gold-soft);
+  border: 1.5px solid var(--gold);
+  border-radius: 10px;
+  padding: 3px 8px;
+  font-size: 0.68rem;
+  color: var(--ink);
+  white-space: nowrap;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: var(--shadow-sm);
+  pointer-events: none;
+  z-index: 20;
+  animation: choiceReactionPop 0.3s ease-out;
+}
+
+@keyframes choiceReactionPop {
+  from { opacity: 0; transform: translateX(-50%) scale(0.8) translateY(4px); }
+  to   { opacity: 1; transform: translateX(-50%) scale(1) translateY(0); }
+}
+
 /* ── Voice Debug Panel ─────────────────────────────────────────────────────── */
 
 .voice-debug-panel {
