@@ -860,7 +860,7 @@ function renderStageCharacter(resident, position, taskLabel, status, isSelected,
   const isConversationSpeaker = currentLine?.speakerId === resident.id;
   const isConversationActive = residentConversation?.status === "playing" || residentConversation?.status === "paused";
   const conversationBubble = (isConversationActive && isConversationSpeaker && residentConversation?.visibleText)
-    ? `<span class="stage-character__dialogue stage-character__dialogue--conversation">${escapeHtml(residentConversation.visibleText)}</span>`
+    ? `<span class="stage-character__dialogue stage-character__dialogue--conversation" data-conversation-visible-text="${escapeHtml(currentLine?.id ?? '')}">${escapeHtml(residentConversation.visibleText)}</span>`
     : "";
 
   // Speaker highlight when conversation is active
@@ -1707,7 +1707,7 @@ export function renderApp(root, state, handlers, uiState = {}) {
     dayOpeningReflection: uiState.dayOpeningReflection ?? null,
     residentVoiceInteraction: uiState.residentVoiceInteraction ?? { enabled: false, recommendedClipKey: "", lastTriggeredAt: 0, hint: "" },
     residentVoiceClips: Array.isArray(uiState.residentVoiceClips) ? uiState.residentVoiceClips : [],
-    residentConversation: uiState.residentConversation ?? { enabled: false, status: "idle", queue: [], currentIndex: 0, currentLineId: "", visibleText: "", typingTimerId: null, autoPlayVoice: true, error: "" },
+    residentConversation: uiState.residentConversation ?? { enabled: false, status: "idle", queue: [], currentIndex: 0, currentLineId: "", visibleText: "", typingTimerId: null, autoPlayVoice: true, error: "", runId: "" },
   };
 
   const safeHandlers = {

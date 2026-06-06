@@ -89,6 +89,7 @@ let uiState = {
     typingTimerId: null,
     autoPlayVoice: true,
     error: "",
+    runId: "",      // unique id to invalidate old timers after stop/restart
   },
 };
 let autoPlayTimer = null;
@@ -302,13 +303,33 @@ function buildResidentConversationQueue(state, conversationState) {
 }
 
 /**
- * Clear any active typewriter timer.
+ * Clear any active typewriter timer and reset typingTimerId in state.
  */
 function clearConversationTimer() {
   const existing = uiState.residentConversation;
   if (existing?.typingTimerId != null) {
     clearTimeout(existing.typingTimerId);
+    uiState = {
+      ...uiState,
+      residentConversation: {
+        ...existing,
+        typingTimerId: null,
+      },
+    };
   }
+}
+
+/**
+ * Update conversation visible text in the DOM without a full render.
+ * Used during typewriter effect to avoid flickering the entire UI.
+ * @param {string} lineId - the conversation line id
+ * @param {string} visibleText - the text to display
+ */
+function updateConversationVisibleText(lineId, visibleText) {
+  const nodes = document.querySelectorAll(`[data-conversation-visible-text="${CSS.escape(lineId)}"]`);
+  nodes.forEach((node) => {
+    node.textContent = visibleText;
+  });
 }
 
 /**
@@ -462,6 +483,8 @@ function startConversationTypewriter(line, audioUrl) {
     // If conversation was paused/stopped since we started, don't continue
     const cur = uiState.residentConversation;
     if (!cur || cur.status !== "playing" || cur.currentLineId !== line.id) return;
+    // Stale timer guard — runId mismatch means this timer is obsolete
+    if (cur.runId !== conv.runId) return;
 
     if (charIndex >= total) {
       // Text complete — wait for audio to finish if we have one
@@ -490,7 +513,8 @@ function startConversationTypewriter(line, audioUrl) {
     charIndex++;
     const visibleText = text.slice(0, charIndex);
     uiState = { ...uiState, residentConversation: { ...cur, visibleText, typingTimerId: null } };
-    render();
+    // Local DOM update — no full render for each character
+    updateConversationVisibleText(line.id, visibleText);
 
     const delay = getDelay(text[charIndex - 1]);
     const timerId = setTimeout(tick, delay);
@@ -520,6 +544,7 @@ function startResidentConversation() {
   stopAllMimoAudio({ reason: "conversation-start" });
 
   const firstLine = queue[0];
+  const runId = `conv-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
   uiState = {
     ...uiState,
     residentConversation: {
@@ -532,6 +557,7 @@ function startResidentConversation() {
       typingTimerId: null,
       autoPlayVoice: true,
       error: "",
+      runId,
     },
   };
   render();
@@ -619,6 +645,8 @@ function resumeResidentConversation() {
     const tick = () => {
       const cur = uiState.residentConversation;
       if (!cur || cur.status !== "playing" || cur.currentLineId !== currentLine.id) return;
+      // Stale timer guard — runId mismatch means this timer is obsolete
+      if (cur.runId !== conv.runId) return;
       if (charIndex >= total) {
         // Text complete — use estimated audio duration
         const estimatedMs = Math.max(1500, total * 120);
@@ -630,7 +658,8 @@ function resumeResidentConversation() {
       charIndex++;
       const visibleText = conv.visibleText + remainingText.slice(0, charIndex);
       uiState = { ...uiState, residentConversation: { ...cur, visibleText, typingTimerId: null } };
-      render();
+      // Local DOM update — no full render for each character
+      updateConversationVisibleText(currentLine.id, visibleText);
       const delay = getDelay(remainingText[charIndex - 1]);
       const timerId = setTimeout(tick, delay);
       uiState = { ...uiState, residentConversation: { ...uiState.residentConversation, typingTimerId: timerId } };
@@ -659,6 +688,7 @@ function stopResidentConversation() {
       currentLineId: "",
       visibleText: "",
       typingTimerId: null,
+      runId: "",
     },
     currentVoicePlayback: makeVoicePlaybackState(),
   };
