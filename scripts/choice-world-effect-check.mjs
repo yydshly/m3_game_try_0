@@ -153,12 +153,13 @@ console.log("\n── stage-character--choice-affected ──");
   assert(content.includes("stage-character__choice-reaction"), "choice-reaction bubble class exists");
 }
 
-// ── 11. choice reaction bubble rendered ─────────────────────────────────────
+// ── 11. choice reaction bubble rendered with contextLabel ───────────────────────
 console.log("\n── choice reaction bubble ──");
 {
   const fs = await import("fs");
   const content = fs.readFileSync(resolve(SRC, "ui/render.js"), "utf8");
-  assert(content.includes("escapeHtml(choiceReaction.reactionText)"), "reaction text escaped");
+  // contextLabel (place+reaction) is used for the bubble text
+  assert(content.includes("escapeHtml(choiceReaction.contextLabel"), "contextLabel is escaped in bubble");
   assert(content.includes("choiceReactionBubble"), "choiceReactionBubble variable exists");
 }
 
@@ -446,6 +447,129 @@ console.log("\n── CSS: choiceMarkerFadeOut animation ──");
   const fs = await import("fs");
   const css = fs.readFileSync(resolve(PROJECT_ROOT, "src/styles.css"), "utf8");
   assert(css.includes("@keyframes choiceMarkerFadeOut") || css.includes("choiceMarkerFadeOut"), "choiceMarkerFadeOut animation defined");
+}
+
+// ── 37. affectedResidents hasBubble field: only 1 primary resident ─────────────
+console.log("\n── affectedResidents: only 1 hasBubble ──");
+{
+  const mod = await import(src("domain/choiceWorldEffect.js"));
+  const residents = [
+    { id: "seven", name: "小七", locationId: "cafe" },
+    { id: "zhou", name: "老周", locationId: "plaza" },
+    { id: "hua", name: "阿花", locationId: "cafe" },
+  ];
+  const view = mod.buildChoiceWorldEffectView(
+    { residents, events: [] },
+    {
+      choiceAftermath: {
+        id: "a4", eventId: "e4", choiceId: "c4", placeId: "cafe",
+        choiceLabel: "测试选择",
+        summary: "结果说明",
+        residentReactions: [
+          { residentId: "seven", residentName: "小七", reaction: "明白了。" },
+          { residentId: "zhou", residentName: "老周", reaction: "好的。" },
+          { residentId: "hua", residentName: "阿花", reaction: "知道了。" },
+        ],
+        createdAt: Date.now(),
+      },
+    }
+  );
+  assert(view.visible === true, "visible is true");
+  const bubbleCount = view.affectedResidents.filter((r) => r.hasBubble).length;
+  assert(bubbleCount === 1, `only 1 resident has hasBubble=true (got ${bubbleCount})`);
+  assert(view.affectedResidents.length >= 1, "has at least 1 affected resident");
+}
+
+// ── 38. contextLabel exists on primary resident ─────────────────────────────────
+console.log("\n── contextLabel on primary resident ──");
+{
+  const mod = await import(src("domain/choiceWorldEffect.js"));
+  const residents = [
+    { id: "seven", name: "小七", locationId: "cafe" },
+    { id: "zhou", name: "老周", locationId: "plaza" },
+  ];
+  const view = mod.buildChoiceWorldEffectView(
+    { residents, events: [] },
+    {
+      choiceAftermath: {
+        id: "a5", eventId: "e5", choiceId: "c5", placeId: "cafe",
+        choiceLabel: "测试",
+        summary: "阿远把画册放在餐厅。",
+        residentReactions: [
+          { residentId: "seven", residentName: "小七", reaction: "明白了。" },
+          { residentId: "zhou", residentName: "老周", reaction: "好的。" },
+        ],
+        createdAt: Date.now(),
+      },
+    }
+  );
+  const primary = view.affectedResidents.find((r) => r.hasBubble);
+  assert(primary !== undefined, "primary (hasBubble) resident exists");
+  assert(primary?.contextLabel !== undefined && primary?.contextLabel !== null, "primary has contextLabel");
+  assert(typeof primary?.contextLabel === "string" && primary.contextLabel.length > 0, "contextLabel is non-empty string");
+  // contextLabel should include the place name
+  assert(primary?.contextLabel.includes("餐厅") || primary?.contextLabel.includes("小镇"), "contextLabel includes place name");
+}
+
+// ── 39. contextLabel ≤ 18 chars ───────────────────────────────────────────────
+console.log("\n── contextLabel max 18 chars ──");
+{
+  const mod = await import(src("domain/choiceWorldEffect.js"));
+  const residents = [{ id: "seven", name: "小七", locationId: "cafe" }];
+  const view = mod.buildChoiceWorldEffectView(
+    { residents, events: [] },
+    {
+      choiceAftermath: {
+        id: "a6", eventId: "e6", choiceId: "c6", placeId: "cafe",
+        choiceLabel: "测试",
+        summary: "小七把画册轻放在餐厅入口旁边的架子上，非常高",
+        residentReactions: [
+          { residentId: "seven", residentName: "小七", reaction: "明白了，我会处理的。" },
+        ],
+        createdAt: Date.now(),
+      },
+    }
+  );
+  const primary = view.affectedResidents.find((r) => r.hasBubble);
+  if (primary?.contextLabel) {
+    assert(primary.contextLabel.length <= 18, `contextLabel ≤ 18 chars (got ${primary.contextLabel.length}: "${primary.contextLabel}")`);
+  }
+}
+
+// ── 40. no undefined in HTML output after choice (renderApp check) ─────────────
+console.log("\n── renderApp: no undefined after choice ──");
+{
+  const stateMod = await import(src("domain/state.js"));
+  const simMod = await import(src("domain/simulation.js"));
+  const renderMod = await import(src("ui/render.js"));
+  const mockRoot = {
+    _innerHTML: "",
+    get innerHTML() { return this._innerHTML; },
+    set innerHTML(v) { this._innerHTML = v; },
+    querySelector() { return { addEventListener() {} }; },
+    querySelectorAll() { return []; },
+  };
+  const state = simMod.advancePhase(simMod.advancePhase(simMod.advancePhase(stateMod.createInitialState())));
+  // Simulate choice aftermath in uiState
+  const uiState = {
+    choiceAftermath: {
+      id: "post-choice-test", eventId: "evt-1", choiceId: "c1", placeId: "cafe",
+      choiceLabel: "帮忙把画册送去餐厅",
+      summary: "小七把画册轻放在餐厅旁边。",
+      residentReactions: [
+        { residentId: "seven", residentName: "小七", reaction: "放在这里，大家路过都能看到。" },
+        { residentId: "zhou", residentName: "老周", reaction: "放在餐厅旁边挺合适。" },
+      ],
+      createdAt: Date.now(),
+    },
+  };
+  renderMod.renderApp(mockRoot, state, uiState);
+  const html = mockRoot.innerHTML;
+  assert(!html.includes(">undefined<"), "no >undefined< in HTML after choice");
+  assert(!html.includes(" undefined "), "no ' undefined ' in text nodes after choice");
+  assert(!html.includes(">null<"), "no >null< in HTML after choice");
+  assert(!html.includes(" null "), "no ' null ' in text nodes after choice");
+  assert(!html.includes("✅ undefined"), "no ✅ undefined completion banner");
 }
 
 // ── Results ────────────────────────────────────────────────────────────────────

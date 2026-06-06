@@ -2118,11 +2118,9 @@ function render() {
 
         uiState = {
           ...uiState,
-          completionFeedback: {
-            residentResults: [],
-            phase: phaseLabel,
-            generatedAt: Date.now(),
-          },
+          // Do NOT set completionFeedback for player choices — that is for resident task completion only.
+          // Player choice results are shown via choiceAftermath in the right panel.
+          completionFeedback: null,
           choiceAftermath: aftermath,
         };
 

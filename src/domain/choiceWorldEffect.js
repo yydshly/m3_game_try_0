@@ -232,12 +232,32 @@ export function buildChoiceWorldEffectView(state, uiState) {
     placeId ?? ""
   );
 
-  const affectedResidents = (choiceAftermath.residentReactions ?? []).slice(0, 2).map((r) => ({
-    residentId: r.residentId ?? "",
-    residentName: r.residentName ?? "居民",
-    reactionText: r.reaction ?? "",
-    role: "helper",
-  }));
+  // Build affectedResidents with context labels.
+  // Max 1 resident gets hasBubble=true (first resident at the event's placeId).
+  // Other affected residents only get highlighted, no bubble.
+  const allReactions = choiceAftermath.residentReactions ?? [];
+  const eventPlaceId = choiceAftermath.placeId ?? null;
+
+  // Pick primary resident: prefer resident at the event's placeId, else first available
+  const atPlace = allReactions.filter((r) => {
+    const res = residents.find((m) => m.id === r.residentId);
+    return res?.locationId === eventPlaceId;
+  });
+  const primaryRaw = atPlace[0] ?? allReactions[0] ?? null;
+
+  const affectedResidents = allReactions.slice(0, 2).map((r, idx) => {
+    const isPrimary = r === primaryRaw;
+    const label = PLACE_NAMES[eventPlaceId ?? ""] ?? "小镇";
+    const shortReaction = (r.reaction ?? "").slice(0, 14);
+    return {
+      residentId: r.residentId ?? "",
+      residentName: r.residentName ?? "居民",
+      reactionText: shortReaction,
+      role: "helper",
+      hasBubble: isPrimary,
+      contextLabel: isPrimary ? `${label}回应：${shortReaction}` : null,
+    };
+  });
 
   return {
     visible: true,

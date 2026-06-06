@@ -7,6 +7,12 @@ import { advancePhase } from "../src/domain/simulation.js";
 import { renderApp } from "../src/ui/render.js";
 import { applyChoiceMemory } from "../src/domain/memory.js";
 import { buildEventChoiceEntryView } from "../src/ui/render.js";
+import { resolve, dirname } from "path";
+import { fileURLToPath } from "url";
+import { readFileSync } from "fs";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const PROJECT_ROOT = resolve(__dirname, "..");
 
 // ── Inline buildChoiceAftermath (no DOM dependency, mirrors app.js logic) ───────
 
@@ -318,6 +324,27 @@ console.log("\n── aftermath: buildChoiceAftermath creates non-empty aftermat
   assert(result?.aftermath?.choiceLabel === "让小七先照顾小猫", "aftermath.choiceLabel correct");
   assert(result?.aftermath?.summary && result.aftermath.summary.length > 0, "aftermath.summary non-empty");
   assert(Array.isArray(result?.aftermath?.residentReactions), "aftermath.residentReactions is array");
+}
+
+// ── Test 10: onChooseEvent does NOT set completionFeedback for choice events ───
+console.log("\n── onChooseEvent: no completionFeedback for player choices ──");
+{
+  const fs = await import("fs");
+  const content = fs.readFileSync(resolve(PROJECT_ROOT, "src/app.js"), "utf8");
+  const chooseHandler = content.split("onChooseEvent:")[1]?.split("onMiniMaxBroadcast:")?.[0] ?? "";
+  // completionFeedback should NOT be set to an object with message; it should be null
+  assert(!chooseHandler.includes("completionFeedback: {") || chooseHandler.includes("completionFeedback: null"), "completionFeedback is null (not a message object) for choice events");
+}
+
+// ── Test 11: aftermath is set after choice ─────────────────────────────────────
+console.log("\n── aftermath: choiceAftermath set after choice ──");
+{
+  const { state, eventId, choiceId } = makeStateWithM3Event();
+  const onChooseEvent = makeOnChooseEvent(state);
+  const result = onChooseEvent(eventId, choiceId);
+  // The inline handler returns { nextState, aftermath }
+  assert(result?.aftermath !== undefined, "aftermath returned from onChooseEvent");
+  assert(result?.aftermath?.id != null, "aftermath has id");
 }
 
 // ── Results ────────────────────────────────────────────────────────────────────

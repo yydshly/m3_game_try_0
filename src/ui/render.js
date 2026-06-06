@@ -289,7 +289,7 @@ function renderGameActions(state, safeUiState, handlers = {}) {
   // Completion feedback banner after animation finishes
   const completionFeedback = safeUiState.completionFeedback;
   const completionBanner = completionFeedback
-    ? `<div class="game-actions__completion-banner" aria-live="polite">✅ ${escapeHtml(completionFeedback.message)}</div>`
+    ? `<div class="game-actions__completion-banner" aria-live="polite">✅ ${safeText(completionFeedback.message, "阶段完成")}</div>`
     : "";
 
   // Buttons disabled during animation (except auto-play toggle and new-town)
@@ -1024,10 +1024,10 @@ function renderStageCharacter(resident, position, taskLabel, status, isSelected,
   const listenerClass = (isConversationActive && conversationRole?.isListener) ? " stage-character--listening" : "";
   const participantClass = isParticipant ? " stage-character--conversation-participant" : "";
 
-  // Choice reaction: shown on residents affected by a player choice
+  // Choice reaction: shown on residents affected by a player choice (context label shows place+reaction)
   const choiceAffectedClass = choiceReaction ? " stage-character--choice-affected" : "";
   const choiceReactionBubble = choiceReaction
-    ? `<span class="stage-character__choice-reaction">${escapeHtml(choiceReaction.reactionText)}</span>`
+    ? `<span class="stage-character__choice-reaction">${escapeHtml(choiceReaction.contextLabel ?? choiceReaction.reactionText)}</span>`
     : "";
 
   // Completion badge shown after animation
@@ -1291,8 +1291,9 @@ function renderTownStage(state, uiState, handlers = {}) {
       const conversationForChar = conversationActive && isSpeaker
         ? uiState.residentConversation
         : null;
-      // Choice reaction for this resident (if affected and not in an active conversation)
-      const choiceReaction = (!isParticipant && !anim) ? (choiceWorldEffect.affectedResidents ?? []).find((r) => r.residentId === resident.id) ?? null : null;
+      // Choice reaction: only primary resident (hasBubble) gets the bubble; others are highlighted via affectedResidentIds
+      const allAffected = choiceWorldEffect.affectedResidents ?? [];
+      const choiceReaction = (!isParticipant && !anim) ? allAffected.find((r) => r.hasBubble && r.residentId === resident.id) ?? null : null;
       return renderStageCharacter(
         resident,
         pos,
