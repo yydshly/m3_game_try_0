@@ -152,7 +152,8 @@ console.log("\n── Choice memory chain preserved ──");
   const content = fs.readFileSync("./src/app.js", "utf8");
   const chooseFn = content.split("onChooseEvent:")[1]?.split("onMiniMaxBroadcast")[0] ?? "";
   assert(chooseFn.includes("applyChoiceMemory"), "applyChoiceMemory still called on choice");
-  assert(chooseFn.includes("completeDayCycle"), "completeDayCycle still called after choice");
+  // transitionDayCycleToCompleted is called (completeDayCycle was renamed + factored to not take nextState)
+  assert(chooseFn.includes("transitionDayCycleToCompleted"), "transitionDayCycleToCompleted called after choice");
 }
 
 // ── 13. completionFeedback still exists ────────────────────────────────────

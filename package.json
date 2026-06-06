@@ -65,6 +65,7 @@
     "mimo-tts-param-probe": "node scripts/mimo-tts-param-probe.mjs",
     "tts-official-contract-check": "node scripts/tts-official-contract-check.mjs",
     "event-choice-entry-check": "node scripts/event-choice-entry-check.mjs",
+    "event-choice-commit-check": "node scripts/event-choice-commit-check.mjs",
     "player-guidance-check": "node scripts/player-guidance-check.mjs"
   }
 }

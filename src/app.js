@@ -731,7 +731,7 @@ function makeMimoVoicePlayback(audioKey, ttsAudio, scene, sourceType, sourceId, 
  * @param {object} currentState
  * @returns {object} choiceAftermath
  */
-function buildChoiceAftermath(sourceEvent, choice, currentState) {
+export function buildChoiceAftermath(sourceEvent, choice, currentState) {
   const residents = currentState?.residents ?? [];
   const phase = ["早上", "下午", "晚上"];
   const phaseLabel = phase[currentState?.phaseIndex ?? 0];
@@ -1912,10 +1912,13 @@ async function runTownDayCycle() {
  *
  * @param {object} nextState - the state after choice has been applied
  */
-function completeDayCycle(nextState) {
+/**
+ * Transition the dayCycle UI to "completed" status and schedule reset to idle.
+ * Does NOT commit state — caller must have already done that.
+ * Only runs when dayCycle is in "waiting_choice" status.
+ */
+function transitionDayCycleToCompleted() {
   if (uiState.dayCycle.status !== "waiting_choice") return;
-  state = nextState;
-  saveState(state);
   uiState = {
     ...uiState,
     dayCycle: {
@@ -1928,12 +1931,20 @@ function completeDayCycle(nextState) {
     },
   };
   render();
-
   // Reset dayCycle to idle after a short display
   setTimeout(() => {
     uiState = { ...uiState, dayCycle: { ...DAY_CYCLE_DEFAULT } };
     render();
   }, 2500);
+}
+
+/**
+ * @deprecated Use transitionDayCycleToCompleted() instead. State must be committed by caller.
+ */
+function completeDayCycle() {
+  // State commit is now done by the caller (onChooseEvent).
+  // This only handles the dayCycle UI transition.
+  transitionDayCycleToCompleted();
 }
 
 function stopAutoPlay() {
@@ -2098,12 +2109,13 @@ function render() {
 
         const currentPhase = phases[state.phaseIndex];
         const nextState = applyChoiceMemory(state, sourceEvent, choice, currentPhase);
-
-        // Build choice aftermath for immediate UI feedback
         const aftermath = buildChoiceAftermath(sourceEvent, choice, state);
         const phaseLabel = currentPhase.label;
 
-        // Set completion feedback (stage-banner style)
+        // Always commit the choice — both day-cycle path and manual-event path
+        state = nextState;
+        saveState(state);
+
         uiState = {
           ...uiState,
           completionFeedback: {
@@ -2114,8 +2126,11 @@ function render() {
           choiceAftermath: aftermath,
         };
 
-        // Advance day cycle to completed after player choice
-        completeDayCycle(nextState);
+        // Render immediately so the chosen state is visible
+        render();
+
+        // Only complete the dayCycle UI when it was in waiting_choice status
+        transitionDayCycleToCompleted();
       },
       onMiniMaxBroadcast: async () => {
         stopAutoPlay();
