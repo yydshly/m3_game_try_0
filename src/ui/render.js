@@ -374,7 +374,7 @@ function renderDayOpeningReflection(openingReflection) {
 
 /**
  * Render the recommended resident voice clip when voice interaction is enabled.
- * Shows a single highlighted clip with play button.
+ * Always renders a stable container (even when empty) to prevent layout shift.
  * @param {object} voiceState - residentVoiceInteraction from uiState
  * @param {Array} clips - residentVoiceClips array
  * @param {object} ttsAudios - tts audio cache
@@ -384,13 +384,11 @@ function renderRecommendedVoiceClip(voiceState, clips, ttsAudios) {
   if (!voiceState?.enabled) return "";
   const recommendedKey = voiceState.recommendedClipKey ?? "";
   const clip = clips.find((c) => c.key === recommendedKey) ?? clips[0];
-  if (!clip) {
-    return voiceState.hint
-      ? `<div class="recommended-voice"><p class="recommended-voice__empty">${escapeHtml(voiceState.hint)}</p></div>`
-      : "";
-  }
 
-  const ta = ttsAudios[clip.key] ?? {};
+  // Always render container — empty state uses --empty modifier class
+  const hasClip = Boolean(clip);
+
+  const ta = hasClip ? (ttsAudios[clip.key] ?? {}) : {};
   const isLoading = ta.status === "loading";
   const isPlaying = ta.status === "playing";
   const isPaused = ta.status === "paused";
@@ -398,20 +396,23 @@ function renderRecommendedVoiceClip(voiceState, clips, ttsAudios) {
   const hasError = ta.status === "error";
 
   let btn = "";
-  if (isLoading) {
-    btn = `<button class="mimo-tts-btn mimo-tts-btn--loading" disabled>🔊…</button>`;
-  } else if (isPlaying) {
-    btn = `<button class="mimo-tts-btn mimo-tts-btn--playing" data-action="pause-mimo-tts" data-audio-key="${escapeHtml(clip.key)}">⏸️</button>`;
-  } else if (isPaused || isReady) {
-    btn = `<button class="mimo-tts-btn mimo-tts-btn--ready" data-action="resume-mimo-tts" data-audio-key="${escapeHtml(clip.key)}">▶️</button>`;
-  } else if (hasError) {
-    btn = `<button class="mimo-tts-btn mimo-tts-btn--error" data-action="play-mimo-tts" data-audio-key="${escapeHtml(clip.key)}" data-text="${escapeHtml(clip.text)}" data-scene="${escapeHtml(clip.scene)}" data-resident-id="${escapeHtml(clip.residentId)}" data-beat-id="">⚠️</button>`;
-  } else {
-    btn = `<button class="mimo-tts-btn" data-action="play-mimo-tts" data-audio-key="${escapeHtml(clip.key)}" data-text="${escapeHtml(clip.text)}" data-scene="${escapeHtml(clip.scene)}" data-resident-id="${escapeHtml(clip.residentId)}" data-beat-id="">🔈 MiMo 播放</button>`;
+  if (hasClip) {
+    if (isLoading) {
+      btn = `<button class="mimo-tts-btn mimo-tts-btn--loading" disabled>🔊…</button>`;
+    } else if (isPlaying) {
+      btn = `<button class="mimo-tts-btn mimo-tts-btn--playing" data-action="pause-mimo-tts" data-audio-key="${escapeHtml(clip.key)}">⏸️</button>`;
+    } else if (isPaused || isReady) {
+      btn = `<button class="mimo-tts-btn mimo-tts-btn--ready" data-action="resume-mimo-tts" data-audio-key="${escapeHtml(clip.key)}">▶️</button>`;
+    } else if (hasError) {
+      btn = `<button class="mimo-tts-btn mimo-tts-btn--error" data-action="play-mimo-tts" data-audio-key="${escapeHtml(clip.key)}" data-text="${escapeHtml(clip.text)}" data-scene="${escapeHtml(clip.scene)}" data-resident-id="${escapeHtml(clip.residentId)}" data-beat-id="">⚠️</button>`;
+    } else {
+      btn = `<button class="mimo-tts-btn" data-action="play-mimo-tts" data-audio-key="${escapeHtml(clip.key)}" data-text="${escapeHtml(clip.text)}" data-scene="${escapeHtml(clip.scene)}" data-resident-id="${escapeHtml(clip.residentId)}" data-beat-id="">🔈 MiMo 播放</button>`;
+    }
   }
 
   return `
-    <div class="recommended-voice" aria-label="推荐收听" aria-live="polite">
+    <div class="recommended-voice ${!hasClip ? "recommended-voice--empty" : ""}" aria-label="推荐收听" aria-live="polite">
+      ${hasClip ? `
       <div class="recommended-voice__header">
         <span>🎧</span>
         <span class="recommended-voice__label">推荐收听：${escapeHtml(clip.title ?? clip.residentName ?? "")}</span>
@@ -420,6 +421,9 @@ function renderRecommendedVoiceClip(voiceState, clips, ttsAudios) {
       <p class="recommended-voice__text">${escapeHtml(clip.text ?? "")}</p>
       ${clip.reason ? `<p class="recommended-voice__reason">${escapeHtml(clip.reason)}</p>` : ""}
       <div class="recommended-voice__actions">${btn}</div>
+      ` : `
+      <p class="recommended-voice__empty">${escapeHtml(voiceState.hint ?? "暂无推荐")}</p>
+      `}
     </div>
   `;
 }
@@ -1865,27 +1869,29 @@ const VOICE_PLAYBACK_LABELS = {
 
 /**
  * Render the global voice playback bar shown at the top of the page.
- * Only visible when currentVoicePlayback is not idle.
+ * Always renders a fixed-height slot; bar visibility is controlled via CSS class.
  * @param {object|null} cvp
  * @param {object} handlers
  */
 function renderVoicePlaybackBar(cvp, handlers) {
-  if (!cvp || cvp.status === "idle") return "";
+  const isIdle = !cvp || cvp.status === "idle";
+  const status = cvp?.status ?? "idle";
 
-  const { status, provider, title, subtitle, textPreview, error } = cvp;
-  const label = VOICE_PLAYBACK_LABELS[cvp.sourceType] || { title: cvp.title || cvp.scene || "语音", icon: "🔊" };
+  const label = VOICE_PLAYBACK_LABELS[cvp?.sourceType] || { title: cvp?.title || cvp?.scene || "语音", icon: "🔊" };
   const icon = label.icon;
   const titleText = label.title;
 
-  const statusClass = {
+  const statusClass = isIdle ? "voice-playback-bar--idle" : ({
     loading: "voice-playback-bar--loading",
     playing: "voice-playback-bar--playing",
     paused:  "voice-playback-bar--paused",
     error:   "voice-playback-bar--error",
-  }[status] || "voice-playback-bar--loading";
+  }[status] || "voice-playback-bar--loading");
 
   const loadingLabel = status === "loading" ? "正在生成语音…" : "";
-  const errorLabel = status === "error" ? (error || "播放失败") : "";
+  const errorLabel = status === "error" ? (cvp?.error || "播放失败") : "";
+  const subtitle = cvp?.subtitle ?? "";
+  const textPreview = cvp?.textPreview ?? "";
 
   const showPause = status === "playing";
   const showResume = status === "paused";
@@ -1899,22 +1905,24 @@ function renderVoicePlaybackBar(cvp, handlers) {
   }[status] ?? `${icon} ${titleText}`;
 
   return `
-    <div class="voice-playback-bar ${statusClass}" role="status" aria-live="polite">
-      <div class="voice-playback-bar__main">
-        <span class="voice-playback-bar__icon">${icon}</span>
-        <div class="voice-playback-bar__info">
-          <div class="voice-playback-bar__title">
-            ${statusTitle}
-            ${subtitle ? `<span class="voice-playback-bar__subtitle">${subtitle}</span>` : ""}
+    <div class="voice-playback-slot" aria-live="polite">
+      <div class="voice-playback-bar ${statusClass}" role="status">
+        <div class="voice-playback-bar__main">
+          <span class="voice-playback-bar__icon">${icon}</span>
+          <div class="voice-playback-bar__info">
+            <div class="voice-playback-bar__title">
+              ${statusTitle}
+              ${subtitle ? `<span class="voice-playback-bar__subtitle">${subtitle}</span>` : ""}
+            </div>
+            ${!isIdle && status !== "loading" && textPreview ? `<div class="voice-playback-bar__text">${textPreview}</div>` : ""}
+            ${status === "error" ? `<div class="voice-playback-bar__error">${errorLabel}</div>` : ""}
           </div>
-          ${status !== "loading" && textPreview ? `<div class="voice-playback-bar__text">${textPreview}</div>` : ""}
-          ${status === "error" ? `<div class="voice-playback-bar__error">${errorLabel}</div>` : ""}
         </div>
-      </div>
-      <div class="voice-playback-bar__actions">
-        ${showPause  ? `<button class="button--ghost button--sm" data-action="voice-pause">⏸️ 暂停</button>` : ""}
-        ${showResume ? `<button class="button--ghost button--sm" data-action="voice-resume">▶️ 继续</button>` : ""}
-        ${showStop   ? `<button class="button--ghost button--sm" data-action="voice-stop">⏹️ 停止</button>` : ""}
+        <div class="voice-playback-bar__actions">
+          ${showPause  ? `<button class="button--ghost button--sm" data-action="voice-pause">⏸️ 暂停</button>` : ""}
+          ${showResume ? `<button class="button--ghost button--sm" data-action="voice-resume">▶️ 继续</button>` : ""}
+          ${showStop   ? `<button class="button--ghost button--sm" data-action="voice-stop">⏹️ 停止</button>` : ""}
+        </div>
       </div>
     </div>
   `;

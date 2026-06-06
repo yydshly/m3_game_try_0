@@ -441,6 +441,10 @@ button, select {
   padding: 10px 12px;
   margin-top: 8px;
   animation: openingReflectionIn 350ms cubic-bezier(.34,1.56,.64,1) both;
+  min-height: 80px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 .recommended-voice__header {
   display: flex;
@@ -480,6 +484,9 @@ button, select {
   color: var(--ink-light);
   text-align: center;
   padding: 8px 0;
+}
+.recommended-voice--empty {
+  justify-content: center;
 }
 
 /* Stage Character Voice Indicator (legacy span) */
@@ -1621,6 +1628,7 @@ button, select {
   bottom: 14px;
   z-index: 5;
   max-width: 320px;
+  min-height: 60px;
   padding: 12px 14px;
   border-radius: 14px;
   border: 1px solid rgba(255,255,255,0.8);
@@ -1645,6 +1653,10 @@ button, select {
   font-size: 0.84rem;
   color: var(--ink);
   line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 /* Stage Legend */
@@ -2703,6 +2715,7 @@ button, select {
   background: linear-gradient(145deg, var(--gold-soft), var(--panel));
   border-color: var(--gold);
   border-width: 1px;
+  min-height: 280px;
 }
 
 .atmosphere-empty {
@@ -2745,6 +2758,7 @@ button, select {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-height: 100px;
 }
 
 .atmosphere-broadcast-preview__title {
@@ -3671,6 +3685,16 @@ details summary {
 }
 
 /* ── Voice Playback Bar ── */
+/* Fixed-height slot — always rendered to prevent layout shift */
+.voice-playback-slot {
+  min-height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 8px;
+  max-width: 680px;
+}
+
 .voice-playback-bar {
   display: flex;
   align-items: center;
@@ -3680,34 +3704,45 @@ details summary {
   border-radius: 10px;
   font-size: 0.875rem;
   box-shadow: var(--shadow-md);
-  margin: 0 auto 8px;
-  max-width: 680px;
+  width: 100%;
+  transition: opacity .18s ease, transform .18s ease;
+}
+
+/* Idle: hidden but still occupies the slot height */
+.voice-playback-bar--idle {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-4px);
+}
+
+.voice-playback-bar--playing {
+  background: linear-gradient(135deg, #e3f0e8 0%, #f0ede6 100%);
+  border: 1.5px solid var(--green);
+  animation: slideDown 0.2s ease-out;
+}
+
+.voice-playback-bar--paused {
+  background: linear-gradient(135deg, #f5f0e8 0%, #ede6d9 100%);
+  border: 1.5px solid var(--gold);
+  animation: slideDown 0.2s ease-out;
+}
+
+.voice-playback-bar--loading {
+  background: linear-gradient(135deg, #f5f0e8 0%, #ede6d9 100%);
+  border: 1.5px solid var(--muted);
+  animation: slideDown 0.2s ease-out;
+}
+
+.voice-playback-bar--error {
+  background: linear-gradient(135deg, #fce8e8 0%, #f5e0e0 100%);
+  border: 1.5px solid var(--rose);
   animation: slideDown 0.2s ease-out;
 }
 
 @keyframes slideDown {
   from { opacity: 0; transform: translateY(-8px); }
   to   { opacity: 1; transform: translateY(0); }
-}
-
-.voice-playback-bar--playing {
-  background: linear-gradient(135deg, #e3f0e8 0%, #f0ede6 100%);
-  border: 1.5px solid var(--green);
-}
-
-.voice-playback-bar--paused {
-  background: linear-gradient(135deg, #f5f0e8 0%, #ede6d9 100%);
-  border: 1.5px solid var(--gold);
-}
-
-.voice-playback-bar--loading {
-  background: linear-gradient(135deg, #f5f0e8 0%, #ede6d9 100%);
-  border: 1.5px solid var(--muted);
-}
-
-.voice-playback-bar--error {
-  background: linear-gradient(135deg, #fce8e8 0%, #f5e0e0 100%);
-  border: 1.5px solid var(--rose);
 }
 
 .voice-playback-bar__main {
