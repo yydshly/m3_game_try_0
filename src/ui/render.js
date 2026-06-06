@@ -713,7 +713,31 @@ function renderResidentDialoguePanel({ beats = [], conversationQueue = [], curre
     `;
   }
 
-  // No conversation active — show empty state message
+  // No conversation active — show beats as dialogue items if available
+  if (beats && beats.length > 0) {
+    const itemsHtml = beats
+      .filter((b) => b.dialogue)
+      .map((b) => `<div class="dialogue-beat">
+        <span class="dialogue-beat__name">${escapeHtml(b.residentName ?? "居民")}：</span>
+        <span class="dialogue-beat__text">${escapeHtml(b.dialogue)}</span>
+      </div>`)
+      .join("");
+
+    if (itemsHtml) {
+      return `
+        <div class="panel dialogue-beats-panel">
+          <div class="panel__head">
+            <h2>💬 居民对话</h2>
+          </div>
+          <div class="dialogue-beats-list">
+            ${itemsHtml}
+          </div>
+        </div>
+      `;
+    }
+  }
+
+  // No conversation and no beats — show empty state
   return `
     <div class="panel dialogue-beats-panel">
       <div class="panel__head">
