@@ -287,6 +287,7 @@ function renderGameActions(state, safeUiState) {
       </div>
       ${animBanner}
       ${completionBanner}
+      ${renderDayOpeningReflection(safeUiState.dayOpeningReflection)}
       ${dayCycleBanner}
       <div class="game-actions__section">
         <p class="game-actions__section-label">🏠 一日闭环</p>
@@ -329,6 +330,29 @@ function renderGameActions(state, safeUiState) {
         <button class="button button--ghost" type="button" data-action="reset-assignments">🔄 重置安排</button>
         <button class="button button--ghost" type="button" data-action="new-town">🏠 新小镇</button>
       </div>
+    </div>
+  `;
+}
+
+// ── Day Opening Reflection ─────────────────────────────────────────────────────────
+
+/**
+ * Render the day opening reflection in the left panel.
+ * Shown when a new day cycle starts and there is prior player memory.
+ * @param {object|null} openingReflection
+ * @returns {string} HTML or empty string
+ */
+function renderDayOpeningReflection(openingReflection) {
+  if (!openingReflection || !openingReflection.id) return "";
+  const { title, summary, sourceType } = openingReflection;
+  const icon = sourceType === "fallback" ? "☀️" : "🌿";
+  return `
+    <div class="day-opening-reflection" aria-label="昨日回响" aria-live="polite">
+      <div class="day-opening-reflection__header">
+        <span>${icon}</span>
+        <span class="day-opening-reflection__title">${escapeHtml(title ?? "昨日回响")}</span>
+      </div>
+      <p class="day-opening-reflection__summary">${escapeHtml(summary ?? "")}</p>
     </div>
   `;
 }
@@ -936,6 +960,12 @@ function renderTownStage(state, uiState) {
         <span class="stage-legend__item"><i class="status-dot status-dot--steady"></i>平稳</span>
         <span class="stage-legend__item"><i class="status-dot status-dot--tired"></i>疲惫</span>
       </div>
+      ${uiState.dayOpeningReflection && uiState.dayOpeningReflection.sourceType !== "fallback" ? `
+        <div class="stage-opening-reflection" aria-label="小镇记得昨天的选择" aria-live="polite">
+          <span class="stage-opening-reflection__icon">🌿</span>
+          <span class="stage-opening-reflection__text">小镇记得昨天的选择</span>
+        </div>
+      ` : ""}
       ${isPlaying ? `
         <div class="stage-broadcast-indicator" aria-label="广播播放中" aria-live="polite">
           <span class="stage-broadcast-indicator__icon">📻</span>
@@ -1562,6 +1592,7 @@ export function renderApp(root, state, handlers, uiState = {}) {
     ttsAudios: uiState.ttsAudios ?? {},
     currentVoicePlayback: uiState.currentVoicePlayback ?? null,
     choiceAftermath: uiState.choiceAftermath ?? null,
+    dayOpeningReflection: uiState.dayOpeningReflection ?? null,
   };
 
   const safeHandlers = {

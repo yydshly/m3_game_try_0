@@ -71,6 +71,7 @@ let uiState = {
   ttsAudios: {},   // { [audioKey]: { status, audioUrl, textHash, error, generatedAt } }
   currentVoicePlayback: makeVoicePlaybackState(), // unified global voice playback state
   choiceAftermath: null, // { id, eventId, choiceId, choiceLabel, summary, residentReactions, stageEffect, memoryLabels, createdAt }
+  dayOpeningReflection: null, // { id, sourceType, sourceId, title, summary, memoryLabels, scenarioHint, createdAt }
 };
 let autoPlayTimer = null;
 let animationTimer = null;
@@ -619,6 +620,89 @@ function showTaskAnimations(prevState, nextState, options = {}) {
   }, TASK_ANIMATION_DURATION_MS);
 }
 
+// ── Day Opening Reflection ─────────────────────────────────────────────────────
+
+/**
+ * Build a day-opening reflection from the most recent player choice or memory.
+ * This is a UI-only state — does not persist to state.townMemory.
+ * Priority: choiceAftermath > townMemory player-choice > residentMemory > fallback
+ *
+ * @param {object} state  - current game state
+ * @param {object} uiState - current UI state (contains choiceAftermath)
+ * @returns {object|null} dayOpeningReflection object or null
+ */
+function buildDayOpeningReflection(state, uiState) {
+  const tm = state.townMemory ?? [];
+  const residents = state.residents ?? [];
+
+  // 1. Check choiceAftermath first (most recent session memory)
+  const ca = uiState.choiceAftermath;
+  if (ca && ca.id) {
+    const labels = ca.memoryLabels ?? [];
+    if (labels.length === 0 && ca.choiceLabel) {
+      labels.push(`你选择了：${ca.choiceLabel}`);
+    }
+    return {
+      id: `opening-${Date.now()}`,
+      sourceType: "choiceAftermath",
+      sourceId: ca.id,
+      title: "昨日回响",
+      summary: ca.summary || `你选择了「${ca.choiceLabel}」，小镇正在延续这个选择的影响。`,
+      memoryLabels: labels,
+      scenarioHint: "",
+      createdAt: Date.now(),
+    };
+  }
+
+  // 2. Check townMemory for most recent player-choice
+  const choiceMemories = tm.filter((m) => m.type === "player-choice" || m.type === "choice-memory");
+  if (choiceMemories.length > 0) {
+    const last = choiceMemories[choiceMemories.length - 1];
+    return {
+      id: `opening-${Date.now()}`,
+      sourceType: "townMemory",
+      sourceId: last.id || "",
+      title: "昨日回响",
+      summary: last.text
+        ? `昨天：${last.text}`
+        : "昨天你做了一个选择，小镇今天还记得这件事。",
+      memoryLabels: [last.text?.slice(0, 30) ?? "昨日选择"].filter(Boolean),
+      scenarioHint: "",
+      createdAt: Date.now(),
+    };
+  }
+
+  // 3. Check resident memories for choice-related content
+  const residentMemories = residents
+    .flatMap((r) => (r.memory ?? []).map((m) => ({ resident: r.name, text: m })))
+    .filter((m) => /选择了?|选择|玩家|事件/.test(m.text));
+  if (residentMemories.length > 0) {
+    const last = residentMemories[residentMemories.length - 1];
+    return {
+      id: `opening-${Date.now()}`,
+      sourceType: "residentMemory",
+      sourceId: "",
+      title: "昨日回响",
+      summary: `昨天${last.resident}记得：${last.text.slice(0, 40)}`,
+      memoryLabels: [last.resident],
+      scenarioHint: "",
+      createdAt: Date.now(),
+    };
+  }
+
+  // 4. Fallback: no memory, gentle default
+  return {
+    id: `opening-${Date.now()}`,
+    sourceType: "fallback",
+    sourceId: "",
+    title: "新的一天",
+    summary: "今天的小镇又开始了新的故事。",
+    memoryLabels: [],
+    scenarioHint: "",
+    createdAt: Date.now(),
+  };
+}
+
 // ── Day Cycle Orchestration ─────────────────────────────────────────────────────
 
 /**
@@ -677,9 +761,13 @@ async function runTownDayCycle() {
     render();
 
     // ── Step 2: AI Director context ───────────────────────────────────────────
+    // Build day opening reflection before director context so it can be included
+    const openingReflection = buildDayOpeningReflection(state, uiState);
+    uiState = { ...uiState, dayOpeningReflection: openingReflection };
+
     let directorCtx;
     try {
-      directorCtx = buildAiDirectorContext(next, uiState.choiceAftermath);
+      directorCtx = buildAiDirectorContext(next, uiState.choiceAftermath, openingReflection);
     } catch (dirErr) {
       console.warn("[dayCycle] AI Director context fallback:", dirErr);
       directorCtx = { activeScenario: scenario };
@@ -691,7 +779,7 @@ async function runTownDayCycle() {
 
     let dialogueBeats = beats; // use fallback beats as base
     try {
-      const m3Dialogue = await requestMiniMaxResidentDialogues(next, directorCtx, uiState.choiceAftermath);
+      const m3Dialogue = await requestMiniMaxResidentDialogues(next, directorCtx, uiState.choiceAftermath, openingReflection);
       if (Array.isArray(m3Dialogue) && m3Dialogue.length > 0) {
         dialogueBeats = m3Dialogue;
       }
@@ -864,11 +952,12 @@ function stopAutoPlay() {
  * M3 beat refresh happens asynchronously in the event/broadcast handlers.
  *
  * @param {object} currentState
+ * @param {object|null} openingReflection
  * @returns {Array}
  */
-function generateResidentBeats(currentState) {
+function generateResidentBeats(currentState, openingReflection = null) {
   try {
-    const directorCtx = buildAiDirectorContext(currentState, uiState.choiceAftermath);
+    const directorCtx = buildAiDirectorContext(currentState, uiState.choiceAftermath, openingReflection);
     return buildFallbackResidentSceneBeats(currentState, directorCtx);
   } catch {
     return [];
@@ -1476,6 +1565,7 @@ function render() {
           ttsAudios: {},
           currentVoicePlayback: makeVoicePlaybackState(),
           choiceAftermath: null,
+          dayOpeningReflection: null,
         };
         commit(createInitialState());
       },

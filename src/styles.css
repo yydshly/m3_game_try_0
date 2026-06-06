@@ -376,6 +376,44 @@ button, select {
 }
 
 /* Completion feedback banner — shown after animation finishes */
+/* Day Opening Reflection */
+.day-opening-reflection {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--green-soft), var(--panel));
+  border: 1.5px solid var(--green);
+  font-size: 0.8rem;
+  animation: openingReflectionIn 350ms cubic-bezier(.34,1.56,.64,1) both;
+}
+
+@keyframes openingReflectionIn {
+  from { opacity: 0; transform: translateY(6px) scale(.92); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.day-opening-reflection__header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 700;
+  color: var(--green-deep);
+  font-size: 0.78rem;
+}
+
+.day-opening-reflection__title {
+  color: var(--green-deep);
+}
+
+.day-opening-reflection__summary {
+  color: var(--ink);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  margin: 0;
+}
+
 .game-actions__completion-banner {
   display: flex;
   align-items: center;
@@ -3595,6 +3633,47 @@ details summary {
 .stage-choice-aftermath__label {
   font-weight: 600;
   color: var(--ink);
+}
+
+/* ── Stage Opening Reflection ── */
+.stage-opening-reflection {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255, 253, 248, 0.88);
+  border: 1.5px solid var(--green);
+  border-radius: 16px;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  color: var(--green-deep);
+  box-shadow: var(--shadow-sm);
+  animation: openingReflectionFadeIn 0.35s ease-out;
+  z-index: 8;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+@keyframes openingReflectionFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.stage-opening-reflection__icon {
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+.stage-opening-reflection__text {
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage-opening-reflection {
+    animation: none;
+  }
 }
 
 /* ── Choice Aftermath Right Panel ── */

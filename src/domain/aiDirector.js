@@ -142,9 +142,11 @@ export function selectTownLifeScenario(state) {
  * Pure function — does not modify state.
  *
  * @param {object} state
+ * @param {object|null} choiceAftermath
+ * @param {object|null} openingReflection
  * @returns {object}
  */
-export function buildAiDirectorContext(state, choiceAftermath = null) {
+export function buildAiDirectorContext(state, choiceAftermath = null, openingReflection = null) {
   const residents = state.residents ?? [];
   const tm = state.townMemory ?? [];
   const phase = ["早上", "下午", "晚上"];
@@ -198,12 +200,16 @@ export function buildAiDirectorContext(state, choiceAftermath = null) {
     ? `你的选择「${choiceAftermath.choiceLabel}」：${choiceAftermath.summary}`
     : "";
 
+  // Day opening reflection (previous day's player choice impact)
+  const openingReflectionText = openingReflection?.summary || "";
+
   // Build narrative prompt text for LLM
   const promptText = buildDirectorPromptText(scenario, residentSnapshots, {
     townMemorySummary,
     residentMemorySummary,
     recentChoices,
     recentAftermath,
+    openingReflectionText,
     availablePlaces,
     taskDistribution,
     phase: phase[state.phaseIndex] ?? "早上",
@@ -217,6 +223,7 @@ export function buildAiDirectorContext(state, choiceAftermath = null) {
     residentMemorySummary,
     recentChoices,
     recentAftermath,
+    openingReflection: openingReflectionText,
     availablePlaces,
     taskDistribution,
     promptText,
@@ -229,6 +236,7 @@ function buildDirectorPromptText(scenario, residentSnapshots, extras) {
     residentMemorySummary,
     recentChoices,
     recentAftermath,
+    openingReflectionText,
     availablePlaces,
     taskDistribution,
     phase,
@@ -253,6 +261,9 @@ function buildDirectorPromptText(scenario, residentSnapshots, extras) {
   }
   if (recentAftermath) {
     ctx += ` 刚刚的选择影响：${recentAftermath}。`;
+  }
+  if (openingReflectionText) {
+    ctx += ` 昨日回响：${openingReflectionText}。请自然引用，不要机械复述。`;
   }
 
   ctx += ` 居民当前分布在${placeList}。`;

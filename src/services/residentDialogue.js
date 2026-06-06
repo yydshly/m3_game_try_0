@@ -12,9 +12,11 @@ import { selectTownLifeScenario } from "../domain/aiDirector.js";
  *
  * @param {object} state
  * @param {object} directorContext - output of buildAiDirectorContext(state)
+ * @param {object|null} choiceAftermath
+ * @param {object|null} openingReflection
  * @returns {object}
  */
-export function buildResidentDialogueContext(state, directorContext = null, choiceAftermath = null) {
+export function buildResidentDialogueContext(state, directorContext = null, choiceAftermath = null, openingReflection = null) {
   const residents = state.residents ?? [];
   const tm = state.townMemory ?? [];
   const phase = ["早上", "下午", "晚上"];
@@ -68,6 +70,9 @@ export function buildResidentDialogueContext(state, directorContext = null, choi
     ? `你的选择「${choiceAftermath.choiceLabel}」：${choiceAftermath.summary}`
     : "";
 
+  // Day opening reflection
+  const openingReflectionText = openingReflection?.summary || "";
+
   // Current broadcast summary (if any)
   const latestBc = state.events?.slice(-1).find((e) => e.type === "town-broadcast");
   const currentBroadcastSummary = latestBc ? `${latestBc.title}：${(latestBc.text ?? "").slice(0, 60)}` : "";
@@ -84,6 +89,7 @@ export function buildResidentDialogueContext(state, directorContext = null, choi
     residentMemorySummary,
     recentChoices,
     recentAftermath,
+    openingReflectionText,
     currentBroadcastSummary,
     currentEventSummary,
     phase: phaseLabel,
@@ -97,6 +103,7 @@ export function buildResidentDialogueContext(state, directorContext = null, choi
     residentMemorySummary,
     recentChoices,
     recentAftermath,
+    openingReflection: openingReflectionText,
     currentBroadcastSummary,
     currentEventSummary,
     promptText,
@@ -110,6 +117,7 @@ function buildResidentDialoguePromptText({
   residentMemorySummary,
   recentChoices,
   recentAftermath,
+  openingReflectionText,
   currentBroadcastSummary,
   currentEventSummary,
   phase,
@@ -132,6 +140,9 @@ function buildResidentDialoguePromptText({
   }
   if (recentAftermath) {
     ctx += ` 刚刚的选择影响：${recentAftermath}。`;
+  }
+  if (openingReflectionText) {
+    ctx += ` 昨日回响：${openingReflectionText}。请自然引用。`;
   }
   if (currentBroadcastSummary) {
     ctx += ` 当前广播：${currentBroadcastSummary}。`;
@@ -173,10 +184,12 @@ function getTaskLabel(taskId) {
  *
  * @param {object} state
  * @param {object} directorContext
+ * @param {object|null} choiceAftermath
+ * @param {object|null} openingReflection
  * @returns {Promise<Array>} residentSceneBeats array
  */
-export async function requestMiniMaxResidentDialogues(state, directorContext = null, choiceAftermath = null) {
-  const ctx = buildResidentDialogueContext(state, directorContext, choiceAftermath);
+export async function requestMiniMaxResidentDialogues(state, directorContext = null, choiceAftermath = null, openingReflection = null) {
+  const ctx = buildResidentDialogueContext(state, directorContext, choiceAftermath, openingReflection);
 
   let raw;
   try {
