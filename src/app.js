@@ -1,6 +1,6 @@
 import { createInitialState, upgradeState } from "./domain/state.js";
 import { advancePhase, applyAgentPlan, assignTask, resetAssignments } from "./domain/simulation.js";
-import { applyChoiceMemory } from "./domain/memory.js";
+import { applyChoiceMemory, buildTownMemoryReferences } from "./domain/memory.js";
 import { buildAiDirectorContext, selectTownLifeScenario } from "./domain/aiDirector.js";
 import { requestMiniMaxPlan, requestMiniMaxEvent, requestMiniMaxBroadcast, buildPromptMemoryNarrative } from "./services/minimaxClient.js";
 import { generateBroadcastSpeech } from "./services/minimaxTts.js";
@@ -1475,6 +1475,9 @@ function buildDayOpeningReflection(state, uiState) {
   const tm = state.townMemory ?? [];
   const residents = state.residents ?? [];
 
+  // Use buildTownMemoryReferences to get structured memory references
+  const memoryRefs = buildTownMemoryReferences(state, { maxReferences: 2 });
+
   // 1. Check choiceAftermath first (most recent session memory)
   const ca = uiState.choiceAftermath;
   if (ca && ca.id) {
@@ -1482,6 +1485,10 @@ function buildDayOpeningReflection(state, uiState) {
     if (labels.length === 0 && ca.choiceLabel) {
       labels.push(`你选择了：${ca.choiceLabel}`);
     }
+    // Show more detail if we have memory references
+    const moreDetail = memoryRefs.hasMemory && memoryRefs.references.length > 0
+      ? ` · ${memoryRefs.references[0].text.slice(0, 20)}`
+      : "";
     return {
       id: `opening-${Date.now()}`,
       sourceType: "choiceAftermath",
@@ -1489,6 +1496,7 @@ function buildDayOpeningReflection(state, uiState) {
       title: "昨日回响",
       summary: ca.summary || `你选择了「${ca.choiceLabel}」，小镇正在延续这个选择的影响。`,
       memoryLabels: labels,
+      memoryDetail: memoryRefs.hasMemory ? memoryRefs.references[0].text : "",
       scenarioHint: "",
       createdAt: Date.now(),
     };
@@ -1507,6 +1515,7 @@ function buildDayOpeningReflection(state, uiState) {
         ? `昨天：${last.text}`
         : "昨天你做了一个选择，小镇今天还记得这件事。",
       memoryLabels: [last.text?.slice(0, 30) ?? "昨日选择"].filter(Boolean),
+      memoryDetail: last.text ?? "",
       scenarioHint: "",
       createdAt: Date.now(),
     };
@@ -1525,6 +1534,7 @@ function buildDayOpeningReflection(state, uiState) {
       title: "昨日回响",
       summary: `昨天${last.resident}记得：${last.text.slice(0, 40)}`,
       memoryLabels: [last.resident],
+      memoryDetail: last.text ?? "",
       scenarioHint: "",
       createdAt: Date.now(),
     };

@@ -414,6 +414,16 @@ button, select {
   margin: 0;
 }
 
+.day-opening-reflection__memory-ref {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.72rem;
+  color: var(--green-deep);
+  background: var(--green-soft);
+  border-radius: 6px;
+  padding: 2px 6px;
+}
+
 /* Voice Interaction Toggle */
 .button--voice-on {
   background: linear-gradient(135deg, var(--blue-soft), var(--panel));

@@ -358,8 +358,14 @@ function renderGameActions(state, safeUiState, handlers = {}) {
  */
 function renderDayOpeningReflection(openingReflection) {
   if (!openingReflection || !openingReflection.id) return "";
-  const { title, summary, sourceType } = openingReflection;
+  const { title, summary, sourceType, memoryDetail } = openingReflection;
   const icon = sourceType === "fallback" ? "☀️" : "🌿";
+
+  // Show a compact memory reference line when available
+  const memoryRefLine = memoryDetail
+    ? `<span class="day-opening-reflection__memory-ref">📖 ${escapeHtml(memoryDetail.slice(0, 40))}${memoryDetail.length > 40 ? "…" : ""}</span>`
+    : "";
+
   return `
     <div class="day-opening-reflection" aria-label="昨日回响" aria-live="polite">
       <div class="day-opening-reflection__header">
@@ -367,6 +373,7 @@ function renderDayOpeningReflection(openingReflection) {
         <span class="day-opening-reflection__title">${escapeHtml(title ?? "昨日回响")}</span>
       </div>
       <p class="day-opening-reflection__summary">${escapeHtml(summary ?? "")}</p>
+      ${memoryRefLine}
     </div>
   `;
 }

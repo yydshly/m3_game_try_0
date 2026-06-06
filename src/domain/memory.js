@@ -210,6 +210,62 @@ export function buildTownMemorySummary(townMemory, options = {}) {
 }
 
 /**
+ * Build structured town memory references for UI display and prompt injection.
+ * Pure function — does not mutate state, does not call any API.
+ *
+ * @param {object} state
+ * @param {object} options
+ * @param {number} options.maxReferences - max references to return (default 2)
+ * @returns {{ hasMemory: boolean, references: Array, promptText: string }}
+ *   references: [{ id, title, text, day, phase, placeId, placeLabel, residentNames, reason }]
+ *   promptText: natural-language summary suitable for LLM prompts
+ */
+export function buildTownMemoryReferences(state, options = {}) {
+  const { maxReferences = 2 } = options;
+  const memories = Array.isArray(state?.townMemory) ? state.townMemory : [];
+  const residents = state?.residents ?? [];
+
+  if (memories.length === 0) {
+    return { hasMemory: false, references: [], promptText: "" };
+  }
+
+  // Take most recent entries
+  const recent = memories.slice(-maxReferences);
+
+  const references = recent
+    .filter((m) => m && typeof m.text === "string")
+    .map((m) => {
+      const placeLabel = MEMORY_LABELS[m.placeId] ?? (m.placeId ?? "");
+      const residentNames = (m.residentIds ?? [])
+        .map((id) => residents.find((r) => r.id === id)?.name ?? "")
+        .filter(Boolean);
+      return {
+        id: m.id ?? "",
+        title: m.title ?? "",
+        text: m.text ?? "",
+        day: m.day ?? state?.day ?? 0,
+        phase: m.phase ?? "",
+        placeId: m.placeId ?? "",
+        placeLabel,
+        residentNames,
+        reason: m.type ?? "player-choice",
+      };
+    });
+
+  if (references.length === 0) {
+    return { hasMemory: false, references: [], promptText: "" };
+  }
+
+  // Build prompt text: e.g. "第3天早上，玩家选择让居民去花园帮忙。"
+  const lines = references.map((r) =>
+    `第${r.day}天${r.phase}：${r.text}`
+  );
+  const promptText = `小镇记忆：${lines.join("；")}。`;
+
+  return { hasMemory: true, references, promptText };
+}
+
+/**
  * Trim memories to max limits (defensive, called after any state merge).
  */
 export function trimMemories(state) {
