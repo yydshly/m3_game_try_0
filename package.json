@@ -59,6 +59,7 @@
     "task-completion-feedback-check": "node scripts/task-completion-feedback-check.mjs",
     "resident-dialogue-ux-check": "node scripts/resident-dialogue-ux-check.mjs",
     "resident-dialogue-visual-check": "node scripts/resident-dialogue-visual-check.mjs",
+    "choice-aftermath-visual-check": "node scripts/choice-aftermath-visual-check.mjs",
     "mimo-tts-param-probe": "node scripts/mimo-tts-param-probe.mjs",
     "tts-official-contract-check": "node scripts/tts-official-contract-check.mjs"
   }

@@ -2271,6 +2271,18 @@ button, select {
 .agent-need-badge--social       { background: var(--rose-soft); color: var(--rose); }
 .agent-need-badge--achievement  { background: var(--gold-soft); color: #8a6a20; }
 
+/* Resident spotlight: choice reaction hint */
+.spotlight__choice-hint {
+  margin: 6px 0;
+  padding: 5px 8px;
+  background: var(--gold-soft);
+  border: 1px solid var(--gold);
+  border-radius: 8px;
+  font-size: 0.75rem;
+  color: var(--ink);
+  line-height: 1.4;
+}
+
 .spotlight__memory-wrap {
   margin-top: 12px;
   padding-top: 12px;
@@ -4210,6 +4222,15 @@ details summary {
 .choice-aftermath__reaction-text {
   color: var(--ink-light);
   line-height: 1.4;
+}
+
+.choice-aftermath__memory {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  font-size: 0.75rem;
+  color: var(--green-deep);
+  font-weight: 600;
 }
 
 /* ── Voice Debug Panel ─────────────────────────────────────────────────────── */

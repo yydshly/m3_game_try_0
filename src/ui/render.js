@@ -965,6 +965,9 @@ function renderChoiceAftermath(aftermath, residentVoiceInteraction = null) {
           ${reactionsHtml}
         </div>
       ` : ""}
+      <div class="choice-aftermath__memory">
+        🌿 这件事已被小镇记住
+      </div>
     </div>
   `;
 }
@@ -1247,6 +1250,14 @@ function renderSpotlight(state, uiState) {
         <span class="spotlight__status-text">${escapeHtml(moodView.statusText)}</span>
         <span class="spotlight__energy-hint">${escapeHtml(moodView.energyLabel)}</span>
       </div>
+
+      ${(() => {
+        const aftermath = uiState?.choiceAftermath;
+        if (!aftermath?.residentReactions?.length) return "";
+        const reaction = (aftermath.residentReactions).find((r) => r.residentId === selected.id);
+        if (!reaction) return "";
+        return `<div class="spotlight__choice-hint">✨ ${escapeHtml(reaction.reaction ?? "回应了你的选择")}</div>`;
+      })()}
 
       ${renderAgentSummary(selected.agent)}
       ${meter("心情", selected.mood, "rose")}
@@ -1951,6 +1962,48 @@ function renderVoiceDebugPanel() {
     <p class="voice-debug-panel__title">🔍 Voice Debug (last ${logs.length}) <button class="voice-debug-panel__clear" data-action="clear-voice-debug">✕</button></p>
     ${rows}
   </div>`;
+}
+
+// ── Choice Aftermath View Model ─────────────────────────────────────────────────────
+
+/**
+ * Build a view model for the player choice aftermath.
+ * Pure function — does NOT modify state or call APIs.
+ * @param {object} state
+ * @param {object} uiState
+ * @returns {object} view model
+ */
+export function buildChoiceAftermathView(state, uiState) {
+  const aftermath = uiState?.choiceAftermath;
+  if (!aftermath || !aftermath.id) {
+    return { visible: false };
+  }
+
+  const residents = state?.residents ?? [];
+  const placeId = aftermath.stageEffect?.placeId ?? null;
+  const location = placeId ? (getLocation(placeId) ?? {}) : {};
+  const placeLabel = location?.name ?? "小镇";
+
+  const affectedResidents = (aftermath.residentReactions ?? []).map((r) => {
+    const resident = residents.find((res) => res.id === r.residentId);
+    return {
+      residentId: r.residentId ?? "",
+      residentName: r.residentName ?? "",
+      reactionText: r.reaction ?? "",
+      moodHint: r.emotion ?? "",
+    };
+  });
+
+  return {
+    visible: true,
+    choiceLabel: aftermath.choiceLabel ?? "",
+    resultText: aftermath.summary ?? "",
+    affectedResidents,
+    placeId: placeId ?? "",
+    placeLabel,
+    memoryHint: "🌿 这件事已被小镇记住",
+    tone: "warm",
+  };
 }
 
 // ── Voice Playback View Model ───────────────────────────────────────────────────────
