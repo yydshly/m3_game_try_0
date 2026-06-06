@@ -1,6 +1,17 @@
 import { locations, phases, tasks } from "../data/seed.js";
 import { buildResidentMoodView } from "../domain/residentMood.js";
 
+/**
+ * Enhance a task label with the current life scenario context.
+ * @param {string} taskLabel
+ * @param {object|null} activeScenario
+ * @returns {string}
+ */
+function getEnhancedTaskLabel(taskLabel, activeScenario) {
+  if (!activeScenario || !taskLabel) return taskLabel;
+  return `${taskLabel}（${activeScenario.label}）`;
+}
+
 const LOCATION_ICONS = {
   garden: "./src/assets/ui/garden.svg",
   cafe: "./src/assets/ui/restaurant.svg",
@@ -462,6 +473,13 @@ function renderAtmospherePanel(state, uiState) {
         <span class="panel-badge">${escapeHtml(statusText)}</span>
         ${latestBc && ttsStatusLine ? `<span class="panel-badge panel-badge--tts">🎙️ ${escapeHtml(ttsStatusLine)}</span>` : ""}
       </div>
+      ${uiState.activeScenario ? `
+        <div class="atmosphere-scenario">
+          <span class="atmosphere-scenario__label">🎬 今日场景</span>
+          <span class="atmosphere-scenario__name">${escapeHtml(uiState.activeScenario.label)}</span>
+          <span class="atmosphere-scenario__tone">${escapeHtml(uiState.activeScenario.tone)}</span>
+        </div>
+      ` : ""}
       ${latestBc ? `
         <div class="atmosphere-broadcast-preview">
           <p class="atmosphere-broadcast-preview__title">${escapeHtml(latestBc.title)}</p>
@@ -488,6 +506,11 @@ function renderAtmospherePanel(state, uiState) {
           ${showPlayButton ? `
             <button class="button button--ghost" type="button" data-action="play-tts">
               ▶️ ${escapeHtml(playButtonLabel)}
+            </button>
+          ` : ""}
+          ${baStatus === "playing" ? `
+            <button class="button button--live" type="button" data-action="play-tts">
+              ⏸️ 暂停
             </button>
           ` : ""}
           ${hasError && friendlyError ? `<span class="tts-error-hint">⚠️ ${escapeHtml(friendlyError)}</span>` : ""}
@@ -532,7 +555,7 @@ function renderPlaceLabel(placeId, isActive, anim) {
   `;
 }
 
-function renderStageCharacter(resident, position, taskLabel, status, isSelected, anim, completionResult, moodView) {
+function renderStageCharacter(resident, position, taskLabel, status, isSelected, anim, completionResult, moodView, activeScenario) {
   const toX = position.x;
   const toY = position.y;
   const selectedClass = isSelected ? " stage-character--selected" : "";
@@ -610,7 +633,7 @@ function renderStageCharacter(resident, position, taskLabel, status, isSelected,
       ${completionBadge}
       ${moodIconHtml}
       <span class="stage-character__name">${escapeHtml(resident.name)}</span>
-      ${!anim && task ? `<span class="stage-character__task">${escapeHtml(task)}</span>` : ""}
+      ${!anim && task ? `<span class="stage-character__task">${escapeHtml(getEnhancedTaskLabel(task, activeScenario))}</span>` : ""}
       ${actionBubble}
     </button>
   `;
@@ -669,6 +692,7 @@ function renderTownStage(state, uiState) {
         anim,
         completionResult,
         moodView,
+        uiState.activeScenario,
       );
     })
     .join("");
@@ -1285,6 +1309,7 @@ export function renderApp(root, state, handlers, uiState = {}) {
     isAnimating: Boolean(uiState.isAnimating),
     animationMessage: uiState.animationMessage ?? "",
     completionFeedback: uiState.completionFeedback ?? null,
+    activeScenario: uiState.activeScenario ?? null,
   };
 
   root.innerHTML = `

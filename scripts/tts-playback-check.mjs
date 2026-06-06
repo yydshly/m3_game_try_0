@@ -129,8 +129,9 @@ console.log("\n── TTS button: playing state ──");
   assert(root.innerHTML.includes("disabled"), "playing: TTS button disabled");
   assert(root.innerHTML.includes("暂停广播"), "playing label: 暂停广播");
   assert(root.innerHTML.includes("⏸️"), "playing icon: ⏸️");
-  // Play button is hidden during playback to avoid confusion — TTS button shows status
-  assert(!root.innerHTML.includes("play-tts"), "playing: no play button (TTS button shows status)");
+  // A dedicated pause button (data-action=play-tts with "暂停") is shown during playback
+  assert(root.innerHTML.includes('data-action="play-tts"'), "playing: dedicated pause button present");
+  assert(root.innerHTML.includes("暂停"), "playing: pause button label visible");
 }
 
 // ── TTS button: paused state ─────────────────────────────────────────────────

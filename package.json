@@ -34,6 +34,7 @@
     "desktop-ui-polish-check": "node scripts/desktop-ui-polish-check.mjs",
     "stage-acting-check": "node scripts/stage-acting-check.mjs",
     "broadcast-tts-check": "node scripts/broadcast-tts-check.mjs",
-    "memory-continuity-check": "node scripts/memory-continuity-check.mjs"
+    "memory-continuity-check": "node scripts/memory-continuity-check.mjs",
+    "ai-director-check": "node scripts/ai-director-check.mjs"
   }
 }

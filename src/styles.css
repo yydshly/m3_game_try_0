@@ -2288,6 +2288,35 @@ button, select {
   line-height: 1.5;
 }
 
+.atmosphere-scenario {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--gold-soft);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.atmosphere-scenario__label {
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: var(--gold);
+}
+
+.atmosphere-scenario__name {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.atmosphere-scenario__tone {
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-left: auto;
+}
+
 .atmosphere-broadcast-preview {
   display: flex;
   flex-direction: column;

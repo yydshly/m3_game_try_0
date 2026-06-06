@@ -1,6 +1,7 @@
 import { createInitialState, upgradeState } from "./domain/state.js";
 import { advancePhase, applyAgentPlan, assignTask, resetAssignments } from "./domain/simulation.js";
 import { applyChoiceMemory } from "./domain/memory.js";
+import { buildAiDirectorContext, selectTownLifeScenario } from "./domain/aiDirector.js";
 import { requestMiniMaxPlan, requestMiniMaxEvent, requestMiniMaxBroadcast, buildPromptMemoryNarrative } from "./services/minimaxClient.js";
 import { generateBroadcastSpeech } from "./services/minimaxTts.js";
 import { loadState, saveState, clearState } from "./services/persistence.js";
@@ -39,6 +40,7 @@ let uiState = {
   isAnimating: false,
   animationMessage: "",
   completionFeedback: null,
+  activeScenario: selectTownLifeScenario(state),
 };
 let autoPlayTimer = null;
 let animationTimer = null;
@@ -281,6 +283,7 @@ function render() {
         if (uiState.isAnimating) return;
         const prev = state;
         const next = advancePhase(state);
+        uiState = { ...uiState, activeScenario: selectTownLifeScenario(next) };
         commit(next);
         showTaskAnimations(prev, next);
       },
@@ -292,6 +295,7 @@ function render() {
         for (let index = 0; index < steps; index += 1) {
           next = advancePhase(next);
         }
+        uiState = { ...uiState, activeScenario: selectTownLifeScenario(next) };
         commit(next);
         showTaskAnimations(prev, next);
       },
@@ -322,7 +326,8 @@ function render() {
         uiState = { ...uiState, eventDirectorStatus: "loading", eventDirectorMessage: "M3 正在观察居民和小镇动态……" };
         render();
         try {
-          const result = await requestMiniMaxEvent(state);
+          const directorCtx = buildAiDirectorContext(state);
+          const result = await requestMiniMaxEvent(state, directorCtx);
           const evt = result.event;
           const currentPhase = phases[state.phaseIndex];
           const newEvent = {
@@ -374,7 +379,8 @@ function render() {
         uiState = { ...uiState, broadcastStatus: "loading", broadcastMessage: "M3 正在整理今天的小镇广播……" };
         render();
         try {
-          const result = await requestMiniMaxBroadcast(state);
+          const directorCtx = buildAiDirectorContext(state);
+          const result = await requestMiniMaxBroadcast(state, directorCtx);
           const bc = result.broadcast;
           const currentPhase = phases[state.phaseIndex];
           const newEvent = {
@@ -556,6 +562,7 @@ function render() {
           isAnimating: false,
           animationMessage: "",
           completionFeedback: null,
+          activeScenario: null,
         };
         commit(createInitialState());
       },

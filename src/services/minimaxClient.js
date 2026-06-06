@@ -68,7 +68,11 @@ export async function requestMiniMaxPlan(state) {
   return payload;
 }
 
-export async function requestMiniMaxEvent(state) {
+export async function requestMiniMaxEvent(state, directorContext = null) {
+  // Dynamically import aiDirector to avoid circular dependency
+  const { buildAiDirectorContext, selectTownLifeScenario, TOWN_LIFE_SCENARIOS } = await import("../domain/aiDirector.js");
+  const scenarioCtx = directorContext ?? buildAiDirectorContext(state);
+
   const response = await fetch("./api/minimax/event", {
     method: "POST",
     headers: {
@@ -76,6 +80,7 @@ export async function requestMiniMaxEvent(state) {
     },
     body: JSON.stringify({
       state: compactEventState(state),
+      directorContext: scenarioCtx,
     }),
   });
 
@@ -90,7 +95,11 @@ export async function requestMiniMaxEvent(state) {
   return payload;
 }
 
-export async function requestMiniMaxBroadcast(state) {
+export async function requestMiniMaxBroadcast(state, directorContext = null) {
+  // Dynamically import aiDirector to avoid circular dependency
+  const { buildAiDirectorContext } = await import("../domain/aiDirector.js");
+  const scenarioCtx = directorContext ?? buildAiDirectorContext(state);
+
   const response = await fetch("./api/minimax/broadcast", {
     method: "POST",
     headers: {
@@ -98,6 +107,7 @@ export async function requestMiniMaxBroadcast(state) {
     },
     body: JSON.stringify({
       state: compactBroadcastState(state),
+      directorContext: scenarioCtx,
     }),
   });
 
