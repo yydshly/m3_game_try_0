@@ -1647,6 +1647,11 @@ function bindEvents(root, handlers) {
   root.querySelector("[data-action='voice-pause']")?.addEventListener("click", handlers.onVoicePause);
   root.querySelector("[data-action='voice-resume']")?.addEventListener("click", handlers.onVoiceResume);
   root.querySelector("[data-action='voice-stop']")?.addEventListener("click", handlers.onVoiceStop);
+  root.querySelector("[data-action='clear-voice-debug']")?.addEventListener("click", () => {
+    if (Array.isArray(window.__VOICE_DEBUG__)) window.__VOICE_DEBUG__.length = 0;
+    const panel = root.querySelector(".voice-debug-panel");
+    if (panel) panel.remove();
+  });
 }
 
 // ── Main Render ───────────────────────────────────────────────────────────────
@@ -1766,9 +1771,57 @@ export function renderApp(root, state, handlers, uiState = {}) {
 
       ${renderProjectMeaning()}
     </div>
+    ${renderVoiceDebugPanel()}
   `;
 
   bindEvents(root, safeHandlers);
+}
+
+// ── Voice Debug Panel ──────────────────────────────────────────────────────────────────
+
+/**
+ * Lightweight browser debug panel for voice链路 diagnostics.
+ * Only visible when localStorage.VOICE_DEBUG === "1" or URL ?voiceDebug=1.
+ * Does NOT display keys, base64, or other sensitive data.
+ */
+function renderVoiceDebugPanel() {
+  // Read flag once at render time — does not auto-update without reload
+  const showPanel =
+    (typeof localStorage !== "undefined" && localStorage.VOICE_DEBUG === "1") ||
+    (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("voiceDebug") === "1");
+
+  if (!showPanel) return "";
+
+  const logs = (typeof window !== "undefined" && Array.isArray(window.__VOICE_DEBUG__))
+    ? window.__VOICE_DEBUG__.slice(-10)
+    : [];
+
+  if (logs.length === 0) {
+    return `<div class="voice-debug-panel"><p class="voice-debug-panel__empty">No voice events yet. Interact with TTS to see logs.</p></div>`;
+  }
+
+  const rows = logs.map((entry) => {
+    const time = new Date(entry.at).toLocaleTimeString();
+    // Build a compact one-line summary of the payload, stripping long strings
+    const parts = [];
+    const p = entry.payload || {};
+    for (const [k, v] of Object.entries(p)) {
+      if (v == null) continue;
+      const str = String(v);
+      // Truncate long strings for display
+      parts.push(`${k}=${str.length > 30 ? str.slice(0, 28) + "…" : str}`);
+    }
+    return `<div class="voice-debug-panel__entry">
+      <span class="voice-debug-panel__time">${escapeHtml(time)}</span>
+      <span class="voice-debug-panel__event">${escapeHtml(entry.event)}</span>
+      <span class="voice-debug-panel__detail">${escapeHtml(parts.join(" | "))}</span>
+    </div>`;
+  }).join("");
+
+  return `<div class="voice-debug-panel" aria-label="Voice diagnostics panel">
+    <p class="voice-debug-panel__title">🔍 Voice Debug (last ${logs.length}) <button class="voice-debug-panel__clear" data-action="clear-voice-debug">✕</button></p>
+    ${rows}
+  </div>`;
 }
 
 // ── Voice Playback Bar ─────────────────────────────────────────────────────────────────

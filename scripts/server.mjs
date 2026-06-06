@@ -919,18 +919,26 @@ async function handleMiniMaxPlan(request, response) {
 // ── TTS (Text-to-Speech) ─────────────────────────────────────────────────────────
 
 async function handleMiniMaxTts(request, response) {
+  const requestId = `mm-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+
   if (!ttsEnabled) {
     sendJson(response, 501, {
+      ok: false,
+      provider: "minimax",
+      debugCode: "MINIMAX_TTS_DISABLED",
+      requestId,
       error: "TTS 功能已禁用。",
-      technicalError: "TTS is not enabled in config.",
     });
     return;
   }
 
   if (!ttsApiKey || ttsApiKey === "your_minimax_api_key_here") {
     sendJson(response, 501, {
+      ok: false,
+      provider: "minimax",
+      debugCode: "MINIMAX_TTS_NO_KEY",
+      requestId,
       error: "语音合成暂时不可用，请在配置中启用 MiniMax API Key。",
-      technicalError: "MiniMax API key is not configured for TTS.",
     });
     return;
   }
@@ -940,19 +948,34 @@ async function handleMiniMaxTts(request, response) {
     const raw = await readJson(request);
     body = raw;
   } catch {
-    sendJson(response, 400, { error: "Invalid request body.", technicalError: "JSON parse error." });
+    sendJson(response, 400, {
+      ok: false,
+      provider: "minimax",
+      debugCode: "MINIMAX_TTS_BAD_REQUEST",
+      requestId,
+      error: "请求体无效。",
+    });
     return;
   }
 
   const text = String(body?.text ?? "").trim();
   if (!text) {
-    sendJson(response, 400, { error: "广播文本为空。", technicalError: "text is empty." });
+    sendJson(response, 400, {
+      ok: false,
+      provider: "minimax",
+      debugCode: "MINIMAX_TTS_EMPTY_TEXT",
+      requestId,
+      error: "广播文本为空。",
+    });
     return;
   }
   if (text.length > 3000) {
     sendJson(response, 400, {
+      ok: false,
+      provider: "minimax",
+      debugCode: "MINIMAX_TTS_TEXT_TOO_LONG",
+      requestId,
       error: `广播文本超过 3000 字符限制（当前 ${text.length} 字符）。`,
-      technicalError: `text length ${text.length} exceeds 3000.`,
     });
     return;
   }
@@ -989,14 +1012,18 @@ async function handleMiniMaxTts(request, response) {
       Number.isNaN(ttsPayload.audio_setting.channel)
     ) {
       sendJson(response, 500, {
+        ok: false,
+        provider: "minimax",
+        debugCode: "MINIMAX_TTS_CONFIG_ERROR",
+        requestId,
         error: "TTS 配置参数无效。",
-        technicalError: "NaN detected in TTS numeric config.",
       });
       return;
     }
 
     // Request diagnostic log (no secrets)
-    console.info("[tts] request summary", {
+    console.info(`[tts:minimax:start] ${requestId}`, {
+      requestId,
       model: ttsPayload.model,
       textLength: text.length,
       voiceId: ttsPayload.voice_setting.voice_id,
@@ -1005,11 +1032,18 @@ async function handleMiniMaxTts(request, response) {
       pitch: ttsPayload.voice_setting.pitch,
       sampleRate: ttsPayload.audio_setting.sample_rate,
       bitrate: ttsPayload.audio_setting.bitrate,
-      bitrateType: typeof ttsPayload.audio_setting.bitrate,
       format: ttsPayload.audio_setting.format,
       channel: ttsPayload.audio_setting.channel,
-      outputFormat: ttsPayload.output_format,
       hasApiKey: Boolean(ttsApiKey && ttsApiKey !== "your_minimax_api_key_here"),
+      keyPrefix: String(ttsApiKey).slice(0, 4) + "***",
+    });
+
+    const endpoint = "https://api.minimaxi.com/v1/t2a_v2";
+    console.info(`[tts:minimax:config] ${requestId}`, {
+      requestId,
+      endpoint,
+      model: ttsPayload.model,
+      textLength: text.length,
     });
 
     const controller = new AbortController();
@@ -1030,7 +1064,9 @@ async function handleMiniMaxTts(request, response) {
     const payload = await ttsResponse.json().catch(() => ({}));
 
     // Response diagnostic log (no secrets)
-    console.error("[tts] MiniMax response summary", {
+    console.info(`[tts:minimax:upstream] ${requestId}`, {
+      requestId,
+      endpoint,
       httpStatus: ttsResponse.status,
       statusCode: payload?.base_resp?.status_code,
       statusMsg: payload?.base_resp?.status_msg,
@@ -1039,17 +1075,18 @@ async function handleMiniMaxTts(request, response) {
       dataStatus: payload?.data?.status,
       hasAudio: Boolean(payload?.data?.audio),
       audioLength: payload?.data?.audio?.length || 0,
-      audioFormat: payload?.extra_info?.audio_format,
-      audioSize: payload?.extra_info?.audio_size,
     });
 
     if (!ttsResponse.ok) {
+      const debugCode = ttsResponse.status === 401 || ttsResponse.status === 403
+        ? "MINIMAX_TTS_AUTH_ERROR"
+        : "MINIMAX_TTS_HTTP_ERROR";
       sendJson(response, ttsResponse.status, {
         ok: false,
+        provider: "minimax",
+        debugCode,
+        requestId,
         error: `语音合成 HTTP 失败（${ttsResponse.status}）`,
-        statusCode: payload?.base_resp?.status_code ?? ttsResponse.status,
-        statusMsg: payload?.base_resp?.status_msg ?? "",
-        traceId: payload?.trace_id ?? payload?.extra_info?.trace_id ?? null,
       });
       return;
     }
@@ -1057,10 +1094,10 @@ async function handleMiniMaxTts(request, response) {
     if (payload?.base_resp?.status_code !== 0) {
       sendJson(response, 502, {
         ok: false,
+        provider: "minimax",
+        debugCode: "MINIMAX_TTS_UPSTREAM_ERROR",
+        requestId,
         error: `语音合成失败：${payload?.base_resp?.status_msg || "未知错误"}`,
-        statusCode: payload?.base_resp?.status_code,
-        statusMsg: payload?.base_resp?.status_msg || "",
-        traceId: payload?.trace_id ?? payload?.extra_info?.trace_id ?? null,
       });
       return;
     }
@@ -1069,10 +1106,10 @@ async function handleMiniMaxTts(request, response) {
     if (!payload?.data) {
       sendJson(response, 502, {
         ok: false,
+        provider: "minimax",
+        debugCode: "MINIMAX_TTS_NO_DATA",
+        requestId,
         error: `语音合成返回空数据：${payload?.base_resp?.status_msg || "未知错误"}`,
-        statusCode: payload?.base_resp?.status_code ?? 0,
-        statusMsg: payload?.base_resp?.status_msg || "",
-        traceId: payload?.trace_id ?? payload?.extra_info?.trace_id ?? null,
       });
       return;
     }
@@ -1080,10 +1117,10 @@ async function handleMiniMaxTts(request, response) {
     if (!audioHex || typeof audioHex !== "string" || audioHex.length === 0) {
       sendJson(response, 502, {
         ok: false,
+        provider: "minimax",
+        debugCode: "MINIMAX_TTS_NO_AUDIO",
+        requestId,
         error: `语音合成未返回音频：${payload?.base_resp?.status_msg || "未知错误"}`,
-        statusCode: payload?.base_resp?.status_code ?? 0,
-        statusMsg: payload?.base_resp?.status_msg || "",
-        traceId: payload?.trace_id ?? payload?.extra_info?.trace_id ?? null,
       });
       return;
     }
@@ -1093,8 +1130,12 @@ async function handleMiniMaxTts(request, response) {
     const audioBase64 = audioBuffer.toString("base64");
     const audioUrl = `data:audio/${ttsPayload.audio_setting.format};base64,${audioBase64}`;
 
+    console.info(`[tts:minimax:success] ${requestId}`, { requestId, hasAudio: true });
     sendJson(response, 200, {
       ok: true,
+      provider: "minimax",
+      debugCode: "MINIMAX_TTS_OK",
+      requestId,
       audioUrl,
       traceId: payload?.trace_id ?? payload?.extra_info?.trace_id ?? null,
       extraInfo: {
@@ -1107,14 +1148,22 @@ async function handleMiniMaxTts(request, response) {
     });
   } catch (error) {
     const isTimeout = error.name === "AbortError";
+    const debugCode = isTimeout ? "MINIMAX_TTS_TIMEOUT" : "MINIMAX_TTS_ERROR";
+    console.error(`[tts:minimax:error] ${requestId}`, {
+      requestId,
+      debugCode,
+      isTimeout,
+      errorName: error.name,
+      errorMessage: error.message?.slice(0, 200),
+    });
     sendJson(response, isTimeout ? 504 : 500, {
       ok: false,
+      provider: "minimax",
+      debugCode,
+      requestId,
       error: isTimeout
         ? `语音合成超时了（${ttsTimeoutMs / 1000}s），请稍后重试。`
         : "语音合成遇到未知错误，请稍后重试。",
-      technicalError: isTimeout
-        ? `TTS request timed out after ${ttsTimeoutMs}ms.`
-        : error.message,
     });
   }
 }
@@ -1195,6 +1244,8 @@ function sanitizeMimoError(error, fallback) {
 }
 
 async function handleMimoTts(request, response) {
+  const requestId = "mi-" + Date.now() + "-" + Math.random().toString(16).slice(2, 8);
+  console.info("[tts:mimo:start] " + requestId, { requestId });
   // Support ?dryRun=1 to validate request construction without calling MiMo
   const url = new URL(request.url, `http://localhost:${port}`);
   const isDryRun = url.searchParams.get("dryRun") === "1";
@@ -1205,9 +1256,12 @@ async function handleMimoTts(request, response) {
     if (mimoApiMode === "token_plan" && !mimoBaseUrl.includes("token-plan")) {
       sendJson(response, 400, {
         ok: false,
+        provider: "mimo",
+        debugCode: "MIMO_TTS_CONFIG_ERROR",
+        requestId,
         error: "MiMo Token Plan Base URL 配置错误",
         mode: "token_plan",
-        baseUrl: mimoBaseUrl,
+        baseUrl: mimoBaseUrl.slice(0, 12) + "***",
       });
       return;
     }
@@ -1216,6 +1270,8 @@ async function handleMimoTts(request, response) {
     sendJson(response, 200, {
       ok: true,
       provider: "mimo",
+      debugCode: "MIMO_TTS_DRY_RUN",
+      requestId,
       mode: cfg.mode,
       endpoint: `${mimoBaseUrl.replace(/\/$/, "")}/chat/completions`,
       model: mimoModel,
@@ -1230,6 +1286,9 @@ async function handleMimoTts(request, response) {
   if (!mimoEnabled) {
     sendJson(response, 501, {
       ok: false,
+      provider: "mimo",
+      debugCode: "MIMO_TTS_DISABLED",
+      requestId,
       error: "MiMo TTS 未启用，请在配置中启用。",
     });
     return;
@@ -1238,6 +1297,9 @@ async function handleMimoTts(request, response) {
   if (!mimoApiKey || mimoApiKey === "your_mimo_api_key_here" || mimoApiKey === "") {
     sendJson(response, 501, {
       ok: false,
+      provider: "mimo",
+      debugCode: "MIMO_TTS_NO_KEY",
+      requestId,
       error: "MiMo TTS 暂时不可用（未配置 API Key）。",
     });
     return;
@@ -1247,18 +1309,21 @@ async function handleMimoTts(request, response) {
   try {
     body = await readJson(request);
   } catch {
-    sendJson(response, 400, { ok: false, error: "无效的请求体。" });
+    sendJson(response, 400, { ok: false, provider: "mimo", debugCode: "MIMO_TTS_BAD_REQUEST", requestId, error: "请求体无效。" });
     return;
   }
 
   const text = String(body?.text ?? "").trim();
   if (!text) {
-    sendJson(response, 400, { ok: false, error: "文本为空。" });
+    sendJson(response, 400, { ok: false, provider: "mimo", debugCode: "MIMO_TTS_EMPTY_TEXT", requestId, error: "文本为空。" });
     return;
   }
   if (text.length > 200) {
     sendJson(response, 400, {
       ok: false,
+      provider: "mimo",
+      debugCode: "MIMO_TTS_TEXT_TOO_LONG",
+      requestId,
       error: `文本超过 200 字限制（当前 ${text.length} 字）。`,
     });
     return;
@@ -1288,6 +1353,17 @@ async function handleMimoTts(request, response) {
 
   try {
     const endpoint = `${mimoBaseUrl.replace(/\/$/, "")}/chat/completions`;
+    const keyPrefix = mimoApiKey ? `${mimoApiKey.slice(0, 3)}***${mimoApiKey.slice(-4)}` : "missing";
+    console.info(`[tts:mimo:config] ${requestId}`, {
+      requestId,
+      endpoint,
+      model: mimoModel,
+      scene,
+      textLength: text.length,
+      hasApiKey: Boolean(mimoApiKey && mimoApiKey !== "your_mimo_api_key_here"),
+      keyPrefix,
+    });
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), mimoTimeoutMs);
 
@@ -1305,6 +1381,16 @@ async function handleMimoTts(request, response) {
 
     const payload = await ttsResponse.json().catch(() => ({}));
 
+    console.info(`[tts:mimo:upstream] ${requestId}`, {
+      requestId,
+      endpoint,
+      httpStatus: ttsResponse.status,
+      ok: ttsResponse.ok,
+      hasError: Boolean(payload?.error),
+      errorMsg: payload?.error?.message ?? payload?.msg ?? "",
+      hasAudio: Boolean(payload?.choices?.[0]?.message?.audio),
+    });
+
     if (!ttsResponse.ok) {
       const safeMsg = sanitizeMimoError(
         { message: payload?.error?.message ?? payload?.msg ?? "" },
@@ -1312,6 +1398,9 @@ async function handleMimoTts(request, response) {
       );
       sendJson(response, ttsResponse.status, {
         ok: false,
+        provider: "mimo",
+        debugCode: "MIMO_TTS_HTTP_ERROR",
+        requestId,
         error: safeMsg,
       });
       return;
@@ -1319,9 +1408,18 @@ async function handleMimoTts(request, response) {
 
     const audioBase64 = parseMimoTtsAudio(payload);
 
+    console.info(`[tts:mimo:parse] ${requestId}`, {
+      requestId,
+      hasAudioBase64: Boolean(audioBase64),
+      audioBase64Length: audioBase64 ? audioBase64.length : 0,
+    });
+
     if (!audioBase64) {
       sendJson(response, 502, {
         ok: false,
+        provider: "mimo",
+        debugCode: "MIMO_TTS_NO_AUDIO",
+        requestId,
         error: "MiMo 未返回音频数据。",
       });
       return;
@@ -1335,22 +1433,35 @@ async function handleMimoTts(request, response) {
 
     const audioUrl = `data:audio/wav;base64,${audioBase64}`;
 
+    console.info(`[tts:mimo:success] ${requestId}`, {
+      requestId,
+      scene,
+      textLength: text.length,
+      audioUrlLength: audioBase64.length,
+    });
+
     sendJson(response, 200, {
       ok: true,
       audioUrl,
       provider: "mimo",
+      debugCode: "MIMO_TTS_OK",
+      requestId,
       format: "wav",
       model: mimoModel,
       scene,
       textHash,
       durationMs: 0,
-      text,
+      text: text.slice(0, 20) + "***",
     });
   } catch (error) {
     const isTimeout = error.name === "AbortError";
     const safeMsg = sanitizeMimoError(error, null);
+    console.error("[tts:mimo:error] " + requestId, { requestId, isTimeout, error: safeMsg });
     sendJson(response, isTimeout ? 504 : 500, {
       ok: false,
+      provider: "mimo",
+      debugCode: isTimeout ? "MIMO_TTS_TIMEOUT" : "MIMO_TTS_ERROR",
+      requestId,
       error: isTimeout
         ? "MiMo 语音生成超时了，请稍后重试。"
         : safeMsg,

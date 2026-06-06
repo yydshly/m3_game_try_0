@@ -39,7 +39,7 @@ export function validateBroadcastText(text) {
  * Calls the server-side /api/minimax/tts proxy to avoid exposing API keys.
  *
  * @param {string} text - Broadcast script text
- * @returns {Promise<{ audioUrl: string, traceId: string|null, extraInfo: object|null }>}
+ * @returns {Promise<{ audioUrl: string, traceId: string|null, extraInfo: object|null, requestId: string|null, debugCode: string|null }>}
  */
 export async function generateBroadcastSpeech(text) {
   const validation = validateBroadcastText(text);
@@ -60,17 +60,25 @@ export async function generateBroadcastSpeech(text) {
       ? `statusCode=${payload.statusCode}: ${payload.statusMsg}`
       : payload?.error ?? `HTTP ${response.status}`;
     const traceInfo = payload?.traceId ? ` (trace_id: ${payload.traceId})` : "";
-    throw new Error(`${serverMsg}${traceInfo}`);
+    const debugInfo = payload?.debugCode ? ` [${payload.debugCode}]` : "";
+    const reqInfo = payload?.requestId ? ` (req: ${payload.requestId})` : "";
+    throw new Error(`${serverMsg}${debugInfo}${traceInfo}${reqInfo}`);
   }
 
-  const { audioUrl, traceId, extraInfo } = payload;
+  const { audioUrl, traceId, extraInfo, requestId, debugCode } = payload;
 
   if (!audioUrl) {
     const traceInfo = payload?.traceId ? ` (trace_id: ${payload.traceId})` : "";
     throw new Error(`TTS returned no audio data${traceInfo}`);
   }
 
-  return { audioUrl, traceId: traceId ?? null, extraInfo: extraInfo ?? null };
+  return {
+    audioUrl,
+    traceId: traceId ?? null,
+    extraInfo: extraInfo ?? null,
+    requestId: requestId ?? null,
+    debugCode: debugCode ?? null,
+  };
 }
 
 /**

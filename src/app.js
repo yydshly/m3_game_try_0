@@ -143,6 +143,65 @@ function makeVoicePlaybackState(overrides = {}) {
   };
 }
 
+// ── Voice Diagnostics Logger ───────────────────────────────────────────────────
+
+/**
+ * Sanitize a payload for safe logging (strips sensitive fields).
+ * @param {object} payload
+ * @returns {object}
+ */
+function sanitizeVoicePayload(payload = {}) {
+  // Deep-clone to avoid mutating the original
+  const sanitized = JSON.parse(JSON.stringify(payload));
+  const sensitiveKeys = ["apiKey", "api_key", "Authorization", "Bearer", "audioUrl", "audio_url", "token", "secret"];
+  for (const key of sensitiveKeys) {
+    if (sanitized[key] != null) {
+      const val = String(sanitized[key]);
+      sanitized[key] = val.length > 8 ? val.slice(0, 4) + "***" + val.slice(-4) : "***";
+    }
+  }
+  // Strip base64 data:audio strings
+  for (const key of Object.keys(sanitized)) {
+    const val = sanitized[key];
+    if (typeof val === "string" && val.startsWith("data:")) {
+      sanitized[key] = "[base64 audio]";
+    }
+    // Strip sk-..., tp-..., and long base64-like tokens found in string values
+    if (typeof val === "string") {
+      sanitized[key] = val
+        .replace(/\b(sk|tp|api[_-]?key)[\w.-]{5,}/gi, "[key]")
+        .replace(/Bearer\s+[A-Za-z0-9._-]{10,}/g, "Bearer [key]")
+        .replace(/data:audio\/[^;]+;base64,[A-Za-z0-9+/=]{80,}/g, "[base64 audio]");
+    }
+  }
+  return sanitized;
+}
+
+/**
+ * Unified voice diagnostics logger.
+ * Logs to console.info and stores in window.__VOICE_DEBUG__ for browser debug panel.
+ * @param {string} event  - event name e.g. "minimax:generate:start"
+ * @param {object} payload - safe (sanitized) payload
+ */
+function voiceLog(event, payload = {}) {
+  const safe = sanitizeVoicePayload(payload);
+  console.info(`[voice:${event}]`, safe);
+  window.__VOICE_DEBUG__ = window.__VOICE_DEBUG__ || [];
+  window.__VOICE_DEBUG__.push({ event, payload: safe, at: Date.now() });
+  // Keep last 50 events to prevent memory bloat
+  if (window.__VOICE_DEBUG__.length > 50) {
+    window.__VOICE_DEBUG__.shift();
+  }
+}
+
+/**
+ * Build a minimal requestId for correlating frontend and server logs.
+ * @returns {string}
+ */
+function makeRequestId() {
+  return `v-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+}
+
 /**
  * Build title/subtitle metadata for the voice playback bar from scene info.
  * @param {string} audioKey
@@ -359,6 +418,7 @@ function stopAllMimoAudio() {
  * @param {string} audioUrl
  */
 function playMimoAudio(audioKey, audioUrl) {
+  voiceLog("mimo:audio:start", { audioKey, hasAudioUrl: Boolean(audioUrl) });
   const existingAudio = activeMimoAudios.get(audioKey);
   if (existingAudio) {
     existingAudio.pause();
@@ -381,6 +441,7 @@ function playMimoAudio(audioKey, audioUrl) {
   activeMimoAudios.set(audioKey, audio);
 
   audio.onplay = () => {
+    voiceLog("mimo:audio:playing", { audioKey });
     const entry = uiState.ttsAudios[audioKey];
     if (entry) {
       uiState = {
@@ -400,6 +461,7 @@ function playMimoAudio(audioKey, audioUrl) {
   audio.onpause = () => {
     const entry = uiState.ttsAudios[audioKey];
     if (entry && entry.status === "playing") {
+      voiceLog("mimo:audio:paused", { audioKey });
       uiState = {
         ...uiState,
         ttsAudios: { ...uiState.ttsAudios, [audioKey]: { ...entry, status: "paused" } },
@@ -414,6 +476,7 @@ function playMimoAudio(audioKey, audioUrl) {
   };
 
   audio.onended = () => {
+    voiceLog("mimo:audio:ended", { audioKey });
     uiState = {
       ...uiState,
       ttsAudios: {
@@ -427,6 +490,7 @@ function playMimoAudio(audioKey, audioUrl) {
   };
 
   audio.onerror = () => {
+    voiceLog("mimo:audio:error", { audioKey, errorName: "AudioError" });
     uiState = {
       ...uiState,
       ttsAudios: {
@@ -450,7 +514,7 @@ function playMimoAudio(audioKey, audioUrl) {
 
   audio.play().catch(() => {
     // Autoplay blocked — treat as paused
-    const entry = uiState.ttsAudios[audioKey];
+    voiceLog("mimo:audio:blocked", { audioKey });
     if (entry) {
       uiState = {
         ...uiState,
@@ -1323,15 +1387,22 @@ function render() {
       },
       onGenerateTts: async () => {
         const latestBc = uiState.latestBroadcast;
-        if (!latestBc) return;
+        if (!latestBc) { voiceLog("minimax:generate:skip", { reason: "no-broadcast" }); return; }
         const scriptText = latestBc.script ?? latestBc.text ?? "";
-        if (!scriptText.trim()) return;
+        if (!scriptText.trim()) { voiceLog("minimax:generate:skip", { reason: "empty-script" }); return; }
 
         const currentHash = hashBroadcastScript(scriptText);
         const ba = uiState.broadcastAudio;
 
         // If loading, ignore (prevent double generation)
-        if (ba.status === "loading") return;
+        if (ba.status === "loading") { voiceLog("minimax:generate:skip", { reason: "already-loading" }); return; }
+
+        voiceLog("minimax:generate:start", {
+          hasScript: Boolean(scriptText),
+          scriptLength: scriptText.length,
+          status: ba.status,
+          hasAudioUrl: Boolean(ba.audioUrl),
+        });
 
         // Stop any active audio before generating
         stopActiveAudio();
@@ -1348,6 +1419,13 @@ function render() {
 
         try {
           const result = await generateBroadcastSpeech(scriptText);
+          voiceLog("minimax:generate:success", {
+            hasAudioUrl: Boolean(result.audioUrl),
+            traceId: result.traceId,
+            requestId: result.requestId,
+            debugCode: result.debugCode,
+            scriptLength: scriptText.length,
+          });
           uiState = {
             ...uiState,
             broadcastAudio: {
@@ -1355,7 +1433,9 @@ function render() {
               text: scriptText,
               audioUrl: result.audioUrl,
               error: null,
+              debugCode: result.debugCode,
               traceId: result.traceId,
+              requestId: result.requestId,
               generatedAt: Date.now(),
               scriptHash: currentHash,
             },
@@ -1366,11 +1446,26 @@ function render() {
         } catch (error) {
           // Categorize MiniMax TTS errors for dev debugging
           const msg = error.message ?? "";
-          let devTag = "MINIMAX_TTS_REQUEST_FAILED";
-          if (msg.includes("fetch") || msg.includes("network") || msg.includes("Network")) devTag = "MINIMAX_TTS_NETWORK_ERROR";
-          else if (msg.includes("400") || msg.includes("401") || msg.includes("403")) devTag = "MINIMAX_TTS_AUTH_ERROR";
-          else if (msg.includes("500") || msg.includes("502") || msg.includes("503")) devTag = "MINIMAX_TTS_SERVER_ERROR";
-          console.warn(`[minimaxTts] ${devTag}:`, msg);
+          // Extract server-side debugCode and requestId if embedded in message
+          const debugCodeMatch = msg.match(/\[([A-Z_]+)\]/);
+          const requestIdMatch = msg.match(/\(req:\s*([^)]+)\)/);
+          const devTag = debugCodeMatch ? debugCodeMatch[1] : "MINIMAX_TTS_REQUEST_FAILED";
+          const requestId = requestIdMatch ? requestIdMatch[1] : null;
+          if (msg.includes("fetch") || msg.includes("network") || msg.includes("Network")) {
+            devTag = "MINIMAX_TTS_NETWORK_ERROR";
+          } else if (msg.includes("400") || msg.includes("401") || msg.includes("403")) {
+            devTag = "MINIMAX_TTS_AUTH_ERROR";
+          } else if (msg.includes("500") || msg.includes("502") || msg.includes("503")) {
+            devTag = "MINIMAX_TTS_SERVER_ERROR";
+          }
+          voiceLog("minimax:generate:error", {
+            debugCode: devTag,
+            requestId,
+            errorName: error.name,
+            errorMessageSafe: msg.slice(0, 120),
+            status: ba.status,
+            scriptLength: scriptText.length,
+          });
           uiState = {
             ...uiState,
             broadcastAudio: {
@@ -1379,6 +1474,7 @@ function render() {
               audioUrl: null,
               error: "MiniMax 广播语音生成失败，请稍后重试。",
               debugCode: devTag,
+              requestId,
               traceId: null,
               generatedAt: null,
               scriptHash: currentHash,
@@ -1389,12 +1485,18 @@ function render() {
       },
       onPlayTts: () => {
         const ba = uiState.broadcastAudio;
-        if (!ba.audioUrl) return;
+        if (!ba.audioUrl) {
+          voiceLog("minimax:play:skip", { reason: "no-audioUrl", status: ba.status });
+          return;
+        }
         // If already playing, pause it
         if (ba.status === "playing") {
+          voiceLog("minimax:play:pause-toggle", { status: ba.status, hasAudioUrl: Boolean(ba.audioUrl) });
           handlers.onPauseTts();
           return;
         }
+
+        voiceLog("minimax:play:start", { status: ba.status, hasAudioUrl: Boolean(ba.audioUrl), textLength: (ba.text || "").length });
 
         // Stop any other audio before playing
         stopActiveAudio();
@@ -1421,6 +1523,7 @@ function render() {
         activeAudio = new Audio(ba.audioUrl);
 
         activeAudio.onplay = () => {
+          voiceLog("minimax:play:playing", { hasAudioUrl: Boolean(ba.audioUrl) });
           uiState = {
             ...uiState,
             broadcastAudio: { ...uiState.broadcastAudio, status: "playing" },
@@ -1432,6 +1535,7 @@ function render() {
         activeAudio.onpause = () => {
           // Only mark paused if it wasn't ended naturally (ended → ready, paused → paused)
           if (uiState.broadcastAudio.status === "playing") {
+            voiceLog("minimax:play:paused", {});
             uiState = {
               ...uiState,
               broadcastAudio: { ...uiState.broadcastAudio, status: "paused" },
@@ -1442,6 +1546,7 @@ function render() {
         };
 
         activeAudio.onended = () => {
+          voiceLog("minimax:play:ended", {});
           uiState = {
             ...uiState,
             broadcastAudio: { ...uiState.broadcastAudio, status: "ready" },
@@ -1452,6 +1557,7 @@ function render() {
         };
 
         activeAudio.onerror = () => {
+          voiceLog("minimax:play:error", { errorName: "AudioError", status: ba.status });
           uiState = {
             ...uiState,
             broadcastAudio: {
@@ -1472,6 +1578,7 @@ function render() {
 
         activeAudio.play().catch(() => {
           // Autoplay blocked — treat as paused
+          voiceLog("minimax:play:blocked", { hasAudioUrl: Boolean(ba.audioUrl) });
           uiState = {
             ...uiState,
             broadcastAudio: { ...uiState.broadcastAudio, status: "paused" },
@@ -1483,6 +1590,7 @@ function render() {
       },
       onPauseTts: () => {
         if (activeAudio && uiState.broadcastAudio.status === "playing") {
+          voiceLog("minimax:pause", { status: uiState.broadcastAudio.status });
           activeAudio.pause();
           // status will transition to "paused" via onpause handler above
         }
@@ -1499,7 +1607,16 @@ function render() {
        * @param {string} [beatId]
        */
       onPlayMimoTts: (audioKey, text, scene, residentId, beatId) => {
-        if (!text || !text.trim()) return;
+        if (!text || !text.trim()) {
+          voiceLog("mimo:play:skip", { audioKey, scene, residentId, beatId, reason: "empty-text" });
+          return;
+        }
+
+        voiceLog("mimo:play:start", {
+          audioKey, scene, residentId, beatId,
+          textLength: text.length,
+          hasText: Boolean(text && text.trim()),
+        });
 
         // Stop all other audio (MiniMax broadcast or other MiMo)
         stopActiveAudio();
@@ -1515,6 +1632,7 @@ function render() {
 
         // If already generated with same hash, just play
         if (existing && existing.status === "ready" && existing.textHash === currentHash && existing.audioUrl) {
+          voiceLog("mimo:play:replay-cached", { audioKey, scene, status: existing.status });
           uiState = {
             ...uiState,
             ttsAudios: {
@@ -1541,9 +1659,13 @@ function render() {
         }
 
         // If currently loading or playing, ignore
-        if (existing && (existing.status === "loading" || existing.status === "playing")) return;
+        if (existing && (existing.status === "loading" || existing.status === "playing")) {
+          voiceLog("mimo:play:skip", { audioKey, reason: "already-loading-or-playing", status: existing?.status });
+          return;
+        }
 
         // Set loading state
+        voiceLog("mimo:play:request", { audioKey, scene, textLength: text.length });
         uiState = {
           ...uiState,
           ttsAudios: {
@@ -1570,6 +1692,12 @@ function render() {
         resolveTtsProviderForScene(scene); // no-op, provider is always mimo
         generateMimoSpeech({ scene, text, voice: "default", emotion: "neutral", speed: 1.0 })
           .then((result) => {
+            voiceLog("mimo:play:success", {
+              audioKey, scene,
+              hasAudioUrl: Boolean(result.audioUrl),
+              requestId: result.requestId,
+              debugCode: result.debugCode,
+            });
             uiState = {
               ...uiState,
               ttsAudios: {
@@ -1580,6 +1708,8 @@ function render() {
                   textHash: currentHash,
                   generatedAt: Date.now(),
                   textPreview: text.slice(0, 40),
+                  requestId: result.requestId,
+                  debugCode: result.debugCode,
                 }),
               },
             };
@@ -1589,12 +1719,22 @@ function render() {
           .catch((err) => {
             // Categorize error for dev debugging; UI only shows a friendly message
             const msg = err.message ?? "";
-            let devTag = "MIMO_TTS_REQUEST_FAILED";
+            // Extract server-side debugCode and requestId if embedded in message
+            const debugCodeMatch = msg.match(/\[([A-Z_]+)\]/);
+            const requestIdMatch = msg.match(/\(req:\s*([^)]+)\)/);
+            let devTag = debugCodeMatch ? debugCodeMatch[1] : "MIMO_TTS_REQUEST_FAILED";
+            const requestId = requestIdMatch ? requestIdMatch[1] : null;
             if (!text || !text.trim()) devTag = "MIMO_TTS_EMPTY_TEXT";
             else if (msg.includes("文本为空") || msg.includes("超过")) devTag = "MIMO_TTS_TEXT_INVALID";
             else if (msg.includes("audioUrl") || msg.includes("未返回音频")) devTag = "MIMO_TTS_AUDIO_MISSING";
             else if (msg.includes("fetch") || msg.includes("network") || msg.includes("Network")) devTag = "MIMO_TTS_NETWORK_ERROR";
-            console.warn(`[mimoTts] ${devTag} for ${audioKey}:`, msg);
+            voiceLog("mimo:play:error", {
+              audioKey, scene,
+              debugCode: devTag,
+              requestId,
+              errorName: err.name,
+              errorMessageSafe: msg.slice(0, 120),
+            });
             uiState = {
               ...uiState,
               ttsAudios: {
@@ -1605,6 +1745,7 @@ function render() {
                   textPreview: text.slice(0, 40),
                   error: "MiMo 语音生成失败，请稍后重试。",
                   debugCode: devTag,
+                  requestId,
                 }),
               },
               currentVoicePlayback: {

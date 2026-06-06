@@ -38,7 +38,9 @@ export async function generateMimoSpeech({ scene, text, voice, emotion, speed, m
 
   if (!response.ok || !payload?.ok) {
     const errMsg = payload?.error ?? `HTTP ${response.status}`;
-    throw new Error(errMsg);
+    const debugInfo = payload?.debugCode ? ` [${payload.debugCode}]` : "";
+    const reqInfo = payload?.requestId ? ` (req: ${payload.requestId})` : "";
+    throw new Error(`${errMsg}${debugInfo}${reqInfo}`);
   }
 
   if (!payload.audioUrl) {
@@ -50,5 +52,7 @@ export async function generateMimoSpeech({ scene, text, voice, emotion, speed, m
     provider: "mimo",
     durationMs: payload.durationMs ?? 0,
     text: payload.text ?? text,
+    requestId: payload.requestId ?? null,
+    debugCode: payload.debugCode ?? null,
   };
 }

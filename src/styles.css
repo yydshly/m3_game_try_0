@@ -3901,4 +3901,77 @@ details summary {
   line-height: 1.4;
 }
 
+/* ── Voice Debug Panel ─────────────────────────────────────────────────────── */
+
+.voice-debug-panel {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  font-size: 0.72rem;
+  font-family: "Courier New", monospace;
+  z-index: 9999;
+  max-height: 180px;
+  overflow-y: auto;
+  border-top: 2px solid #4fc3f7;
+  padding: 6px 10px;
+}
+
+.voice-debug-panel__title {
+  margin: 0 0 4px;
+  font-size: 0.75rem;
+  color: #4fc3f7;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.voice-debug-panel__clear {
+  background: none;
+  border: 1px solid #4fc3f7;
+  color: #4fc3f7;
+  cursor: pointer;
+  font-size: 0.65rem;
+  padding: 0 4px;
+  border-radius: 3px;
+  margin-left: auto;
+}
+
+.voice-debug-panel__clear:hover {
+  background: #4fc3f7;
+  color: #1a1a2e;
+}
+
+.voice-debug-panel__entry {
+  display: flex;
+  gap: 8px;
+  padding: 2px 0;
+  border-bottom: 1px solid #2a2a4a;
+  line-height: 1.4;
+}
+
+.voice-debug-panel__time {
+  color: #888;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.voice-debug-panel__event {
+  color: #81d4fa;
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-weight: bold;
+}
+
+.voice-debug-panel__detail {
+  color: #b0bec5;
+  word-break: break-all;
+}
+
+.voice-debug-panel__empty {
+  color: #666;
+  margin: 4px 0;
+}
 
