@@ -49,6 +49,7 @@
     "voice-ui-e2e-check": "node scripts/voice-ui-e2e-check.mjs",
     "voice-handler-self-call-check": "node scripts/voice-handler-self-call-check.mjs",
     "mimo-ui-voice-contract-check": "node scripts/mimo-ui-voice-contract-check.mjs",
+    "voice-lifecycle-check": "node scripts/voice-lifecycle-check.mjs",
     "mimo-tts-param-probe": "node scripts/mimo-tts-param-probe.mjs",
     "tts-official-contract-check": "node scripts/tts-official-contract-check.mjs"
   }

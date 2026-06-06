@@ -372,15 +372,48 @@ function syncCurrentVoicePlayback(audioKey, provider) {
 }
 
 /**
- * Stop and clean up the active audio instance.
+ * Stop the MiniMax broadcast audio and sync broadcastAudio state.
+ * @param {object} options
+ * @param {string} [options.nextStatus] - Status to set (default "ready")
+ * @param {boolean} [options.clearCurrentPlayback] - Clear currentVoicePlayback if minimax (default true)
+ * @param {string} [options.reason] - Log reason for the stop
  */
-function stopActiveAudio() {
+function stopBroadcastAudio(options = {}) {
+  const {
+    nextStatus = "ready",
+    clearCurrentPlayback = true,
+    reason = "stop-broadcast",
+  } = options;
+
   if (activeAudio) {
     activeAudio.pause();
     activeAudio.src = "";
     activeAudio.onended = null;
     activeAudio.onerror = null;
     activeAudio = null;
+  }
+
+  const ba = uiState.broadcastAudio;
+  if (ba && (ba.status === "playing" || ba.status === "paused")) {
+    uiState = {
+      ...uiState,
+      broadcastAudio: {
+        ...ba,
+        status: ba.audioUrl ? nextStatus : "idle",
+      },
+      currentVoicePlayback:
+        clearCurrentPlayback && uiState.currentVoicePlayback?.provider === "minimax"
+          ? makeVoicePlaybackState()
+          : uiState.currentVoicePlayback,
+    };
+
+    voiceLog("minimax:audio:stop", {
+      reason,
+      nextStatus,
+      hasAudioUrl: Boolean(ba.audioUrl),
+    });
+
+    render();
   }
 }
 
@@ -400,16 +433,66 @@ function stopMimoAudio(audioKey) {
 }
 
 /**
- * Stop all active MiMo audio instances.
+ * Stop all active MiMo audio instances and sync their uiState.ttsAudios status.
+ * @param {object} options
+ * @param {string} [options.exceptKey] - Do not stop this key's audio
+ * @param {string} [options.nextStatus] - Status to set for stopped entries (default "ready")
+ * @param {boolean} [options.clearCurrentPlayback] - Clear currentVoicePlayback if it was mimo (default true)
+ * @param {string} [options.reason] - Log reason for the stop
  */
-function stopAllMimoAudio() {
+function stopAllMimoAudio(options = {}) {
+  const {
+    exceptKey = "",
+    nextStatus = "ready",
+    clearCurrentPlayback = true,
+    reason = "stop-all-mimo",
+  } = options;
+
+  const stoppedKeys = [];
+
   for (const [key, audio] of activeMimoAudios) {
+    if (exceptKey && key === exceptKey) continue;
+
     audio.pause();
     audio.src = "";
     audio.onended = null;
     audio.onerror = null;
+    activeMimoAudios.delete(key);
+    stoppedKeys.push(key);
   }
-  activeMimoAudios.clear();
+
+  if (stoppedKeys.length > 0) {
+    const nextTtsAudios = { ...uiState.ttsAudios };
+
+    for (const key of stoppedKeys) {
+      const entry = nextTtsAudios[key];
+      if (!entry) continue;
+
+      nextTtsAudios[key] = {
+        ...entry,
+        status: entry.audioUrl ? nextStatus : "idle",
+        error: null,
+      };
+    }
+
+    uiState = {
+      ...uiState,
+      ttsAudios: nextTtsAudios,
+      currentVoicePlayback:
+        clearCurrentPlayback && uiState.currentVoicePlayback?.provider === "mimo"
+          ? makeVoicePlaybackState()
+          : uiState.currentVoicePlayback,
+    };
+
+    voiceLog("mimo:audio:stop-all", {
+      reason,
+      stoppedKeys,
+      nextStatus,
+      exceptKey,
+    });
+
+    render();
+  }
 }
 
 /**
@@ -438,8 +521,8 @@ function playBroadcastAudio() {
   });
 
   // Stop any other audio before playing
-  stopActiveAudio();
-  stopAllMimoAudio();
+  stopBroadcastAudio({ reason: "play-minimax" });
+  stopAllMimoAudio({ reason: "play-minimax" });
 
   uiState = {
     ...uiState,
@@ -576,9 +659,9 @@ function playMimoAudio(audioKey, audioUrl) {
   if (uiState.currentVoicePlayback && uiState.currentVoicePlayback.key !== audioKey) {
     // Stop any other audio from the opposite provider
     if (uiState.currentVoicePlayback.provider === "minimax") {
-      stopActiveAudio();
+      stopBroadcastAudio({ reason: "play-mimo", clearCurrentPlayback: false });
     } else if (uiState.currentVoicePlayback.provider === "mimo") {
-      stopAllMimoAudio();
+      stopAllMimoAudio({ exceptKey: audioKey, reason: "play-mimo-audio" });
     }
     uiState = { ...uiState, currentVoicePlayback: makeVoicePlaybackState() };
   }
@@ -680,13 +763,15 @@ function playMimoAudio(audioKey, audioUrl) {
 
 /**
  * Pause a MiMo audio by key.
+ * If no real Audio instance exists but status is "playing", still updates state to "paused".
  * @param {string} audioKey
  */
 function pauseMimoAudio(audioKey) {
   const audio = activeMimoAudios.get(audioKey);
   if (audio) audio.pause();
+  // Even if audio instance is gone, sync state if it was playing
   const existing = uiState.ttsAudios[audioKey];
-  if (existing && existing.status === "playing") {
+  if (existing && (existing.status === "playing" || existing.status === "paused")) {
     uiState = {
       ...uiState,
       ttsAudios: {
@@ -705,21 +790,31 @@ function pauseMimoAudio(audioKey) {
 
 /**
  * Resume a MiMo audio by key.
+ * If no Audio instance exists but entry has audioUrl, recreates it.
  * @param {string} audioKey
  */
 function resumeMimoAudio(audioKey) {
   const existing = uiState.ttsAudios[audioKey];
-  if (existing && existing.status === "paused" && existing.audioUrl) {
-    uiState = {
-      ...uiState,
-      currentVoicePlayback: {
-        ...uiState.currentVoicePlayback,
-        status: "playing",
-        error: "",
-        updatedAt: Date.now(),
-      },
-    };
-    render();
+  if (!existing || existing.status !== "paused" || !existing.audioUrl) return;
+
+  // Update playback state to playing first
+  uiState = {
+    ...uiState,
+    currentVoicePlayback: {
+      ...uiState.currentVoicePlayback,
+      status: "playing",
+      error: "",
+      updatedAt: Date.now(),
+    },
+    ttsAudios: {
+      ...uiState.ttsAudios,
+      [audioKey]: { ...existing, status: "playing", startedAt: Date.now() },
+    },
+  };
+  render();
+
+  // If Audio instance is gone, recreate it
+  if (!activeMimoAudios.has(audioKey)) {
     playMimoAudio(audioKey, existing.audioUrl);
   }
 }
@@ -1598,7 +1693,7 @@ function render() {
         });
 
         // Stop any active audio before generating
-        stopActiveAudio();
+        stopBroadcastAudio({ reason: "generate-minimax" });
 
         uiState = {
           ...uiState,
@@ -1720,10 +1815,6 @@ function render() {
           hasText: Boolean(text && text.trim()),
         });
 
-        // Stop all other audio (MiniMax broadcast or other MiMo)
-        stopActiveAudio();
-        stopAllMimoAudio();
-
         const currentHash = hashText(text);
         const existing = uiState.ttsAudios[audioKey];
 
@@ -1732,9 +1823,34 @@ function render() {
         const sourceId = residentId || beatId || "";
         const meta = buildVoicePlaybackMeta(audioKey, scene, residentId, beatId, state);
 
-        // If already generated with same hash, just play
-        if (existing && existing.status === "ready" && existing.textHash === currentHash && existing.audioUrl) {
+        // 1. Same key is loading — ignore
+        if (existing?.status === "loading") {
+          voiceLog("mimo:play:skip", { audioKey, reason: "already-loading", status: existing?.status });
+          return;
+        }
+
+        // 2. Same key is playing — pause it, don't stop
+        if (existing?.status === "playing") {
+          voiceLog("mimo:play:pause-same", { audioKey, reason: "pause-same-key" });
+          pauseMimoAudio(audioKey);
+          return;
+        }
+
+        // 3. Same key is paused with valid audio — resume
+        if (existing?.status === "paused" && existing.audioUrl && existing.textHash === currentHash) {
+          voiceLog("mimo:play:resume-cached", { audioKey, scene, status: existing.status });
+          stopBroadcastAudio({ reason: "resume-mimo", clearCurrentPlayback: false });
+          stopAllMimoAudio({ exceptKey: audioKey, nextStatus: "ready", reason: "resume-mimo" });
+          resumeMimoAudio(audioKey);
+          return;
+        }
+
+        // 4. Same key is ready with same hash — replay cached
+        if (existing?.status === "ready" && existing.audioUrl && existing.textHash === currentHash) {
           voiceLog("mimo:play:replay-cached", { audioKey, scene, status: existing.status });
+          stopBroadcastAudio({ reason: "play-cached-mimo", clearCurrentPlayback: false });
+          stopAllMimoAudio({ exceptKey: audioKey, nextStatus: "ready", reason: "play-cached-mimo" });
+          // Set playing state before calling playMimoAudio
           uiState = {
             ...uiState,
             ttsAudios: {
@@ -1760,11 +1876,9 @@ function render() {
           return;
         }
 
-        // If currently loading or playing, ignore
-        if (existing && (existing.status === "loading" || existing.status === "playing")) {
-          voiceLog("mimo:play:skip", { audioKey, reason: "already-loading-or-playing", status: existing?.status });
-          return;
-        }
+        // 5. Stop other audio before generating new
+        stopBroadcastAudio({ reason: "generate-mimo" });
+        stopAllMimoAudio(); // no-arg form — stops all, updates ttsAudios
 
         // Set loading state
         voiceLog("mimo:play:request", { audioKey, scene, textLength: text.length });
@@ -1816,6 +1930,7 @@ function render() {
               },
             };
             render();
+            // playMimoAudio will set currentVoicePlayback via onplay callback
             playMimoAudio(audioKey, result.audioUrl);
           })
           .catch((err) => {
@@ -1921,25 +2036,13 @@ function render() {
       onVoiceStop: () => {
         const cvp = uiState.currentVoicePlayback;
         if (cvp?.provider === "minimax") {
-          stopActiveAudio();
-          uiState = {
-            ...uiState,
-            broadcastAudio: { ...uiState.broadcastAudio, status: "ready" },
-            currentVoicePlayback: makeVoicePlaybackState(),
-          };
+          stopBroadcastAudio({ reason: "voice-stop" });
         } else if (cvp?.provider === "mimo" && cvp.key) {
-          stopMimoAudio(cvp.key);
-          const entry = uiState.ttsAudios[cvp.key];
-          if (entry) {
-            uiState = {
-              ...uiState,
-              ttsAudios: { ...uiState.ttsAudios, [cvp.key]: { ...entry, status: "ready" } },
-              currentVoicePlayback: makeVoicePlaybackState(),
-            };
-          }
+          stopAllMimoAudio({ reason: "voice-stop" });
         } else {
           // Nothing playing, just clear
           uiState = { ...uiState, currentVoicePlayback: makeVoicePlaybackState() };
+          render();
         }
         render();
       },

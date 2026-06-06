@@ -133,7 +133,7 @@ console.log("\n── Stop clears playback state ──");
   const content = fs.readFileSync("./src/app.js", "utf8");
   const stopFn = content.split("onVoiceStop:")[1]?.split("onAssignTask")[0] ?? "";
   assert(stopFn.includes("makeVoicePlaybackState()"), "stop calls makeVoicePlaybackState() to clear");
-  assert(stopFn.includes("stopActiveAudio()") || stopFn.includes("stopMimoAudio"), "stop stops audio");
+  assert(stopFn.includes("stopBroadcastAudio(") || stopFn.includes("stopAllMimoAudio("), "stop stops audio");
 }
 
 // ── 12. New audio stops old audio ─────────────────────────────────────────
@@ -141,10 +141,10 @@ console.log("\n── New audio stops old audio ──");
 {
   const fs = await import("fs");
   const content = fs.readFileSync("./src/app.js", "utf8");
-  // onPlayMimoTts should call stopActiveAudio() before playing
+  // onPlayMimoTts should call stopBroadcastAudio() before playing MiMo
   const mimoFn = content.split("onPlayMimoTts:")[1]?.split("onPauseMimoTts")[0] ?? "";
-  assert(mimoFn.includes("stopActiveAudio()"), "onPlayMimoTts stops MiniMax audio before playing MiMo");
-  assert(mimoFn.includes("stopAllMimoAudio()"), "onPlayMimoTts stops other MiMo audio before playing");
+  assert(mimoFn.includes("stopBroadcastAudio("), "onPlayMimoTts stops MiniMax audio before playing MiMo");
+  assert(mimoFn.includes("stopAllMimoAudio("), "onPlayMimoTts stops other MiMo audio before playing");
 }
 
 // ── 13. Playback end clears or updates state ─────────────────────────────
