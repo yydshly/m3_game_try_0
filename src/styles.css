@@ -277,8 +277,8 @@ button, select {
 
 .layout {
   display: grid;
-  grid-template-columns: minmax(220px, 260px) minmax(620px, 1fr) minmax(320px, 380px);
-  gap: 16px;
+  grid-template-columns: minmax(200px, 230px) minmax(640px, 1fr) minmax(300px, 360px);
+  gap: 14px;
   align-items: start;
 }
 
@@ -293,12 +293,12 @@ button, select {
 .game-actions {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   background: var(--panel);
-  border-radius: 20px;
+  border-radius: 16px;
   border: 1px solid var(--line);
-  box-shadow: var(--shadow-md);
-  padding: 16px;
+  box-shadow: var(--shadow-sm);
+  padding: 14px;
 }
 
 .game-actions__title {
@@ -399,16 +399,16 @@ button, select {
 .game-actions .button--primary,
 .game-actions .button--ai {
   width: 100%;
-  min-height: 48px;
-  font-size: 0.9rem;
+  min-height: 40px;
+  font-size: 0.85rem;
 }
 
 /* Secondary action buttons in left panel */
 .game-actions .button--ghost,
 .game-actions .button--secondary {
   width: 100%;
-  min-height: 38px;
-  font-size: 0.8rem;
+  min-height: 32px;
+  font-size: 0.78rem;
 }
 
 /* Stats mini-display in left panel */
@@ -425,10 +425,10 @@ button, select {
 /* Compact Goals Widget */
 .compact-goals {
   background: var(--panel);
-  border-radius: 16px;
+  border-radius: 14px;
   border: 1px solid var(--line);
   box-shadow: var(--shadow-sm);
-  padding: 14px;
+  padding: 12px;
 }
 
 .compact-goals__head {
@@ -447,7 +447,16 @@ button, select {
 .side-panel {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
+}
+
+/* Side panel panels are lighter weight — map is the star */
+.side-panel .panel {
+  box-shadow: var(--shadow-sm);
+}
+
+.side-panel .panel:hover {
+  box-shadow: var(--shadow-md);
 }
 
 /* ============================================================
@@ -458,7 +467,7 @@ button, select {
   background: var(--panel);
   border-radius: 20px;
   border: 1px solid var(--line);
-  box-shadow: var(--shadow-md);
+  box-shadow: 0 6px 24px rgba(61, 48, 39, 0.14);
   padding: 20px;
   overflow: hidden;
 }
@@ -490,7 +499,7 @@ button, select {
   border-radius: 16px;
   overflow: hidden;
   border: 3px solid var(--line-strong);
-  box-shadow: 0 8px 32px rgba(61, 48, 39, 0.15);
+  box-shadow: 0 8px 32px rgba(61, 48, 39, 0.18);
 }
 
 /* Phase tints over the SVG background */
@@ -1647,6 +1656,22 @@ button, select {
   border-color: var(--purple);
   border-width: 1px;
 }
+
+.event-director--idle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.event-director__idle-icon { font-size: 0.9rem; }
+.event-director__idle-label { font-weight: 700; color: var(--ink-light); }
+.event-director__idle-text { color: var(--muted); }
 
 .event-director--ready {
   background: linear-gradient(145deg, var(--green-soft), var(--panel));

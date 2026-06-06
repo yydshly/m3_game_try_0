@@ -29,6 +29,7 @@
     "completion-check": "node scripts/completion-feedback-check.mjs",
     "tts-check": "node scripts/tts-check.mjs",
     "memory-reference-check": "node scripts/memory-reference-check.mjs",
-    "resident-feedback-check": "node scripts/resident-feedback-check.mjs"
+    "resident-feedback-check": "node scripts/resident-feedback-check.mjs",
+    "desktop-ui-polish-check": "node scripts/desktop-ui-polish-check.mjs"
   }
 }

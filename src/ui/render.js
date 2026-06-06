@@ -337,19 +337,31 @@ function renderLlmStatus(uiState) {
 
 function renderEventDirectorStatus(uiState) {
   const statusLabels = {
-    idle: { icon: "🎭", label: "idle", text: "让 M3 观察小镇，生成一个今天的小事件。" },
+    idle: { icon: "🎭", label: "待机", text: "让 M3 观察小镇，生成一个今天的小事件。" },
     loading: { icon: "🎭", label: "思考中", text: "M3 正在观察居民和小镇动态……" },
     ready: { icon: "✨", label: "已就绪", text: uiState.eventDirectorMessage || "小镇事件已加入动态。" },
     error: { icon: "⚠️", label: "异常", text: uiState.eventDirectorMessage || "事件导演暂时没有灵感，请稍后再试。" },
   };
   const info = statusLabels[uiState.eventDirectorStatus] ?? statusLabels.idle;
   const isError = uiState.eventDirectorStatus === "error";
+  const isIdle = uiState.eventDirectorStatus === "idle";
+
+  // Idle state: compact single-line style
+  if (isIdle) {
+    return `
+      <div class="event-director event-director--idle">
+        <span class="event-director__idle-icon">${info.icon}</span>
+        <span class="event-director__idle-label">小镇事件导演：</span>
+        <span class="event-director__idle-text">${escapeHtml(info.text)}</span>
+      </div>
+    `;
+  }
 
   return `
-    <section class="panel event-director event-director--${escapeHtml(uiState.eventDirectorStatus ?? "idle")}">
+    <section class="panel event-director event-director--${escapeHtml(uiState.eventDirectorStatus ?? "ready")}">
       <div class="panel__head">
         <h2>${info.icon} 小镇事件导演</h2>
-        <span class="llm-status-badge llm-status-badge--${escapeHtml(uiState.eventDirectorStatus ?? "idle")}">${escapeHtml(info.label)}</span>
+        <span class="llm-status-badge llm-status-badge--${escapeHtml(uiState.eventDirectorStatus ?? "ready")}">${escapeHtml(info.label)}</span>
       </div>
       <p>${escapeHtml(info.text)}</p>
       ${isError && uiState.eventDirectorMessage ? `<p class="llm-status__hint">💡 检查 MiniMax 配置或稍后重试。</p>` : ""}
@@ -548,7 +560,7 @@ function renderStageCharacter(resident, position, taskLabel, status, isSelected,
       ${completionBadge}
       ${moodIconHtml}
       <span class="stage-character__name">${escapeHtml(resident.name)}</span>
-      ${task ? `<span class="stage-character__task">${escapeHtml(task)}</span>` : ""}
+      ${!anim && task ? `<span class="stage-character__task">${escapeHtml(task)}</span>` : ""}
       ${actionBubble}
     </button>
   `;
@@ -630,7 +642,7 @@ function renderTownStage(state, uiState) {
           ? `
           <aside class="stage-bubble" aria-live="polite">
             <span class="stage-bubble__tag">📌 最新动态</span>
-            <p>${escapeHtml(latestEvent.text)}</p>
+            <p>${escapeHtml(latestEvent.text.slice(0, 120))}${latestEvent.text.length > 120 ? "…" : ""}</p>
           </aside>`
           : ""
       }
