@@ -413,6 +413,152 @@ function stopAllMimoAudio() {
 }
 
 /**
+ * Play (or resume) the MiniMax broadcast audio.
+ * Handles play/pause toggle: if already playing → pause.
+ * If paused → resume. If ended → replay from start.
+ */
+function playBroadcastAudio() {
+  const ba = uiState.broadcastAudio;
+
+  if (!ba?.audioUrl) {
+    voiceLog("minimax:play:skip", { reason: "no-audioUrl", status: ba?.status });
+    return;
+  }
+
+  // If already playing, pause it
+  if (ba.status === "playing") {
+    pauseBroadcastAudio();
+    return;
+  }
+
+  voiceLog("minimax:play:start", {
+    status: ba.status,
+    hasAudioUrl: Boolean(ba.audioUrl),
+    textLength: (ba.text || "").length,
+  });
+
+  // Stop any other audio before playing
+  stopActiveAudio();
+  stopAllMimoAudio();
+
+  uiState = {
+    ...uiState,
+    currentVoicePlayback: makeVoicePlaybackState({
+      key: "minimax-broadcast",
+      provider: "minimax",
+      scene: "town_broadcast",
+      sourceType: "town_broadcast",
+      sourceId: "",
+      title: "小镇广播",
+      subtitle: "",
+      textPreview: (ba.text || "").slice(0, 40),
+      status: "playing",
+      startedAt: Date.now(),
+      updatedAt: Date.now(),
+    }),
+  };
+
+  activeAudio = new Audio(ba.audioUrl);
+
+  activeAudio.onplay = () => {
+    voiceLog("minimax:play:playing", { hasAudioUrl: Boolean(ba.audioUrl) });
+    uiState = {
+      ...uiState,
+      broadcastAudio: { ...uiState.broadcastAudio, status: "playing" },
+      currentVoicePlayback: { ...uiState.currentVoicePlayback, status: "playing", updatedAt: Date.now() },
+    };
+    render();
+  };
+
+  activeAudio.onpause = () => {
+    // Only mark paused if it wasn't ended naturally (ended → ready, paused → paused)
+    if (uiState.broadcastAudio.status === "playing") {
+      voiceLog("minimax:play:paused", {});
+      uiState = {
+        ...uiState,
+        broadcastAudio: { ...uiState.broadcastAudio, status: "paused" },
+        currentVoicePlayback: { ...uiState.currentVoicePlayback, status: "paused", updatedAt: Date.now() },
+      };
+      render();
+    }
+  };
+
+  activeAudio.onended = () => {
+    voiceLog("minimax:play:ended", {});
+    uiState = {
+      ...uiState,
+      broadcastAudio: { ...uiState.broadcastAudio, status: "ready" },
+      currentVoicePlayback: makeVoicePlaybackState(), // clear
+    };
+    activeAudio = null;
+    render();
+  };
+
+  activeAudio.onerror = () => {
+    voiceLog("minimax:play:error", { errorName: "AudioError", status: ba.status });
+    uiState = {
+      ...uiState,
+      broadcastAudio: {
+        ...uiState.broadcastAudio,
+        status: "error",
+        error: "音频播放失败，请稍后重试。",
+        debugCode: "MINIMAX_TTS_AUDIO_PLAY_FAILED",
+      },
+      currentVoicePlayback: {
+        ...uiState.currentVoicePlayback,
+        status: "error",
+        error: "音频播放失败，请稍后重试。",
+        debugCode: "MINIMAX_TTS_AUDIO_PLAY_FAILED",
+        updatedAt: Date.now(),
+      },
+    };
+    activeAudio = null;
+    render();
+  };
+
+  activeAudio.play().catch((error) => {
+    // Autoplay blocked by browser — treat as paused, not error
+    voiceLog("minimax:play:blocked", {
+      hasAudioUrl: Boolean(ba.audioUrl),
+      debugCode: "MINIMAX_TTS_AUTOPLAY_FAILED",
+      errorName: error?.name,
+      errorMessage: (error?.message ?? "").slice(0, 80),
+    });
+    uiState = {
+      ...uiState,
+      broadcastAudio: {
+        ...uiState.broadcastAudio,
+        status: "paused",
+        debugCode: "MINIMAX_TTS_AUTOPLAY_FAILED",
+      },
+      currentVoicePlayback: { ...uiState.currentVoicePlayback, status: "paused", debugCode: "MINIMAX_TTS_AUTOPLAY_FAILED", updatedAt: Date.now() },
+    };
+    activeAudio = null;
+    render();
+  });
+}
+
+/**
+ * Pause the MiniMax broadcast audio.
+ */
+function pauseBroadcastAudio() {
+  if (activeAudio && !activeAudio.paused) {
+    activeAudio.pause();
+    // status will transition to "paused" via onpause handler
+  }
+  // Always update UI to paused (in case audio was already paused or ended)
+  if (uiState.broadcastAudio.status === "playing") {
+    voiceLog("minimax:pause", { status: uiState.broadcastAudio.status });
+    uiState = {
+      ...uiState,
+      broadcastAudio: { ...uiState.broadcastAudio, status: "paused" },
+      currentVoicePlayback: { ...uiState.currentVoicePlayback, status: "paused", updatedAt: Date.now() },
+    };
+    render();
+  }
+}
+
+/**
  * Start playing a MiMo audio URL for a given audioKey.
  * @param {string} audioKey
  * @param {string} audioUrl
@@ -515,10 +661,11 @@ function playMimoAudio(audioKey, audioUrl) {
   audio.play().catch(() => {
     // Autoplay blocked — treat as paused
     voiceLog("mimo:audio:blocked", { audioKey });
-    if (entry) {
+    const currentEntry = uiState.ttsAudios[audioKey];
+    if (currentEntry) {
       uiState = {
         ...uiState,
-        ttsAudios: { ...uiState.ttsAudios, [audioKey]: { ...entry, status: "paused" } },
+        ttsAudios: { ...uiState.ttsAudios, [audioKey]: { ...currentEntry, status: "paused" } },
         currentVoicePlayback: {
           ...uiState.currentVoicePlayback,
           status: "paused",
@@ -529,6 +676,52 @@ function playMimoAudio(audioKey, audioUrl) {
     }
     activeMimoAudios.delete(audioKey);
   });
+}
+
+/**
+ * Pause a MiMo audio by key.
+ * @param {string} audioKey
+ */
+function pauseMimoAudio(audioKey) {
+  const audio = activeMimoAudios.get(audioKey);
+  if (audio) audio.pause();
+  const existing = uiState.ttsAudios[audioKey];
+  if (existing && existing.status === "playing") {
+    uiState = {
+      ...uiState,
+      ttsAudios: {
+        ...uiState.ttsAudios,
+        [audioKey]: { ...existing, status: "paused" },
+      },
+      currentVoicePlayback: {
+        ...uiState.currentVoicePlayback,
+        status: "paused",
+        updatedAt: Date.now(),
+      },
+    };
+    render();
+  }
+}
+
+/**
+ * Resume a MiMo audio by key.
+ * @param {string} audioKey
+ */
+function resumeMimoAudio(audioKey) {
+  const existing = uiState.ttsAudios[audioKey];
+  if (existing && existing.status === "paused" && existing.audioUrl) {
+    uiState = {
+      ...uiState,
+      currentVoicePlayback: {
+        ...uiState.currentVoicePlayback,
+        status: "playing",
+        error: "",
+        updatedAt: Date.now(),
+      },
+    };
+    render();
+    playMimoAudio(audioKey, existing.audioUrl);
+  }
 }
 
 /**
@@ -1442,7 +1635,7 @@ function render() {
           };
           render();
           // Auto-play after successful generation
-          handlers.onPlayTts();
+          playBroadcastAudio();
         } catch (error) {
           // Categorize MiniMax TTS errors for dev debugging
           // NOTE: generateBroadcastSpeech only throws on actual failure (network error,
@@ -1499,121 +1692,10 @@ function render() {
         }
       },
       onPlayTts: () => {
-        const ba = uiState.broadcastAudio;
-        if (!ba.audioUrl) {
-          voiceLog("minimax:play:skip", { reason: "no-audioUrl", status: ba.status });
-          return;
-        }
-        // If already playing, pause it
-        if (ba.status === "playing") {
-          voiceLog("minimax:play:pause-toggle", { status: ba.status, hasAudioUrl: Boolean(ba.audioUrl) });
-          handlers.onPauseTts();
-          return;
-        }
-
-        voiceLog("minimax:play:start", { status: ba.status, hasAudioUrl: Boolean(ba.audioUrl), textLength: (ba.text || "").length });
-
-        // Stop any other audio before playing
-        stopActiveAudio();
-        stopAllMimoAudio();
-
-        // Sync global voice playback state
-        uiState = {
-          ...uiState,
-          currentVoicePlayback: makeVoicePlaybackState({
-            key: "minimax-broadcast",
-            provider: "minimax",
-            scene: "town_broadcast",
-            sourceType: "town_broadcast",
-            sourceId: "",
-            title: "小镇广播",
-            subtitle: "",
-            textPreview: (ba.text || "").slice(0, 40),
-            status: "playing",
-            startedAt: Date.now(),
-            updatedAt: Date.now(),
-          }),
-        };
-
-        activeAudio = new Audio(ba.audioUrl);
-
-        activeAudio.onplay = () => {
-          voiceLog("minimax:play:playing", { hasAudioUrl: Boolean(ba.audioUrl) });
-          uiState = {
-            ...uiState,
-            broadcastAudio: { ...uiState.broadcastAudio, status: "playing" },
-            currentVoicePlayback: { ...uiState.currentVoicePlayback, status: "playing", updatedAt: Date.now() },
-          };
-          render();
-        };
-
-        activeAudio.onpause = () => {
-          // Only mark paused if it wasn't ended naturally (ended → ready, paused → paused)
-          if (uiState.broadcastAudio.status === "playing") {
-            voiceLog("minimax:play:paused", {});
-            uiState = {
-              ...uiState,
-              broadcastAudio: { ...uiState.broadcastAudio, status: "paused" },
-              currentVoicePlayback: { ...uiState.currentVoicePlayback, status: "paused", updatedAt: Date.now() },
-            };
-            render();
-          }
-        };
-
-        activeAudio.onended = () => {
-          voiceLog("minimax:play:ended", {});
-          uiState = {
-            ...uiState,
-            broadcastAudio: { ...uiState.broadcastAudio, status: "ready" },
-            currentVoicePlayback: makeVoicePlaybackState(), // clear
-          };
-          activeAudio = null;
-          render();
-        };
-
-        activeAudio.onerror = () => {
-          voiceLog("minimax:play:error", { errorName: "AudioError", status: ba.status });
-          uiState = {
-            ...uiState,
-            broadcastAudio: {
-              ...uiState.broadcastAudio,
-              status: "error",
-              error: "音频播放失败，请稍后重试。",
-              debugCode: "MINIMAX_TTS_AUDIO_PLAY_FAILED",
-            },
-            currentVoicePlayback: {
-              ...uiState.currentVoicePlayback,
-              status: "error",
-              error: "音频播放失败，请稍后重试。",
-              updatedAt: Date.now(),
-            },
-          };
-          activeAudio = null;
-          render();
-        };
-
-        activeAudio.play().catch(() => {
-          // Autoplay blocked by browser — treat as paused, not error
-          voiceLog("minimax:play:blocked", { hasAudioUrl: Boolean(ba.audioUrl) });
-          uiState = {
-            ...uiState,
-            broadcastAudio: {
-              ...uiState.broadcastAudio,
-              status: "paused",
-              debugCode: "MINIMAX_TTS_AUTOPLAY_FAILED",
-            },
-            currentVoicePlayback: { ...uiState.currentVoicePlayback, status: "paused", updatedAt: Date.now() },
-          };
-          activeAudio = null;
-          render();
-        });
+        playBroadcastAudio();
       },
       onPauseTts: () => {
-        if (activeAudio && uiState.broadcastAudio.status === "playing") {
-          voiceLog("minimax:pause", { status: uiState.broadcastAudio.status });
-          activeAudio.pause();
-          // status will transition to "paused" via onpause handler above
-        }
+        pauseBroadcastAudio();
       },
       // ── MiMo TTS for lightweight scenes ────────────────────────────────────
       /**
@@ -1710,7 +1792,7 @@ function render() {
 
         // Resolve provider and call appropriate generator
         resolveTtsProviderForScene(scene); // no-op, provider is always mimo
-        generateMimoSpeech({ scene, text, voice: "default", emotion: "neutral", speed: 1.0 })
+        generateMimoSpeech({ scene, text, emotion: "neutral", speed: 1.0 })
           .then((result) => {
             voiceLog("mimo:play:success", {
               audioKey, scene,
@@ -1820,9 +1902,9 @@ function render() {
         const cvp = uiState.currentVoicePlayback;
         if (!cvp || cvp.status !== "playing") return;
         if (cvp.provider === "minimax") {
-          handlers.onPauseTts();
+          pauseBroadcastAudio();
         } else if (cvp.provider === "mimo" && cvp.key) {
-          handlers.onPauseMimoTts(cvp.key);
+          pauseMimoAudio(cvp.key);
         }
       },
       /** Resume whatever is currently paused */
@@ -1830,9 +1912,9 @@ function render() {
         const cvp = uiState.currentVoicePlayback;
         if (!cvp || cvp.status !== "paused") return;
         if (cvp.provider === "minimax") {
-          handlers.onPlayTts();
+          playBroadcastAudio();
         } else if (cvp.provider === "mimo" && cvp.key) {
-          handlers.onResumeMimoTts(cvp.key);
+          resumeMimoAudio(cvp.key);
         }
       },
       /** Stop all audio and clear the global playback state */
