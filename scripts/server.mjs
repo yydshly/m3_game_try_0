@@ -1364,6 +1364,20 @@ async function handleMimoTts(request, response) {
       keyPrefix,
     });
 
+    // [tts:mimo:request-shape] — safe structural log, no secrets
+    console.info(`[tts:mimo:request-shape] ${requestId}`, {
+      requestId,
+      model: chatPayload.model,
+      messageCount: chatPayload.messages?.length ?? 0,
+      messageRoles: (chatPayload.messages ?? []).map((m) => m.role),
+      userContentLength: chatPayload.messages?.[0]?.content?.length ?? 0,
+      assistantContentLength: chatPayload.messages?.[1]?.content?.length ?? 0,
+      audioKeys: Object.keys(chatPayload.audio ?? {}),
+      audioFormat: chatPayload.audio?.format,
+      audioVoice: chatPayload.audio?.voice,
+      topLevelKeys: Object.keys(chatPayload),
+    });
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), mimoTimeoutMs);
 

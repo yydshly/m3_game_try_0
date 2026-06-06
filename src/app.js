@@ -1445,21 +1445,36 @@ function render() {
           handlers.onPlayTts();
         } catch (error) {
           // Categorize MiniMax TTS errors for dev debugging
+          // NOTE: generateBroadcastSpeech only throws on actual failure (network error,
+          // HTTP non-ok, or server-side ok=false). It NEVER throws on success.
+          // So if we are here, the TTS request genuinely failed.
           const msg = error.message ?? "";
           // Extract server-side debugCode and requestId if embedded in message
           const debugCodeMatch = msg.match(/\[([A-Z_]+)\]/);
           const requestIdMatch = msg.match(/\(req:\s*([^)]+)\)/);
-          const devTag = debugCodeMatch ? debugCodeMatch[1] : "MINIMAX_TTS_REQUEST_FAILED";
+          const serverDebugCode = debugCodeMatch ? debugCodeMatch[1] : null;
           const requestId = requestIdMatch ? requestIdMatch[1] : null;
-          if (msg.includes("fetch") || msg.includes("network") || msg.includes("Network")) {
-            devTag = "MINIMAX_TTS_NETWORK_ERROR";
+
+          // Determine the appropriate debug code:
+          // - Use the actual server code if present (e.g. MINIMAX_TTS_UPSTREAM_ERROR,
+          //   MINIMAX_TTS_NO_AUDIO, MINIMAX_TTS_NO_DATA)
+          // - Otherwise categorize by error type
+          let devTag;
+          if (serverDebugCode) {
+            devTag = serverDebugCode;
+          } else if (msg.includes("fetch") || msg.includes("network") || msg.includes("Network") || msg.includes("Failed to fetch")) {
+            devTag = "MINIMAX_TTS_REQUEST_FAILED";
           } else if (msg.includes("400") || msg.includes("401") || msg.includes("403")) {
             devTag = "MINIMAX_TTS_AUTH_ERROR";
           } else if (msg.includes("500") || msg.includes("502") || msg.includes("503")) {
             devTag = "MINIMAX_TTS_SERVER_ERROR";
+          } else {
+            devTag = "MINIMAX_TTS_REQUEST_FAILED";
           }
+
           voiceLog("minimax:generate:error", {
             debugCode: devTag,
+            serverDebugCode,
             requestId,
             errorName: error.name,
             errorMessageSafe: msg.slice(0, 120),
@@ -1564,6 +1579,7 @@ function render() {
               ...uiState.broadcastAudio,
               status: "error",
               error: "音频播放失败，请稍后重试。",
+              debugCode: "MINIMAX_TTS_AUDIO_PLAY_FAILED",
             },
             currentVoicePlayback: {
               ...uiState.currentVoicePlayback,
@@ -1577,11 +1593,15 @@ function render() {
         };
 
         activeAudio.play().catch(() => {
-          // Autoplay blocked — treat as paused
+          // Autoplay blocked by browser — treat as paused, not error
           voiceLog("minimax:play:blocked", { hasAudioUrl: Boolean(ba.audioUrl) });
           uiState = {
             ...uiState,
-            broadcastAudio: { ...uiState.broadcastAudio, status: "paused" },
+            broadcastAudio: {
+              ...uiState.broadcastAudio,
+              status: "paused",
+              debugCode: "MINIMAX_TTS_AUTOPLAY_FAILED",
+            },
             currentVoicePlayback: { ...uiState.currentVoicePlayback, status: "paused", updatedAt: Date.now() },
           };
           activeAudio = null;
