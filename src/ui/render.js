@@ -331,6 +331,13 @@ function renderGameActions(state, safeUiState, handlers = {}) {
         ${safeUiState.residentVoiceInteraction?.enabled ? '<p class="game-actions__voice-hint">开启后，可点击居民对白和选择反应播放 MiMo 语音</p>' : ""}
       </div>
       <div class="game-actions__section">
+        <p class="game-actions__section-label">💬 居民对话演出</p>
+        ${safeUiState.residentConversation?.status === "playing" ? `<button class="button button--conversation-pause" type="button" data-action="toggle-conversation">⏸️ 暂停</button>` : ""}
+        ${safeUiState.residentConversation?.status === "paused" ? `<button class="button button--conversation-resume" type="button" data-action="toggle-conversation">▶️ 继续</button>` : ""}
+        ${(safeUiState.residentConversation?.status === "playing" || safeUiState.residentConversation?.status === "paused") ? `<button class="button button--ghost" type="button" data-action="stop-conversation">⏹️ 停止</button>` : ""}
+        ${(!safeUiState.residentConversation?.enabled || safeUiState.residentConversation?.status === "idle" || safeUiState.residentConversation?.status === "completed" || safeUiState.residentConversation?.status === "error") ? `<button class="button button--conversation-start" type="button" data-action="toggle-conversation">💬 开启对话演出</button>` : ""}
+      </div>
+      <div class="game-actions__section">
         <p class="game-actions__section-label">⚙️ 其他</p>
         <button class="button ${safeUiState.autoPlay ? "button--live" : "button--ghost"}" type="button" data-action="toggle-auto">
           ${safeUiState.autoPlay ? "⏸️ 暂停" : "▶️ 自动推进"}
@@ -789,7 +796,7 @@ function renderCharacterVoiceIndicator(resident, beat, voiceState, ttsAudios) {
   return `<button class="stage-character__voice-btn stage-character__voice-btn--idle" type="button" data-action="play-mimo-tts" data-audio-key="${escapeHtml(audioKey)}" data-text="${escapeHtml(beat.dialogue ?? '')}" data-scene="resident_dialogue" data-resident-id="${escapeHtml(resident.id)}" data-beat-id="${escapeHtml(beat.id ?? '')}" title="播放 ${escapeHtml(resident.name)} 的对白">🔈</button>`;
 }
 
-function renderStageCharacter(resident, position, taskLabel, status, isSelected, anim, completionResult, moodView, activeScenario, beat, residentVoiceInteraction = null, ttsAudios = {}) {
+function renderStageCharacter(resident, position, taskLabel, status, isSelected, anim, completionResult, moodView, activeScenario, beat, residentVoiceInteraction = null, ttsAudios = {}, residentConversation = null) {
   const toX = position.x;
   const toY = position.y;
   const selectedClass = isSelected ? " stage-character--selected" : "";
@@ -848,6 +855,17 @@ function renderStageCharacter(resident, position, taskLabel, status, isSelected,
         : `<span class="stage-character__dialogue stage-character__dialogue--scenario">${escapeHtml(beat.dialogue.slice(0, 28))}</span>`)
     : "";
 
+  // Conversation bubble — shown when this resident is the current speaker
+  const currentLine = residentConversation?.queue?.[residentConversation?.currentIndex];
+  const isConversationSpeaker = currentLine?.speakerId === resident.id;
+  const isConversationActive = residentConversation?.status === "playing" || residentConversation?.status === "paused";
+  const conversationBubble = (isConversationActive && isConversationSpeaker && residentConversation?.visibleText)
+    ? `<span class="stage-character__dialogue stage-character__dialogue--conversation">${escapeHtml(residentConversation.visibleText)}</span>`
+    : "";
+
+  // Speaker highlight when conversation is active
+  const speakerClass = (isConversationActive && isConversationSpeaker) ? " stage-character--speaking" : "";
+
   // Completion badge shown after animation
   const completionBadge = completionResult
     ? `<span class="stage-character__completion-badge" title="${escapeHtml(completionResult.label)}">${escapeHtml(completionResult.icon)}</span>`
@@ -860,7 +878,7 @@ function renderStageCharacter(resident, position, taskLabel, status, isSelected,
 
   return `
     <button
-      class="stage-character${selectedClass}${statusClass}${extraClasses}"
+      class="stage-character${selectedClass}${statusClass}${extraClasses}${speakerClass}"
       style="${extraStyles}"
       data-action="select-resident"
       data-resident-id="${escapeHtml(resident.id)}"
@@ -878,6 +896,7 @@ function renderStageCharacter(resident, position, taskLabel, status, isSelected,
       ${!anim && task ? `<span class="stage-character__task">${escapeHtml(getEnhancedTaskLabel(task, activeScenario))}</span>` : ""}
       ${actionBubble}
       ${dialogueBubble}
+      ${conversationBubble}
       ${renderCharacterVoiceIndicator(resident, beat, residentVoiceInteraction, ttsAudios)}
     </button>
   `;
@@ -1003,6 +1022,7 @@ function renderTownStage(state, uiState) {
         beat,
         uiState.residentVoiceInteraction,
         uiState.ttsAudios,
+        uiState.residentConversation,
       );
     })
     .join("");
@@ -1647,6 +1667,12 @@ function bindEvents(root, handlers) {
   root.querySelector("[data-action='voice-pause']")?.addEventListener("click", handlers.onVoicePause);
   root.querySelector("[data-action='voice-resume']")?.addEventListener("click", handlers.onVoiceResume);
   root.querySelector("[data-action='voice-stop']")?.addEventListener("click", handlers.onVoiceStop);
+  root.querySelectorAll("[data-action='toggle-conversation']").forEach((button) => {
+    button.addEventListener("click", handlers.onToggleConversation);
+  });
+  root.querySelectorAll("[data-action='stop-conversation']").forEach((button) => {
+    button.addEventListener("click", handlers.onStopConversation);
+  });
   root.querySelector("[data-action='clear-voice-debug']")?.addEventListener("click", () => {
     if (Array.isArray(window.__VOICE_DEBUG__)) window.__VOICE_DEBUG__.length = 0;
     const panel = root.querySelector(".voice-debug-panel");
@@ -1681,6 +1707,7 @@ export function renderApp(root, state, handlers, uiState = {}) {
     dayOpeningReflection: uiState.dayOpeningReflection ?? null,
     residentVoiceInteraction: uiState.residentVoiceInteraction ?? { enabled: false, recommendedClipKey: "", lastTriggeredAt: 0, hint: "" },
     residentVoiceClips: Array.isArray(uiState.residentVoiceClips) ? uiState.residentVoiceClips : [],
+    residentConversation: uiState.residentConversation ?? { enabled: false, status: "idle", queue: [], currentIndex: 0, currentLineId: "", visibleText: "", typingTimerId: null, autoPlayVoice: true, error: "" },
   };
 
   const safeHandlers = {
@@ -1706,6 +1733,8 @@ export function renderApp(root, state, handlers, uiState = {}) {
     onVoicePause: handlers.onVoicePause ?? (() => {}),
     onVoiceResume: handlers.onVoiceResume ?? (() => {}),
     onVoiceStop: handlers.onVoiceStop ?? (() => {}),
+    onToggleConversation: handlers.onToggleConversation ?? (() => {}),
+    onStopConversation: handlers.onStopConversation ?? (() => {}),
   };
 
   root.innerHTML = `

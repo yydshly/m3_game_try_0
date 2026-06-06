@@ -79,6 +79,17 @@ let uiState = {
     hint: "",
   },
   residentVoiceClips: [],
+  residentConversation: {
+    enabled: false,
+    status: "idle", // idle | playing | paused | completed | error
+    queue: [],      // array of conversation lines
+    currentIndex: 0,
+    currentLineId: "",
+    visibleText: "",
+    typingTimerId: null,
+    autoPlayVoice: true,
+    error: "",
+  },
 };
 let autoPlayTimer = null;
 let animationTimer = null;
@@ -141,6 +152,510 @@ function makeVoicePlaybackState(overrides = {}) {
     updatedAt: 0,
     ...overrides,
   };
+}
+
+// ── Resident Conversation ─────────────────────────────────────────────────────
+
+/**
+ * Build a resident conversation queue using local templates (no M3 call).
+ * Returns 3-5 short dialogue lines based on scenario, location, or fallback.
+ * @param {object} state - game state
+ * @param {object} conversationState - residentConversation uiState slice
+ * @returns {Array} queue of conversation lines
+ */
+function buildResidentConversationQueue(state, conversationState) {
+  const residents = state.residents ?? [];
+  if (residents.length < 2) return [];
+
+  const activeScenario = state.residentConversation?.activeScenario ?? null;
+  const beats = state.residentSceneBeats ?? [];
+
+  // Collect pairs: prefer same-location pairs, then scenario-relevant residents
+  const byLocation = {};
+  for (const r of residents) {
+    const loc = r.locationId ?? "";
+    if (!byLocation[loc]) byLocation[loc] = [];
+    byLocation[loc].push(r);
+  }
+  const sameLocPairs = Object.values(byLocation).filter(arr => arr.length >= 2);
+
+  /** @type {Array<{speaker: object, target: object}>} */
+  let pairs = [];
+
+  if (sameLocPairs.length > 0) {
+    for (const group of sameLocPairs) {
+      for (let i = 0; i < group.length; i++) {
+        for (let j = i + 1; j < group.length; j++) {
+          pairs.push({ speaker: group[i], target: group[j] });
+          if (pairs.length >= 3) break;
+        }
+        if (pairs.length >= 3) break;
+      }
+      if (pairs.length >= 3) break;
+    }
+  }
+
+  // Fallback: use first two residents
+  if (pairs.length < 2) {
+    pairs = [
+      { speaker: residents[0], target: residents[1] },
+      { speaker: residents[1], target: residents[0] },
+    ];
+  }
+
+  // Scene-based templates
+  const TEMPLATES = {
+    garden_day: [
+      ["speaker.name，花园这边的架子有点松了。", "target.name，浇水的时候小心点。"],
+      ["target.name，你看这棵发芽了！", "真的呢，要好好照顾。"],
+    ],
+    repair_moment: [
+      ["speaker.name，这个工具放哪里？", "target.name，在那边的架子上。"],
+      ["谢谢 target.name！", "不客气，一起加油。"],
+    ],
+    market_errand: [
+      ["speaker.name，食材准备好了吗？", "target.name，还差一点点。"],
+      ["那我去采购吧。", "好的，辛苦 target.name 了。"],
+    ],
+    quiet_reading: [
+      ["speaker.name，这本书真不错。", "target.name，是啊，很安静的感觉。"],
+      ["target.name，借你看一下。", "好的，谢谢 speaker.name。"],
+    ],
+    neighbor_help: [
+      ["speaker.name，需要帮忙吗？", "target.name，太好了，一起吧。"],
+      ["target.name，分工合作更快。", "嗯，有伴真好。"],
+    ],
+    festival_prepare: [
+      ["speaker.name，节日布置好了吗？", "target.name，快了，一起看看。"],
+      ["target.name，这个位置不错。", "嗯，很温馨。"],
+    ],
+    weather_shift: [
+      ["speaker.name，好像要下雨了。", "target.name，那我们赶紧回去吧。"],
+      ["好的，去收东西。", "嗯，target.name 带把伞吧。"],
+    ],
+    resident_mood: [
+      ["speaker.name，今天感觉怎么样？", "target.name，还不错，你呢？"],
+      ["我也挺好的。", "那就好，一起加油。"],
+    ],
+  };
+
+  const SCENARIO_MAP = {
+    neighbor互助: "neighbor_help",
+    garden花园: "garden_day",
+    market采购: "market_errand",
+    repair修理: "repair_moment",
+    reading阅读: "quiet_reading",
+    festival节日: "festival_prepare",
+    weather天气: "weather_shift",
+    resident_mood心情: "resident_mood",
+  };
+
+  let templateKey = "resident_mood";
+  if (activeScenario?.id) {
+    const mapped = SCENARIO_MAP[activeScenario.id];
+    if (mapped && TEMPLATES[mapped]) templateKey = mapped;
+  }
+
+  const lines = TEMPLATES[templateKey] ?? TEMPLATES.resident_mood;
+
+  // Use beats for dynamic names if available
+  const beatMap = {};
+  for (const beat of beats) {
+    if (beat?.residentId && beat?.dialogue) {
+      beatMap[beat.residentId] = beat;
+    }
+  }
+
+  const queue = [];
+  for (let i = 0; i < lines.length; i++) {
+    const pairIdx = i % pairs.length;
+    const { speaker, target } = pairs[pairIdx];
+    const beat = beatMap[speaker.id];
+    const speakerName = beat?.residentName ?? speaker.name ?? "居民";
+    const targetName = beat?.targetName ?? target.name ?? "邻居";
+    const rawText = lines[i] ?? "";
+    const text = rawText.replace(/speaker\.name/g, speakerName).replace(/target\.name/g, targetName);
+    const lineId = `conv-line-${i + 1}`;
+    const audioKey = `conversation:${speaker.id}:${lineId}`;
+
+    queue.push({
+      id: lineId,
+      speakerId: speaker.id,
+      targetId: target.id,
+      speakerName,
+      targetName,
+      text: text.slice(0, 50),
+      scene: "resident_dialogue",
+      audioKey,
+      status: "idle",
+    });
+  }
+
+  return queue;
+}
+
+/**
+ * Clear any active typewriter timer.
+ */
+function clearConversationTimer() {
+  const existing = uiState.residentConversation;
+  if (existing?.typingTimerId != null) {
+    clearTimeout(existing.typingTimerId);
+  }
+}
+
+/**
+ * Advance to the next conversation line (or finish if at end).
+ */
+function advanceConversationLine() {
+  clearConversationTimer();
+  const conv = uiState.residentConversation;
+  if (!conv || conv.status !== "playing") return;
+
+  const nextIndex = conv.currentIndex + 1;
+  if (nextIndex >= conv.queue.length) {
+    // Conversation finished
+    uiState = {
+      ...uiState,
+      residentConversation: {
+        ...conv,
+        status: "completed",
+        typingTimerId: null,
+        currentLineId: "",
+        visibleText: "",
+      },
+      currentVoicePlayback: makeVoicePlaybackState(),
+    };
+    stopAllMimoAudio({ reason: "conversation-done" });
+    render();
+    return;
+  }
+
+  const nextLine = conv.queue[nextIndex];
+  uiState = {
+    ...uiState,
+    residentConversation: {
+      ...conv,
+      currentIndex: nextIndex,
+      currentLineId: nextLine.id,
+      visibleText: "",
+      typingTimerId: null,
+    },
+  };
+  render();
+  playConversationLine(nextLine);
+}
+
+/**
+ * Play a single conversation line: start typewriter and MiMo audio.
+ * @param {object} line - conversation line from queue
+ */
+function playConversationLine(line) {
+  const conv = uiState.residentConversation;
+  if (!conv || (conv.status !== "playing" && conv.status !== "paused")) return;
+
+  // Stop any other audio first
+  stopBroadcastAudio({ reason: "conversation" });
+  stopAllMimoAudio({ exceptKey: line.audioKey, reason: "conversation" });
+
+  // Set ttsAudios entry to loading first
+  const currentHash = hashText(line.text);
+  uiState = {
+    ...uiState,
+    ttsAudios: {
+      ...uiState.ttsAudios,
+      [line.audioKey]: { status: "loading", audioUrl: null, textHash: currentHash, textPreview: line.text.slice(0, 40), error: null },
+    },
+    currentVoicePlayback: makeVoicePlaybackState({
+      key: line.audioKey,
+      provider: "mimo",
+      scene: "conversation",
+      sourceType: "conversation",
+      sourceId: line.speakerId,
+      title: line.speakerName,
+      subtitle: line.targetName ? `对 ${line.targetName} 说` : "对话",
+      textPreview: line.text.slice(0, 40),
+      status: "loading",
+      startedAt: Date.now(),
+      updatedAt: Date.now(),
+    }),
+  };
+  render();
+
+  // Use existing cached audio if available and same hash, otherwise generate
+  const existing = uiState.ttsAudios[line.audioKey];
+  if (existing?.audioUrl && existing?.textHash === currentHash) {
+    // Cached — use it
+    uiState = {
+      ...uiState,
+      ttsAudios: { ...uiState.ttsAudios, [line.audioKey]: { ...existing, status: "ready" } },
+    };
+    render();
+    startConversationTypewriter(line, existing.audioUrl);
+  } else {
+    // Generate via MiMo
+    generateMimoSpeech({ text: line.text, voice: "mimo_default", format: "wav" })
+      .then((result) => {
+        // Guard: don't proceed if conversation was stopped/paused
+        const cur = uiState.residentConversation;
+        if (!cur || (cur.status !== "playing" && cur.status !== "paused") || cur.currentLineId !== line.id) return;
+        if (result?.audioUrl) {
+          const entry = uiState.ttsAudios[line.audioKey];
+          uiState = {
+            ...uiState,
+            ttsAudios: {
+              ...uiState.ttsAudios,
+              [line.audioKey]: { status: "ready", audioUrl: result.audioUrl, textHash: currentHash, textPreview: line.text.slice(0, 40), error: null },
+            },
+          };
+          render();
+          startConversationTypewriter(line, result.audioUrl);
+        }
+      })
+      .catch(() => {
+        // Guard: don't proceed if conversation was stopped/paused
+        const cur = uiState.residentConversation;
+        if (!cur || (cur.status !== "playing" && cur.status !== "paused") || cur.currentLineId !== line.id) return;
+        // MiMo failed — still show text, mark as error for voice
+        const entry = uiState.ttsAudios[line.audioKey];
+        if (entry) {
+          uiState = {
+            ...uiState,
+            ttsAudios: { ...uiState.ttsAudios, [line.audioKey]: { ...entry, status: "error", error: "语音生成失败，但文字正常显示" } },
+          };
+          render();
+        }
+        // Continue typewriter even without audio
+        startConversationTypewriter(line, null);
+      });
+  }
+}
+
+/**
+ * Start typewriter effect for a conversation line.
+ * @param {object} line
+ * @param {string|null} audioUrl
+ */
+function startConversationTypewriter(line, audioUrl) {
+  const conv = uiState.residentConversation;
+  if (!conv || conv.status === "idle" || conv.status === "completed") return;
+
+  let charIndex = 0;
+  const text = line.text;
+  const total = text.length;
+
+  // Estimate duration: ~120ms per character, extra for punctuation
+  const getDelay = (ch) => {
+    if ("，。！？、；：".includes(ch)) return 250;
+    if (",.!?;:'\"".includes(ch)) return 200;
+    return 100;
+  };
+
+  const tick = () => {
+    // If conversation was paused/stopped since we started, don't continue
+    const cur = uiState.residentConversation;
+    if (!cur || cur.status !== "playing" || cur.currentLineId !== line.id) return;
+
+    if (charIndex >= total) {
+      // Text complete — wait for audio to finish if we have one
+      if (audioUrl) {
+        // Set status to "playing" and wait for audio onended to advance
+        const audio = activeMimoAudios.get(line.audioKey);
+        if (audio) {
+          // Audio already playing or ready — just advance after natural duration
+          // Use estimated audio duration
+          const estimatedMs = Math.max(1500, total * 120);
+          const timerId = setTimeout(() => advanceConversationLine(), estimatedMs);
+          uiState = { ...uiState, residentConversation: { ...cur, typingTimerId: timerId } };
+          render();
+        } else {
+          advanceConversationLine();
+        }
+      } else {
+        // No audio — short pause then advance
+        const timerId = setTimeout(() => advanceConversationLine(), 1200);
+        uiState = { ...uiState, residentConversation: { ...cur, typingTimerId: timerId } };
+        render();
+      }
+      return;
+    }
+
+    charIndex++;
+    const visibleText = text.slice(0, charIndex);
+    uiState = { ...uiState, residentConversation: { ...cur, visibleText, typingTimerId: null } };
+    render();
+
+    const delay = getDelay(text[charIndex - 1]);
+    const timerId = setTimeout(tick, delay);
+    uiState = { ...uiState, residentConversation: { ...uiState.residentConversation, typingTimerId: timerId } };
+  };
+
+  // Start audio playback if we have a URL
+  if (audioUrl) {
+    // Stop any previous conversation audio with a different key
+    stopAllMimoAudio({ exceptKey: line.audioKey, reason: "conversation-line" });
+    playMimoAudio(line.audioKey, audioUrl);
+  }
+
+  // Begin typewriter
+  tick();
+}
+
+/**
+ * Start the conversation: generate queue and begin first line.
+ */
+function startResidentConversation() {
+  const queue = buildResidentConversationQueue(state, uiState);
+  if (!queue || queue.length === 0) return;
+
+  // Stop any existing audio
+  stopBroadcastAudio({ reason: "conversation-start" });
+  stopAllMimoAudio({ reason: "conversation-start" });
+
+  const firstLine = queue[0];
+  uiState = {
+    ...uiState,
+    residentConversation: {
+      enabled: true,
+      status: "playing",
+      queue,
+      currentIndex: 0,
+      currentLineId: firstLine.id,
+      visibleText: "",
+      typingTimerId: null,
+      autoPlayVoice: true,
+      error: "",
+    },
+  };
+  render();
+  playConversationLine(firstLine);
+}
+
+/**
+ * Pause the conversation (and the current audio).
+ */
+function pauseResidentConversation() {
+  const conv = uiState.residentConversation;
+  if (!conv || conv.status !== "playing") return;
+
+  clearConversationTimer();
+
+  // Pause audio
+  if (conv.currentLineId) {
+    const audio = activeMimoAudios.get(`conversation:${conv.queue[conv.currentIndex]?.speakerId}:${conv.currentLineId}`);
+    if (audio) audio.pause();
+    const lineAudioKey = conv.queue[conv.currentIndex]?.audioKey;
+    if (lineAudioKey) {
+      const entry = uiState.ttsAudios[lineAudioKey];
+      if (entry) {
+        uiState = {
+          ...uiState,
+          ttsAudios: { ...uiState.ttsAudios, [lineAudioKey]: { ...entry, status: "paused" } },
+        };
+      }
+    }
+  }
+
+  uiState = {
+    ...uiState,
+    residentConversation: { ...conv, status: "paused", typingTimerId: null },
+    currentVoicePlayback: uiState.currentVoicePlayback?.status === "playing"
+      ? { ...uiState.currentVoicePlayback, status: "paused" }
+      : uiState.currentVoicePlayback,
+  };
+  render();
+}
+
+/**
+ * Resume the conversation.
+ */
+function resumeResidentConversation() {
+  const conv = uiState.residentConversation;
+  if (!conv || conv.status !== "paused") return;
+
+  const currentLine = conv.queue[conv.currentIndex];
+  if (!currentLine) return;
+
+  // Resume audio
+  const audioKey = currentLine.audioKey;
+  const audio = activeMimoAudios.get(audioKey);
+  if (audio) {
+    audio.play().catch(() => {});
+    const entry = uiState.ttsAudios[audioKey];
+    if (entry) {
+      uiState = {
+        ...uiState,
+        ttsAudios: { ...uiState.ttsAudios, [audioKey]: { ...entry, status: "playing" } },
+      };
+    }
+  }
+
+  uiState = {
+    ...uiState,
+    residentConversation: { ...conv, status: "playing" },
+    currentVoicePlayback: uiState.currentVoicePlayback?.key
+      ? { ...uiState.currentVoicePlayback, status: "playing" }
+      : uiState.currentVoicePlayback,
+  };
+  render();
+
+  // Restart typewriter from current position
+  const remainingText = currentLine.text.slice(conv.visibleText.length);
+  if (remainingText.length > 0) {
+    let charIndex = 0;
+    const total = remainingText.length;
+    const getDelay = (ch) => {
+      if ("，。！？、；：".includes(ch)) return 250;
+      if (",.!?;:'\"".includes(ch)) return 200;
+      return 100;
+    };
+    const tick = () => {
+      const cur = uiState.residentConversation;
+      if (!cur || cur.status !== "playing" || cur.currentLineId !== currentLine.id) return;
+      if (charIndex >= total) {
+        // Text complete — use estimated audio duration
+        const estimatedMs = Math.max(1500, total * 120);
+        const timerId = setTimeout(() => advanceConversationLine(), estimatedMs);
+        uiState = { ...uiState, residentConversation: { ...cur, typingTimerId: timerId } };
+        render();
+        return;
+      }
+      charIndex++;
+      const visibleText = conv.visibleText + remainingText.slice(0, charIndex);
+      uiState = { ...uiState, residentConversation: { ...cur, visibleText, typingTimerId: null } };
+      render();
+      const delay = getDelay(remainingText[charIndex - 1]);
+      const timerId = setTimeout(tick, delay);
+      uiState = { ...uiState, residentConversation: { ...uiState.residentConversation, typingTimerId: timerId } };
+    };
+    tick();
+  }
+}
+
+/**
+ * Stop the conversation and clean up.
+ */
+function stopResidentConversation() {
+  const conv = uiState.residentConversation;
+  if (!conv) return;
+
+  clearConversationTimer();
+  stopAllMimoAudio({ reason: "conversation-stop" });
+
+  uiState = {
+    ...uiState,
+    residentConversation: {
+      ...conv,
+      status: "idle",
+      queue: [],
+      currentIndex: 0,
+      currentLineId: "",
+      visibleText: "",
+      typingTimerId: null,
+    },
+    currentVoicePlayback: makeVoicePlaybackState(),
+  };
+  render();
 }
 
 // ── Voice Diagnostics Logger ───────────────────────────────────────────────────
@@ -1700,6 +2215,10 @@ function render() {
         }
       },
       onGenerateTts: async () => {
+        // Stop any running conversation when user starts a broadcast
+        if (uiState.residentConversation?.status === "playing" || uiState.residentConversation?.status === "paused") {
+          stopResidentConversation();
+        }
         const latestBc = uiState.latestBroadcast;
         if (!latestBc) { voiceLog("minimax:generate:skip", { reason: "no-broadcast" }); return; }
         const scriptText = latestBc.script ?? latestBc.text ?? "";
@@ -1830,6 +2349,10 @@ function render() {
        * @param {string} [beatId]
        */
       onPlayMimoTts: (audioKey, text, scene, residentId, beatId) => {
+        // Stop conversation if user manually plays a MiMo clip
+        if (uiState.residentConversation?.status === "playing" || uiState.residentConversation?.status === "paused") {
+          stopResidentConversation();
+        }
         if (!text || !text.trim()) {
           voiceLog("mimo:play:skip", { audioKey, scene, residentId, beatId, reason: "empty-text" });
           return;
@@ -2068,7 +2591,12 @@ function render() {
         if (cvp?.provider === "minimax") {
           stopBroadcastAudio({ reason: "voice-stop" });
         } else if (cvp?.provider === "mimo" && cvp.key) {
-          stopAllMimoAudio({ reason: "voice-stop" });
+          if (cvp.key.startsWith("conversation:")) {
+            // Conversation audio — stop the whole conversation
+            stopResidentConversation();
+          } else {
+            stopAllMimoAudio({ reason: "voice-stop" });
+          }
         } else {
           // Nothing playing, just clear
           uiState = { ...uiState, currentVoicePlayback: makeVoicePlaybackState() };
@@ -2097,6 +2625,20 @@ function render() {
           },
         };
         render();
+      },
+      onToggleConversation: () => {
+        const conv = uiState.residentConversation;
+        if (!conv || conv.status === "idle" || conv.status === "completed" || conv.status === "error") {
+          // Start conversation
+          startResidentConversation();
+        } else if (conv.status === "playing") {
+          pauseResidentConversation();
+        } else if (conv.status === "paused") {
+          resumeResidentConversation();
+        }
+      },
+      onStopConversation: () => {
+        stopResidentConversation();
       },
       onRunTownDayCycle: () => {
         runTownDayCycle();
@@ -2129,6 +2671,7 @@ function render() {
           choiceAftermath: null,
           dayOpeningReflection: null,
           residentVoiceInteraction: { enabled: false, recommendedClipKey: "", lastTriggeredAt: 0, hint: "" },
+          residentConversation: { enabled: false, status: "idle", queue: [], currentIndex: 0, currentLineId: "", visibleText: "", typingTimerId: null, autoPlayVoice: true, error: "" },
         };
         commit(createInitialState());
       },
