@@ -52,6 +52,31 @@ const ttsChannel = Number(config.tts?.channel ?? 1);
 const ttsTimeoutMs = Number(config.tts?.timeoutMs ?? 30_000);
 const ttsApiKey = minimaxApiKey; // shares the same key as other MiniMax services
 
+// ── MiMo TTS Config ─────────────────────────────────────────────────────────────
+const mimoEnabled = config.mimo?.tts?.enabled ?? false;
+const mimoApiKey =
+  envValue("MIMO_API_KEY") ??
+  config.mimo?.tts?.apiKey ??
+  "";
+const mimoBaseUrl =
+  envValue("MIMO_BASE_URL") ??
+  config.mimo?.tts?.baseUrl ??
+  "https://api.mimo.ai/v1";
+const mimoModel =
+  envValue("MIMO_TTS_MODEL") ??
+  config.mimo?.tts?.model ??
+  "mimo-v2.5-tts";
+const mimoVoiceId =
+  envValue("MIMO_TTS_VOICE_ID") ??
+  config.mimo?.tts?.voiceId ??
+  "default";
+const mimoSpeed = Number(
+  envValue("MIMO_TTS_SPEED") ?? config.mimo?.tts?.speed ?? 1.0
+);
+const mimoTimeoutMs = Number(
+  envValue("MIMO_TTS_TIMEOUT_MS") ?? config.mimo?.tts?.timeoutMs ?? 20_000
+);
+
 const mimeTypes = {
   ".css": "text/css; charset=utf-8",
   ".html": "text/html; charset=utf-8",
@@ -1042,6 +1067,132 @@ async function handleMiniMaxTts(request, response) {
   }
 }
 
+// ── MiMo TTS ─────────────────────────────────────────────────────────────────
+
+async function handleMimoTts(request, response) {
+  if (!mimoEnabled) {
+    sendJson(response, 501, {
+      ok: false,
+      error: "MiMo TTS 未启用，请在配置中启用。",
+    });
+    return;
+  }
+
+  if (!mimoApiKey || mimoApiKey === "your_mimo_api_key_here" || mimoApiKey === "") {
+    sendJson(response, 501, {
+      ok: false,
+      error: "MiMo TTS 暂时不可用（未配置 API Key）。",
+    });
+    return;
+  }
+
+  let body;
+  try {
+    body = await readJson(request);
+  } catch {
+    sendJson(response, 400, { ok: false, error: "无效的请求体。" });
+    return;
+  }
+
+  const text = String(body?.text ?? "").trim();
+  if (!text) {
+    sendJson(response, 400, { ok: false, error: "文本为空。" });
+    return;
+  }
+  if (text.length > 200) {
+    sendJson(response, 400, {
+      ok: false,
+      error: `文本超过 200 字限制（当前 ${text.length} 字）。`,
+    });
+    return;
+  }
+
+  const scene = String(body?.scene ?? "resident_dialogue").trim();
+  const voice = String(body?.voice ?? mimoVoiceId).trim();
+  const emotion = String(body?.emotion ?? "neutral").trim();
+  const speed = Number(body?.speed ?? mimoSpeed);
+
+  try {
+    const ttsPayload = {
+      model: mimoModel,
+      text,
+      stream: false,
+      voice_setting: {
+        voice_id: voice,
+        speed,
+        vol: 1,
+        pitch: 0,
+      },
+    };
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), mimoTimeoutMs);
+
+    const ttsResponse = await fetch(`${mimoBaseUrl}/t2a_v2`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${mimoApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(ttsPayload),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeout);
+
+    const payload = await ttsResponse.json().catch(() => ({}));
+
+    if (!ttsResponse.ok) {
+      sendJson(response, ttsResponse.status, {
+        ok: false,
+        error: "MiMo 语音生成失败，请稍后重试。",
+        statusCode: payload?.base_resp?.status_code ?? ttsResponse.status,
+        statusMsg: payload?.base_resp?.status_msg ?? "",
+      });
+      return;
+    }
+
+    if (payload?.base_resp?.status_code !== 0) {
+      sendJson(response, 502, {
+        ok: false,
+        error: "MiMo 语音生成失败。",
+        statusCode: payload?.base_resp?.status_code,
+        statusMsg: payload?.base_resp?.status_msg ?? "",
+      });
+      return;
+    }
+
+    const audioHex = payload?.data?.audio;
+    if (!audioHex || typeof audioHex !== "string" || audioHex.length === 0) {
+      sendJson(response, 502, {
+        ok: false,
+        error: "MiMo 未返回音频数据。",
+      });
+      return;
+    }
+
+    const audioBuffer = Buffer.from(audioHex, "hex");
+    const audioBase64 = audioBuffer.toString("base64");
+    const audioUrl = `data:audio/mp3;base64,${audioBase64}`;
+
+    sendJson(response, 200, {
+      ok: true,
+      audioUrl,
+      provider: "mimo",
+      durationMs: 0,
+      text,
+    });
+  } catch (error) {
+    const isTimeout = error.name === "AbortError";
+    sendJson(response, isTimeout ? 504 : 500, {
+      ok: false,
+      error: isTimeout
+        ? "MiMo 语音生成超时了，请稍后重试。"
+        : "MiMo 语音生成遇到未知错误，请稍后重试。",
+    });
+  }
+}
+
 function resolvePath(url) {
   const pathname = decodeURIComponent(new URL(url, `http://localhost:${port}`).pathname);
   const requested = pathname === "/" ? "/index.html" : pathname;
@@ -1070,6 +1221,11 @@ const server = createServer((request, response) => {
 
   if (request.method === "POST" && request.url === "/api/minimax/tts") {
     handleMiniMaxTts(request, response);
+    return;
+  }
+
+  if (request.method === "POST" && request.url === "/api/mimo/tts") {
+    handleMimoTts(request, response);
     return;
   }
 

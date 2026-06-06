@@ -463,6 +463,65 @@ button, select {
   opacity: 0.9;
 }
 
+/* MiMo TTS row in day cycle banner and event panel */
+.day-cycle-status__tts-row,
+.m3-event__tts-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+  align-items: center;
+}
+
+/* MiMo TTS buttons */
+.mimo-tts-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  min-height: 26px;
+}
+
+.mimo-tts-btn:hover:not(:disabled) {
+  background: var(--green-soft);
+  border-color: var(--green);
+}
+
+.mimo-tts-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mimo-tts-btn--playing {
+  background: var(--gold-soft);
+  border-color: var(--gold);
+  color: #8a6020;
+}
+
+.mimo-tts-btn--ready {
+  background: var(--green-soft);
+  border-color: var(--green);
+  color: var(--green-deep);
+}
+
+.mimo-tts-btn--loading {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.mimo-tts-btn--error {
+  background: #fff3e0;
+  border-color: #e65100;
+  color: #bf360c;
+}
+
 /* Primary action buttons in left panel */
 .game-actions .button--primary,
 .game-actions .button--ai {

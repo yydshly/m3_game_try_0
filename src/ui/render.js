@@ -172,7 +172,7 @@ function renderGameHud(state) {
 
 // ── Day Cycle Status Banner ─────────────────────────────────────────────────────
 
-function renderDayCycleStatus(safeUiState) {
+function renderDayCycleStatus(safeUiState, handlers = {}) {
   const dc = safeUiState.dayCycle;
   if (!dc || dc.status === "idle") return "";
 
@@ -191,6 +191,35 @@ function renderDayCycleStatus(safeUiState) {
 
   const icon = statusIcons[dc.status] ?? "⚙️";
   const cls = statusClasses[dc.status] ?? "";
+  const ttsAudios = safeUiState.ttsAudios ?? {};
+
+  // Completion feedback TTS button
+  const cfTextKey = "completion_feedback:current";
+  const cfTa = ttsAudios[cfTextKey] ?? {};
+  const cfText = "本阶段行动完成";
+  const completionTtsBtn = (handlers.onPlayMimoTts)
+    ? (() => {
+      if (cfTa.status === "loading") return `<button class="mimo-tts-btn mimo-tts-btn--loading" disabled>🔊…</button>`;
+      if (cfTa.status === "playing") return `<button class="mimo-tts-btn mimo-tts-btn--playing" data-action="pause-mimo-tts" data-audio-key="${escapeHtml(cfTextKey)}">⏸️</button>`;
+      if (cfTa.status === "paused" || cfTa.status === "ready") return `<button class="mimo-tts-btn mimo-tts-btn--ready" data-action="resume-mimo-tts" data-audio-key="${escapeHtml(cfTextKey)}">▶️</button>`;
+      if (cfTa.status === "error") return `<button class="mimo-tts-btn mimo-tts-btn--error" data-action="play-mimo-tts" data-audio-key="${escapeHtml(cfTextKey)}" data-text="${escapeHtml(cfText)}" data-scene="completion_feedback" data-resident-id="" data-beat-id="">⚠️</button>`;
+      return `<button class="mimo-tts-btn" data-action="play-mimo-tts" data-audio-key="${escapeHtml(cfTextKey)}" data-text="${escapeHtml(cfText)}" data-scene="completion_feedback" data-resident-id="" data-beat-id="">🔈</button>`;
+    })()
+    : "";
+
+  // Day-opening TTS button
+  const dayOpenTextKey = "day_opening:current";
+  const doTa = ttsAudios[dayOpenTextKey] ?? {};
+  const dayOpenText = dc.scenarioId ? `今天的小镇围绕「${dc.scenarioId}」展开。` : "";
+  const dayOpenTtsBtn = (isRunning && dayOpenText && handlers.onPlayMimoTts)
+    ? (() => {
+      if (doTa.status === "loading") return `<button class="mimo-tts-btn mimo-tts-btn--loading" disabled>🔊…</button>`;
+      if (doTa.status === "playing") return `<button class="mimo-tts-btn mimo-tts-btn--playing" data-action="pause-mimo-tts" data-audio-key="${escapeHtml(dayOpenTextKey)}">⏸️</button>`;
+      if (doTa.status === "paused" || doTa.status === "ready") return `<button class="mimo-tts-btn mimo-tts-btn--ready" data-action="resume-mimo-tts" data-audio-key="${escapeHtml(dayOpenTextKey)}">▶️</button>`;
+      if (doTa.status === "error") return `<button class="mimo-tts-btn mimo-tts-btn--error" data-action="play-mimo-tts" data-audio-key="${escapeHtml(dayOpenTextKey)}" data-text="${escapeHtml(dayOpenText)}" data-scene="day_opening" data-resident-id="" data-beat-id="">⚠️</button>`;
+      return `<button class="mimo-tts-btn" data-action="play-mimo-tts" data-audio-key="${escapeHtml(dayOpenTextKey)}" data-text="${escapeHtml(dayOpenText)}" data-scene="day_opening" data-resident-id="" data-beat-id="">🔈 今日场景</button>`;
+    })()
+    : "";
   const stepText = dc.step || "处理中……";
   const isRunning = dc.status === "running";
   const isWaiting = dc.status === "waiting_choice";
@@ -206,6 +235,7 @@ function renderDayCycleStatus(safeUiState) {
       <p class="day-cycle-status__step">${escapeHtml(stepText)}</p>
       ${dc.scenarioId && isRunning ? `<p class="day-cycle-status__scenario">🎬 ${escapeHtml(dc.scenarioId)}</p>` : ""}
       ${isError && dc.error ? `<p class="day-cycle-status__error">${escapeHtml(dc.error)}</p>` : ""}
+      ${(completionTtsBtn || dayOpenTtsBtn) ? `<div class="day-cycle-status__tts-row">${completionTtsBtn}${dayOpenTtsBtn}</div>` : ""}
     </div>
   `;
 }
@@ -243,7 +273,7 @@ function renderGameActions(state, safeUiState) {
   const dayCycleActive = dayCycleRunning || dayCycleWaiting || dayCycleCompleted || dayCycleError;
   const dayCycleDisabled = dayCycleActive || isAnimating ? "disabled" : "";
 
-  const dayCycleBanner = dayCycleActive ? renderDayCycleStatus(safeUiState) : "";
+  const dayCycleBanner = dayCycleActive ? renderDayCycleStatus(safeUiState, safeHandlers) : "";
 
   return `
     <div class="game-actions">
@@ -439,15 +469,34 @@ function renderEventDirectorStatus(uiState) {
 
 // ── Resident Dialogue Panel ──────────────────────────────────────────────────────
 
-function renderResidentDialoguePanel(beats) {
+function renderResidentDialoguePanel(beats, ttsAudios = {}, handlers = {}) {
   if (!Array.isArray(beats) || beats.length === 0) return "";
   const itemsHtml = beats
     .filter((b) => b?.dialogue)
     .map((beat) => {
-      const emotion = beat.emotion ?? "💬";
+      const audioKey = `resident_dialogue:${beat.residentId}:${beat.id}`;
+      const ta = ttsAudios[audioKey] ?? {};
+      const isPlaying = ta.status === "playing";
+      const isPaused = ta.status === "paused";
+      const isReady = ta.status === "ready";
+      const isLoading = ta.status === "loading";
+      const isError = ta.status === "error";
+      const hasAudio = ta.audioUrl && !isLoading;
+
+      const ttsBtn = isLoading
+        ? `<button class="mimo-tts-btn mimo-tts-btn--loading" disabled>🔊…</button>`
+        : isPlaying
+        ? `<button class="mimo-tts-btn mimo-tts-btn--playing" data-action="pause-mimo-tts" data-audio-key="${escapeHtml(audioKey)}">⏸️</button>`
+        : isPaused || isReady
+        ? `<button class="mimo-tts-btn mimo-tts-btn--ready" data-action="resume-mimo-tts" data-audio-key="${escapeHtml(audioKey)}">▶️</button>`
+        : isError
+        ? `<button class="mimo-tts-btn mimo-tts-btn--error" data-action="play-mimo-tts" data-audio-key="${escapeHtml(audioKey)}" data-text="${escapeHtml(beat.dialogue)}" data-scene="resident_dialogue" data-resident-id="${escapeHtml(beat.residentId)}" data-beat-id="${escapeHtml(beat.id)}">⚠️</button>`
+        : `<button class="mimo-tts-btn" data-action="play-mimo-tts" data-audio-key="${escapeHtml(audioKey)}" data-text="${escapeHtml(beat.dialogue)}" data-scene="resident_dialogue" data-resident-id="${escapeHtml(beat.residentId)}" data-beat-id="${escapeHtml(beat.id)}">🔈</button>`;
+
       return `<div class="dialogue-beat">
         <span class="dialogue-beat__name">${escapeHtml(beat.residentName)}：</span>
         <span class="dialogue-beat__text">${escapeHtml(beat.dialogue)}</span>
+        ${ttsBtn}
       </div>`;
     })
     .join("");
@@ -984,7 +1033,7 @@ const TONE_LABELS = {
   memory: "回忆",
 };
 
-function renderM3EventItem(event, residents, latestClass = "") {
+function renderM3EventItem(event, residents, latestClass = "", ttsAudios = {}, handlers = {}) {
   const toneLabel = TONE_LABELS[event.tone] ?? event.tone ?? "温暖";
   const placeName = {
     garden: "花园", cafe: "咖啡馆", workshop: "工坊", plaza: "广场", forest: "森林",
@@ -998,6 +1047,20 @@ function renderM3EventItem(event, residents, latestClass = "") {
           return `<span class="m3-event__resident" title="${escapeHtml(resident.name)}">${escapeHtml(resident.name)}</span>`;
         })
         .join("")
+    : "";
+
+  // Event TTS button — text truncated to 80 chars
+  const eventTextKey = `event_prompt:${event.id}`;
+  const ta = ttsAudios[eventTextKey] ?? {};
+  const eventPromptText = `${event.title ?? ""}。${event.text ?? ""}`.slice(0, 80);
+  const eventTtsBtn = (handlers.onPlayMimoTts)
+    ? (() => {
+      if (ta.status === "loading") return `<button class="mimo-tts-btn mimo-tts-btn--loading" disabled>🔊…</button>`;
+      if (ta.status === "playing") return `<button class="mimo-tts-btn mimo-tts-btn--playing" data-action="pause-mimo-tts" data-audio-key="${escapeHtml(eventTextKey)}">⏸️</button>`;
+      if (ta.status === "paused" || ta.status === "ready") return `<button class="mimo-tts-btn mimo-tts-btn--ready" data-action="resume-mimo-tts" data-audio-key="${escapeHtml(eventTextKey)}">▶️</button>`;
+      if (ta.status === "error") return `<button class="mimo-tts-btn mimo-tts-btn--error" data-action="play-mimo-tts" data-audio-key="${escapeHtml(eventTextKey)}" data-text="${escapeHtml(eventPromptText)}" data-scene="event_prompt" data-resident-id="" data-beat-id="">⚠️</button>`;
+      return `<button class="mimo-tts-btn" data-action="play-mimo-tts" data-audio-key="${escapeHtml(eventTextKey)}" data-text="${escapeHtml(eventPromptText)}" data-scene="event_prompt" data-resident-id="" data-beat-id="">🔈</button>`;
+    })()
     : "";
 
   const hasChoices = Array.isArray(event.choices) && event.choices.length > 0;
@@ -1044,6 +1107,7 @@ function renderM3EventItem(event, residents, latestClass = "") {
       </div>
       ${event.title ? `<p class="m3-event__title">${escapeHtml(event.title)}</p>` : ""}
       <p class="m3-event__text">${escapeHtml(event.text)}</p>
+      ${eventTtsBtn ? `<div class="m3-event__tts-row">${eventTtsBtn}</div>` : ""}
       <div class="m3-event__footer">
         <span class="m3-event__place">📍 ${escapeHtml(placeName)}</span>
         ${participantHtml ? `<span class="m3-event__residents">👥 ${participantHtml}</span>` : ""}
@@ -1186,7 +1250,7 @@ function renderTownMemory(state) {
   `;
 }
 
-function renderEventFeed(state, completionFeedback) {
+function renderEventFeed(state, completionFeedback, ttsAudios = {}, handlers = {}) {
   const events = [...state.events].reverse().slice(0, 12);
   const isLatest = completionFeedback != null;
   const typeIcon = { action: "🏃", social: "💬", system: "🔔", report: "📰", "m3-event": "🎭", "town-broadcast": "📻", "player-choice": "🧭" };
@@ -1202,7 +1266,7 @@ function renderEventFeed(state, completionFeedback) {
           .map((event, index) => {
             const latestClass = isLatest && index === 0 ? " feed-item--latest" : "";
             if (event.type === "m3-event") {
-              return renderM3EventItem(event, state.residents, latestClass);
+              return renderM3EventItem(event, state.residents, latestClass, ttsAudios, handlers);
             }
             if (event.type === "town-broadcast") {
               return renderTownBroadcastItem(event, state.residents, latestClass);
@@ -1387,6 +1451,27 @@ function bindEvents(root, handlers) {
       );
     });
   });
+  root.querySelectorAll("[data-action='play-mimo-tts']").forEach((button) => {
+    button.addEventListener("click", () => {
+      handlers.onPlayMimoTts(
+        button.dataset.audioKey,
+        button.dataset.text,
+        button.dataset.scene,
+        button.dataset.residentId,
+        button.dataset.beatId,
+      );
+    });
+  });
+  root.querySelectorAll("[data-action='pause-mimo-tts']").forEach((button) => {
+    button.addEventListener("click", () => {
+      handlers.onPauseMimoTts(button.dataset.audioKey);
+    });
+  });
+  root.querySelectorAll("[data-action='resume-mimo-tts']").forEach((button) => {
+    button.addEventListener("click", () => {
+      handlers.onResumeMimoTts(button.dataset.audioKey);
+    });
+  });
 }
 
 // ── Main Render ───────────────────────────────────────────────────────────────
@@ -1410,6 +1495,13 @@ export function renderApp(root, state, handlers, uiState = {}) {
     activeScenario: uiState.activeScenario ?? null,
     residentSceneBeats: uiState.residentSceneBeats ?? [],
     dayCycle: uiState.dayCycle ?? { status: "idle", step: "", scenarioId: "", error: "", startedAt: 0, completedAt: 0 },
+    ttsAudios: uiState.ttsAudios ?? {},
+  };
+
+  const safeHandlers = {
+    onPlayMimoTts: handlers.onPlayMimoTts ?? (() => {}),
+    onPauseMimoTts: handlers.onPauseMimoTts ?? (() => {}),
+    onResumeMimoTts: handlers.onResumeMimoTts ?? (() => {}),
   };
 
   root.innerHTML = `
@@ -1437,14 +1529,14 @@ export function renderApp(root, state, handlers, uiState = {}) {
           ${renderLlmStatus(safeUiState)}
           ${renderEventDirectorStatus(safeUiState)}
           ${renderAtmospherePanel(state, safeUiState)}
-          ${renderResidentDialoguePanel(safeUiState.residentSceneBeats)}
+          ${renderResidentDialoguePanel(safeUiState.residentSceneBeats, safeUiState.ttsAudios, safeHandlers)}
           ${renderSpotlight(state, safeUiState)}
         </aside>
       </main>
 
       <section class="story-section">
         <div class="story-section__grid">
-          ${renderEventFeed(state, safeUiState.completionFeedback)}
+          ${renderEventFeed(state, safeUiState.completionFeedback, safeUiState.ttsAudios, safeHandlers)}
           ${renderRelationships(state)}
           ${renderReports(state)}
         </div>

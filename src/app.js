@@ -4,6 +4,8 @@ import { applyChoiceMemory } from "./domain/memory.js";
 import { buildAiDirectorContext, selectTownLifeScenario } from "./domain/aiDirector.js";
 import { requestMiniMaxPlan, requestMiniMaxEvent, requestMiniMaxBroadcast, buildPromptMemoryNarrative } from "./services/minimaxClient.js";
 import { generateBroadcastSpeech } from "./services/minimaxTts.js";
+import { generateMimoSpeech } from "./services/mimoClient.js";
+import { resolveTtsProviderForScene, buildAudioKey, hashText } from "./services/ttsService.js";
 import { loadState, saveState, clearState } from "./services/persistence.js";
 import { renderApp } from "./ui/render.js";
 import { phases } from "./data/seed.js";
@@ -66,6 +68,7 @@ let uiState = {
   activeScenario: selectTownLifeScenario(state),
   residentSceneBeats: [],
   dayCycle: { ...DAY_CYCLE_DEFAULT },
+  ttsAudios: {},   // { [audioKey]: { status, audioUrl, textHash, error, generatedAt } }
 };
 let autoPlayTimer = null;
 let animationTimer = null;
@@ -75,6 +78,9 @@ let completionTimer = null;
 
 /** Persistent audio instance for the broadcast player */
 let activeAudio = null;
+
+/** Map of audioKey → Audio instance for MiMo TTS */
+const activeMimoAudios = new Map();
 
 /**
  * Simple string hash for detecting script changes.
@@ -115,6 +121,130 @@ function stopActiveAudio() {
     activeAudio.onerror = null;
     activeAudio = null;
   }
+}
+
+/**
+ * Stop a specific MiMo audio by key and clean up its state.
+ * @param {string} audioKey
+ */
+function stopMimoAudio(audioKey) {
+  const audio = activeMimoAudios.get(audioKey);
+  if (audio) {
+    audio.pause();
+    audio.src = "";
+    audio.onended = null;
+    audio.onerror = null;
+    activeMimoAudios.delete(audioKey);
+  }
+}
+
+/**
+ * Stop all active MiMo audio instances.
+ */
+function stopAllMimoAudio() {
+  for (const [key, audio] of activeMimoAudios) {
+    audio.pause();
+    audio.src = "";
+    audio.onended = null;
+    audio.onerror = null;
+  }
+  activeMimoAudios.clear();
+}
+
+/**
+ * Start playing a MiMo audio URL for a given audioKey.
+ * @param {string} audioKey
+ * @param {string} audioUrl
+ */
+function playMimoAudio(audioKey, audioUrl) {
+  const existingAudio = activeMimoAudios.get(audioKey);
+  if (existingAudio) {
+    existingAudio.pause();
+    existingAudio.src = "";
+    activeMimoAudios.delete(audioKey);
+  }
+
+  const audio = new Audio(audioUrl);
+  activeMimoAudios.set(audioKey, audio);
+
+  audio.onplay = () => {
+    const entry = uiState.ttsAudios[audioKey];
+    if (entry) {
+      uiState = {
+        ...uiState,
+        ttsAudios: { ...uiState.ttsAudios, [audioKey]: { ...entry, status: "playing" } },
+      };
+      render();
+    }
+  };
+
+  audio.onpause = () => {
+    const entry = uiState.ttsAudios[audioKey];
+    if (entry && entry.status === "playing") {
+      uiState = {
+        ...uiState,
+        ttsAudios: { ...uiState.ttsAudios, [audioKey]: { ...entry, status: "paused" } },
+      };
+      render();
+    }
+  };
+
+  audio.onended = () => {
+    uiState = {
+      ...uiState,
+      ttsAudios: {
+        ...uiState.ttsAudios,
+        [audioKey]: { ...(uiState.ttsAudios[audioKey] ?? {}), status: "ready" },
+      },
+    };
+    activeMimoAudios.delete(audioKey);
+    render();
+  };
+
+  audio.onerror = () => {
+    uiState = {
+      ...uiState,
+      ttsAudios: {
+        ...uiState.ttsAudios,
+        [audioKey]: {
+          ...(uiState.ttsAudios[audioKey] ?? {}),
+          status: "error",
+          error: "音频播放失败。",
+        },
+      },
+    };
+    activeMimoAudios.delete(audioKey);
+    render();
+  };
+
+  audio.play().catch(() => {
+    // Autoplay blocked — treat as paused
+    const entry = uiState.ttsAudios[audioKey];
+    if (entry) {
+      uiState = {
+        ...uiState,
+        ttsAudios: { ...uiState.ttsAudios, [audioKey]: { ...entry, status: "paused" } },
+      };
+      render();
+    }
+    activeMimoAudios.delete(audioKey);
+  });
+}
+
+/**
+ * Build a ttsAudio state object.
+ * @param {object} overrides
+ * @returns {object}
+ */
+function makeTtsAudio(overrides = {}) {
+  return {
+    status: "idle",   // idle | loading | ready | playing | paused | error
+    audioUrl: null,
+    textHash: "",
+    error: null,
+    generatedAt: null,
+    ...overrides,
+  };
 }
 
 // ── Task Animation Layer ────────────────────────────────────────────────────────────
@@ -820,6 +950,101 @@ function render() {
           // status will transition to "paused" via onpause handler above
         }
       },
+      // ── MiMo TTS for lightweight scenes ────────────────────────────────────
+      /**
+       * Generate and/or play a MiMo TTS audio for a given scene.
+       * Stops any currently playing MiMo audio before starting a new one.
+       *
+       * @param {string} audioKey  - unique key e.g. "resident_dialogue:hua:beat-123"
+       * @param {string} text      - text to synthesize
+       * @param {string} scene     - scene type
+       * @param {string} [residentId]
+       * @param {string} [beatId]
+       */
+      onPlayMimoTts: (audioKey, text, scene, residentId, beatId) => {
+        if (!text || !text.trim()) return;
+
+        // Stop all other MiMo audio to avoid chaos
+        stopAllMimoAudio();
+
+        const currentHash = hashText(text);
+        const existing = uiState.ttsAudios[audioKey];
+
+        // If already generated with same hash, just play
+        if (existing && existing.status === "ready" && existing.textHash === currentHash && existing.audioUrl) {
+          playMimoAudio(audioKey, existing.audioUrl);
+          return;
+        }
+
+        // If currently loading or playing, ignore
+        if (existing && (existing.status === "loading" || existing.status === "playing")) return;
+
+        // Set loading state
+        uiState = {
+          ...uiState,
+          ttsAudios: {
+            ...uiState.ttsAudios,
+            [audioKey]: makeTtsAudio({ status: "loading", textHash: currentHash }),
+          },
+        };
+        render();
+
+        // Resolve provider and call appropriate generator
+        const provider = resolveTtsProviderForScene(scene);
+        generateMimoSpeech({ scene, text, voice: "default", emotion: "neutral", speed: 1.0 })
+          .then((result) => {
+            uiState = {
+              ...uiState,
+              ttsAudios: {
+                ...uiState.ttsAudios,
+                [audioKey]: makeTtsAudio({
+                  status: "ready",
+                  audioUrl: result.audioUrl,
+                  textHash: currentHash,
+                  generatedAt: Date.now(),
+                }),
+              },
+            };
+            render();
+            playMimoAudio(audioKey, result.audioUrl);
+          })
+          .catch((err) => {
+            console.warn(`[mimoTts] generation failed for ${audioKey}:`, err.message);
+            uiState = {
+              ...uiState,
+              ttsAudios: {
+                ...uiState.ttsAudios,
+                [audioKey]: makeTtsAudio({
+                  status: "error",
+                  textHash: currentHash,
+                  error: "MiMo 语音生成失败，请稍后重试。",
+                }),
+              },
+            };
+            render();
+          });
+      },
+      onPauseMimoTts: (audioKey) => {
+        const audio = activeMimoAudios.get(audioKey);
+        if (audio) audio.pause();
+        const existing = uiState.ttsAudios[audioKey];
+        if (existing && existing.status === "playing") {
+          uiState = {
+            ...uiState,
+            ttsAudios: {
+              ...uiState.ttsAudios,
+              [audioKey]: { ...existing, status: "paused" },
+            },
+          };
+          render();
+        }
+      },
+      onResumeMimoTts: (audioKey) => {
+        const existing = uiState.ttsAudios[audioKey];
+        if (existing && existing.status === "paused" && existing.audioUrl) {
+          playMimoAudio(audioKey, existing.audioUrl);
+        }
+      },
       onAssignTask: (residentId, taskId) => commit(assignTask(state, residentId, taskId)),
       onSelectResident: (residentId) => {
         uiState = { ...uiState, selectedResidentId: residentId };
@@ -852,6 +1077,7 @@ function render() {
           activeScenario: null,
           residentSceneBeats: [],
           dayCycle: { ...DAY_CYCLE_DEFAULT },
+          ttsAudios: {},
         };
         commit(createInitialState());
       },

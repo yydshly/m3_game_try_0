@@ -23,5 +23,16 @@
     "format": "mp3",
     "channel": 1,
     "timeoutMs": 30000
+  },
+  "mimo": {
+    "tts": {
+      "enabled": false,
+      "apiKey": "your_mimo_api_key_here",
+      "baseUrl": "https://api.mimo.ai/v1",
+      "model": "mimo-v2.5-tts",
+      "voiceId": "default",
+      "speed": 1.0,
+      "timeoutMs": 20000
+    }
   }
 }
