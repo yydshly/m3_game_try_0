@@ -62,6 +62,29 @@ const TASK_STAGE_EFFECTS = {
   rest:    { action: "rest", effect: "rest",   bubble: "有人在安静地休息。", gait: "slow" },
 };
 
+// ── Stage Presentation Layer ─────────────────────────────────────────────────────
+// Defines how each task looks on the stage — prop emoji, action class, place effect.
+// These are pure UI concerns; they do NOT affect simulation or task planning.
+
+/**
+ * @typedef {Object} StagePresentation
+ * @property {string} actionClass  - CSS class suffix added to .stage-character (e.g. "is-farming")
+ * @property {string} prop         - emoji shown as the character's prop/hand item
+ * @property {string} propClass    - CSS class for prop animation (e.g. "prop--tool")
+ * @property {string} placeEffect  - CSS class suffix for place label effect (e.g. "soil-bloom")
+ * @property {string} motion       - animation type: "work-loop" | "calm-loop" | "talk-loop" | "breath-loop" | "travel-loop"
+ */
+
+/** @type {Record<string, StagePresentation>} */
+const TASK_STAGE_PRESENTATIONS = {
+  plant:   { actionClass: "is-farming",   prop: "⛏️", propClass: "prop--tool",   placeEffect: "soil-bloom",  motion: "work-loop"  },
+  cook:    { actionClass: "is-cooking",   prop: "🍳", propClass: "prop--tool",   placeEffect: "steam-rise",  motion: "work-loop"  },
+  repair:  { actionClass: "is-building",  prop: "🔧", propClass: "prop--tool",   placeEffect: "spark-float", motion: "work-loop"  },
+  chat:    { actionClass: "is-chatting",  prop: "💬", propClass: "prop--chat",   placeEffect: "chat-pulse",  motion: "talk-loop"  },
+  forage:  { actionClass: "is-foraging",  prop: "🧺", propClass: "prop--tool",   placeEffect: "leaf-float",  motion: "work-loop"  },
+  rest:    { actionClass: "is-resting",   prop: "☁️", propClass: "prop--rest",   placeEffect: "soft-glow",   motion: "breath-loop" },
+};
+
 const TASK_COMPLETION_ICONS = {
   plant:   "🌸",
   cook:    "🍲",
@@ -106,6 +129,7 @@ function buildTaskAnimations(prevState, nextState) {
   return nextState.residents.map((resident) => {
     const taskId = resident.assignmentId;
     const effect = TASK_STAGE_EFFECTS[taskId] ?? TASK_STAGE_EFFECTS.rest;
+    const presentation = TASK_STAGE_PRESENTATIONS[taskId] ?? TASK_STAGE_PRESENTATIONS.rest;
     const gait = getGait(taskId, resident);
 
     const fromResident = prevById.get(resident.id);
@@ -125,6 +149,12 @@ function buildTaskAnimations(prevState, nextState) {
       bubble: effect.bubble,
       gait,
       traveling,
+      // Presentation
+      presentationClass: presentation.actionClass,
+      prop: presentation.prop,
+      propClass: presentation.propClass,
+      placeEffect: presentation.placeEffect,
+      motion: presentation.motion,
       startedAt: Date.now(),
     };
   });

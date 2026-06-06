@@ -1000,6 +1000,181 @@ button, select {
   50%  { opacity: 0.9; transform: translateX(-50%) translateY(-6px); }
 }
 
+/* ── Stage Presentation Motion Classes ──────────────────────────────────────── */
+
+@keyframes motion-work {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  25%       { transform: scale(1.05) rotate(-2deg); }
+  75%       { transform: scale(1.05) rotate(2deg); }
+}
+
+@keyframes motion-calm {
+  0%, 100% { transform: scale(1); }
+  50%       { transform: scale(1.06); }
+}
+
+@keyframes motion-talk {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  25%       { transform: translateY(-3px) rotate(-1deg); }
+  75%       { transform: translateY(-3px) rotate(1deg); }
+}
+
+@keyframes motion-breath {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%       { transform: scale(1.04); opacity: 0.88; }
+}
+
+@keyframes motion-travel {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-4px); }
+}
+
+/* Motion applied to sprite wrapper */
+.motion-work-loop  .stage-character__sprite { animation: motion-work  1.2s ease-in-out infinite; }
+.motion-calm-loop  .stage-character__sprite { animation: motion-calm  2.4s ease-in-out infinite; }
+.motion-talk-loop  .stage-character__sprite { animation: motion-talk  1.4s ease-in-out infinite; }
+.motion-breath-loop .stage-character__sprite { animation: motion-breath 2.4s ease-in-out infinite; }
+.motion-travel-loop .stage-character__sprite { animation: motion-travel 0.9s ease-in-out infinite; }
+
+/* ── Prop Animations (character hand items) ─────────────────────────────────── */
+
+.stage-character__prop {
+  position: absolute;
+  bottom: 2px;
+  right: -4px;
+  font-size: 16px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 4;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.2));
+}
+
+/* Tool prop (⛏️ 🔧 🍳 🧺) — slight swing */
+.stage-character__prop--tool {
+  animation: prop-tool 1.2s ease-in-out infinite;
+  transform-origin: bottom center;
+}
+
+/* Chat prop (💬) — gentle bob */
+.stage-character__prop--chat {
+  animation: prop-chat 1.6s ease-in-out infinite;
+}
+
+/* Rest prop (☁️) — slow float */
+.stage-character__prop--rest {
+  animation: prop-rest 2.4s ease-in-out infinite;
+}
+
+@keyframes prop-tool {
+  0%, 100% { transform: rotate(0deg); }
+  25%       { transform: rotate(-12deg); }
+  75%       { transform: rotate(12deg); }
+}
+
+@keyframes prop-chat {
+  0%, 100% { transform: translateY(0) scale(1); opacity: 1; }
+  50%       { transform: translateY(-4px) scale(1.1); opacity: 0.85; }
+}
+
+@keyframes prop-rest {
+  0%, 100% { transform: translateY(0); opacity: 0.7; }
+  50%       { transform: translateY(-5px); opacity: 1; }
+}
+
+/* ── Place Effect Enhancements ──────────────────────────────────────────────── */
+
+/* Soil bloom at garden when farming */
+.stage-place-label--place-effect-soil-bloom::after {
+  content: "🌱";
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 14px;
+  animation: effectBloom 1.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Steam rising at cafe when cooking */
+.stage-place-label--place-effect-steam-rise::after {
+  content: "💨";
+  position: absolute;
+  top: -16px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 14px;
+  animation: effectSteam 1.8s ease-out infinite;
+  pointer-events: none;
+}
+
+/* Spark floating at workshop when repairing */
+.stage-place-label--place-effect-spark-float::after {
+  content: "✨";
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 13px;
+  animation: effectSpark 1.0s ease-out infinite;
+  pointer-events: none;
+}
+
+/* Chat pulse at plaza when chatting */
+.stage-place-label--place-effect-chat-pulse::after {
+  content: "💬";
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 13px;
+  animation: effectChat 1.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Leaf floating at forest when foraging */
+.stage-place-label--place-effect-leaf-float::after {
+  content: "🍃";
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 13px;
+  animation: effectLeaf 2.0s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Soft glow at resting locations */
+.stage-place-label--place-effect-soft-glow::after {
+  content: "☁️";
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 14px;
+  animation: prop-rest 2.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* ── Character Body Shadow ─────────────────────────────────────────────────── */
+
+.stage-character__sprite {
+  position: relative;
+}
+
+/* Ground shadow under character */
+.stage-character__sprite::after {
+  content: "";
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 32px;
+  height: 8px;
+  background: radial-gradient(ellipse, rgba(61,48,39,0.18) 0%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
 /* ── Reduced Motion ── */
 @media (prefers-reduced-motion: reduce) {
   .stage-character--traveling,
@@ -1007,8 +1182,10 @@ button, select {
   .stage-effect-anchor,
   .stage-character__action-bubble,
   .stage-character__completion-badge,
+  .stage-character__prop,
   .game-actions__completion-banner,
-  .feed-item--latest {
+  .feed-item--latest,
+  [class*="motion-"] {
     animation: none !important;
   }
 }

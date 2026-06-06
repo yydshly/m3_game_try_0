@@ -479,12 +479,13 @@ function renderPlaceLabel(placeId, isActive, anim) {
   const activeClass = isActive ? " stage-place-label--active" : "";
   const travelingClass = anim?.traveling ? " stage-place-label--traveling" : "";
   const taskClass = anim ? ` stage-place-label--task stage-place-label--effect-${escapeHtml(anim.effect)}` : "";
+  const placeEffectClass = anim?.placeEffect ? ` stage-place-label--place-effect-${escapeHtml(anim.placeEffect)}` : "";
   const effectAnchor = anim
-    ? `<span class="stage-effect-anchor stage-effect-anchor--${escapeHtml(anim.effect)}" aria-hidden="true"></span>`
+    ? `<span class="stage-effect-anchor stage-effect-anchor--${escapeHtml(anim.effect)} stage-effect-anchor--${escapeHtml(anim.placeEffect ?? anim.effect)}" aria-hidden="true"></span>`
     : "";
 
   return `
-    <div class="stage-place-label stage-place-label--${escapeHtml(placeId)}${activeClass}${travelingClass}${taskClass}"
+    <div class="stage-place-label stage-place-label--${escapeHtml(placeId)}${activeClass}${travelingClass}${taskClass}${placeEffectClass}"
          style="left:${place.x}%; top:${place.y}%;"
          aria-label="${escapeHtml(place.label)}">
       <span class="stage-place-label__icon">${place.icon}</span>
@@ -502,6 +503,7 @@ function renderStageCharacter(resident, position, taskLabel, status, isSelected,
 
   let extraClasses = "";
   let extraStyles = "";
+  let propHtml = "";
 
   if (anim) {
     const fromPlace = stagePlaces[anim.fromPlaceId ?? anim.toPlaceId];
@@ -520,11 +522,21 @@ function renderStageCharacter(resident, position, taskLabel, status, isSelected,
     const travelClass = anim.traveling ? " stage-character--traveling" : "";
     const actionClass = ` stage-character--${escapeHtml(anim.action)}`;
     const activeClass = " stage-character--active";
+    // Presentation class: "is-farming", "is-chatting", "is-resting", etc.
+    const presentationClass = anim.presentationClass ? ` stage-character--${escapeHtml(anim.presentationClass)}` : "";
+    // Motion class for the sprite: "motion-work", "motion-calm", etc.
+    const motionClass = anim.motion ? ` motion-${escapeHtml(anim.motion)}` : "";
 
-    extraClasses = `${activeClass}${travelClass}${gaitClass}${faceClass}${actionClass}`;
+    extraClasses = `${activeClass}${travelClass}${gaitClass}${faceClass}${actionClass}${presentationClass}${motionClass}`;
     extraStyles = anim.traveling
       ? `--from-x:${fromX}%; --from-y:${fromY}%; --to-x:${toX}%; --to-y:${toY}%; left:${toX}%; top:${toY}%;`
       : `left:${toX}%; top:${toY}%;`;
+
+    // Prop element shown as a small item near the character
+    if (anim.prop) {
+      const propClass = anim.propClass ?? "prop--tool";
+      propHtml = `<span class="stage-character__prop stage-character__${escapeHtml(propClass)}" aria-hidden="true">${escapeHtml(anim.prop)}</span>`;
+    }
   } else {
     extraStyles = `left:${toX}%; top:${toY}%;`;
   }
@@ -556,6 +568,7 @@ function renderStageCharacter(resident, position, taskLabel, status, isSelected,
     >
       <span class="stage-character__sprite">
         ${getResidentAvatarImg(resident, 54)}
+        ${propHtml}
       </span>
       ${completionBadge}
       ${moodIconHtml}

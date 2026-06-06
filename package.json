@@ -30,6 +30,7 @@
     "tts-check": "node scripts/tts-check.mjs",
     "memory-reference-check": "node scripts/memory-reference-check.mjs",
     "resident-feedback-check": "node scripts/resident-feedback-check.mjs",
-    "desktop-ui-polish-check": "node scripts/desktop-ui-polish-check.mjs"
+    "desktop-ui-polish-check": "node scripts/desktop-ui-polish-check.mjs",
+    "stage-acting-check": "node scripts/stage-acting-check.mjs"
   }
 }
