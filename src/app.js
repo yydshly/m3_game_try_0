@@ -7,6 +7,7 @@ import { generateBroadcastSpeech } from "./services/minimaxTts.js";
 import { loadState, saveState, clearState } from "./services/persistence.js";
 import { renderApp } from "./ui/render.js";
 import { phases } from "./data/seed.js";
+import { buildResidentDialogueContext, buildFallbackResidentSceneBeats, requestMiniMaxResidentDialogues, buildBeatsSummary } from "./services/residentDialogue.js";
 
 const root = document.querySelector("#app");
 let state = loadState();
@@ -41,6 +42,7 @@ let uiState = {
   animationMessage: "",
   completionFeedback: null,
   activeScenario: selectTownLifeScenario(state),
+  residentSceneBeats: [],
 };
 let autoPlayTimer = null;
 let animationTimer = null;
@@ -243,6 +245,23 @@ function stopAutoPlay() {
   uiState = { ...uiState, autoPlay: false };
 }
 
+/**
+ * Generate resident scene beats for the current state.
+ * Uses fallback generation (synchronous, no M3 call) to keep phase advance fast.
+ * M3 beat refresh happens asynchronously in the event/broadcast handlers.
+ *
+ * @param {object} currentState
+ * @returns {Array}
+ */
+function generateResidentBeats(currentState) {
+  try {
+    const directorCtx = buildAiDirectorContext(currentState);
+    return buildFallbackResidentSceneBeats(currentState, directorCtx);
+  } catch {
+    return [];
+  }
+}
+
 function scheduleAutoPlay() {
   if (!uiState.autoPlay) return;
   if (autoPlayTimer) clearTimeout(autoPlayTimer);
@@ -283,7 +302,9 @@ function render() {
         if (uiState.isAnimating) return;
         const prev = state;
         const next = advancePhase(state);
-        uiState = { ...uiState, activeScenario: selectTownLifeScenario(next) };
+        const scenario = selectTownLifeScenario(next);
+        const beats = generateResidentBeats(next);
+        uiState = { ...uiState, activeScenario: scenario, residentSceneBeats: beats };
         commit(next);
         showTaskAnimations(prev, next);
       },
@@ -295,7 +316,9 @@ function render() {
         for (let index = 0; index < steps; index += 1) {
           next = advancePhase(next);
         }
-        uiState = { ...uiState, activeScenario: selectTownLifeScenario(next) };
+        const scenario = selectTownLifeScenario(next);
+        const beats = generateResidentBeats(next);
+        uiState = { ...uiState, activeScenario: scenario, residentSceneBeats: beats };
         commit(next);
         showTaskAnimations(prev, next);
       },
@@ -326,7 +349,10 @@ function render() {
         uiState = { ...uiState, eventDirectorStatus: "loading", eventDirectorMessage: "M3 正在观察居民和小镇动态……" };
         render();
         try {
-          const directorCtx = buildAiDirectorContext(state);
+          const directorCtx = {
+            ...buildAiDirectorContext(state),
+            residentBeatsSummary: buildBeatsSummary(uiState.residentSceneBeats),
+          };
           const result = await requestMiniMaxEvent(state, directorCtx);
           const evt = result.event;
           const currentPhase = phases[state.phaseIndex];
@@ -379,7 +405,10 @@ function render() {
         uiState = { ...uiState, broadcastStatus: "loading", broadcastMessage: "M3 正在整理今天的小镇广播……" };
         render();
         try {
-          const directorCtx = buildAiDirectorContext(state);
+          const directorCtx = {
+            ...buildAiDirectorContext(state),
+            residentBeatsSummary: buildBeatsSummary(uiState.residentSceneBeats),
+          };
           const result = await requestMiniMaxBroadcast(state, directorCtx);
           const bc = result.broadcast;
           const currentPhase = phases[state.phaseIndex];
@@ -563,6 +592,7 @@ function render() {
           animationMessage: "",
           completionFeedback: null,
           activeScenario: null,
+          residentSceneBeats: [],
         };
         commit(createInitialState());
       },

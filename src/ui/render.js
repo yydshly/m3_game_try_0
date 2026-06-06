@@ -380,6 +380,35 @@ function renderEventDirectorStatus(uiState) {
   `;
 }
 
+// ── Resident Dialogue Panel ──────────────────────────────────────────────────────
+
+function renderResidentDialoguePanel(beats) {
+  if (!Array.isArray(beats) || beats.length === 0) return "";
+  const itemsHtml = beats
+    .filter((b) => b?.dialogue)
+    .map((beat) => {
+      const emotion = beat.emotion ?? "💬";
+      return `<div class="dialogue-beat">
+        <span class="dialogue-beat__name">${escapeHtml(beat.residentName)}：</span>
+        <span class="dialogue-beat__text">${escapeHtml(beat.dialogue)}</span>
+      </div>`;
+    })
+    .join("");
+
+  if (!itemsHtml) return "";
+
+  return `
+    <div class="panel dialogue-beats-panel">
+      <div class="panel__head">
+        <h2>💬 居民小对白</h2>
+      </div>
+      <div class="dialogue-beats-list">
+        ${itemsHtml}
+      </div>
+    </div>
+  `;
+}
+
 // ── Atmosphere Panel ─────────────────────────────────────────────────────────────
 
 const MOOD_LABELS = {
@@ -555,7 +584,7 @@ function renderPlaceLabel(placeId, isActive, anim) {
   `;
 }
 
-function renderStageCharacter(resident, position, taskLabel, status, isSelected, anim, completionResult, moodView, activeScenario) {
+function renderStageCharacter(resident, position, taskLabel, status, isSelected, anim, completionResult, moodView, activeScenario, beat) {
   const toX = position.x;
   const toY = position.y;
   const selectedClass = isSelected ? " stage-character--selected" : "";
@@ -606,6 +635,14 @@ function renderStageCharacter(resident, position, taskLabel, status, isSelected,
     ? `<span class="stage-character__action-bubble">${escapeHtml(anim.bubble)}</span>`
     : "";
 
+  // Scene dialogue bubble — shown below the character, below action bubble
+  // When anim is active, show a lighter version; otherwise full display
+  const dialogueBubble = (beat?.dialogue)
+    ? (anim
+        ? `<span class="stage-character__dialogue stage-character__dialogue--light">${escapeHtml(beat.dialogue.slice(0, 20))}</span>`
+        : `<span class="stage-character__dialogue stage-character__dialogue--scenario">${escapeHtml(beat.dialogue.slice(0, 28))}</span>`)
+    : "";
+
   // Completion badge shown after animation
   const completionBadge = completionResult
     ? `<span class="stage-character__completion-badge" title="${escapeHtml(completionResult.label)}">${escapeHtml(completionResult.icon)}</span>`
@@ -635,6 +672,7 @@ function renderStageCharacter(resident, position, taskLabel, status, isSelected,
       <span class="stage-character__name">${escapeHtml(resident.name)}</span>
       ${!anim && task ? `<span class="stage-character__task">${escapeHtml(getEnhancedTaskLabel(task, activeScenario))}</span>` : ""}
       ${actionBubble}
+      ${dialogueBubble}
     </button>
   `;
 }
@@ -683,6 +721,7 @@ function renderTownStage(state, uiState) {
         completionById: completionByResidentId,
         activeAnimations,
       });
+      const beat = (uiState.residentSceneBeats ?? []).find((b) => b.residentId === resident.id) ?? null;
       return renderStageCharacter(
         resident,
         pos,
@@ -693,6 +732,7 @@ function renderTownStage(state, uiState) {
         completionResult,
         moodView,
         uiState.activeScenario,
+        beat,
       );
     })
     .join("");
@@ -1310,6 +1350,7 @@ export function renderApp(root, state, handlers, uiState = {}) {
     animationMessage: uiState.animationMessage ?? "",
     completionFeedback: uiState.completionFeedback ?? null,
     activeScenario: uiState.activeScenario ?? null,
+    residentSceneBeats: uiState.residentSceneBeats ?? [],
   };
 
   root.innerHTML = `
@@ -1337,6 +1378,7 @@ export function renderApp(root, state, handlers, uiState = {}) {
           ${renderLlmStatus(safeUiState)}
           ${renderEventDirectorStatus(safeUiState)}
           ${renderAtmospherePanel(state, safeUiState)}
+          ${renderResidentDialoguePanel(safeUiState.residentSceneBeats)}
           ${renderSpotlight(state, safeUiState)}
         </aside>
       </main>

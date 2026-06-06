@@ -1155,6 +1155,80 @@ button, select {
   pointer-events: none;
 }
 
+/* ── Scene Dialogue Bubble ───────────────────────────────────────────────── */
+
+.stage-character__dialogue {
+  display: block;
+  margin-top: 2px;
+  padding: 2px 7px;
+  border-radius: 8px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  white-space: nowrap;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  animation: dialogueIn 300ms ease-out;
+}
+
+.stage-character__dialogue--scenario {
+  background: rgba(255, 248, 235, 0.95);
+  border: 1.5px solid var(--gold);
+  color: #7a5a20;
+  box-shadow: 0 2px 6px rgba(61, 48, 39, 0.12);
+}
+
+.stage-character__dialogue--light {
+  background: rgba(255, 248, 235, 0.7);
+  border: 1px solid rgba(201, 164, 85, 0.5);
+  color: #9a8060;
+  font-size: 0.58rem;
+  max-width: 80px;
+}
+
+@keyframes dialogueIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Right Panel: Resident Dialogue Beats ────────────────────────────────── */
+
+.dialogue-beats-panel {
+  background: linear-gradient(145deg, var(--gold-soft), var(--panel));
+  border-color: var(--gold);
+  border-width: 1px;
+}
+
+.dialogue-beats-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dialogue-beat {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid var(--line);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.dialogue-beat__name {
+  font-weight: 800;
+  color: var(--ink);
+  font-size: 0.72rem;
+}
+
+.dialogue-beat__text {
+  color: var(--ink-light);
+  font-size: 0.78rem;
+}
+
 /* ── Character Body Shadow ─────────────────────────────────────────────────── */
 
 .stage-character__sprite {
