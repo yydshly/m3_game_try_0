@@ -21,17 +21,23 @@ export async function generateMimoSpeech({ scene, text, voice, emotion, speed, m
     throw new Error(validation.reason);
   }
 
+  const requestBody = {
+    text: text.trim(),
+    scene: scene ?? "resident_dialogue",
+    emotion: emotion ?? "neutral",
+    speed: speed ?? 1.0,
+    metadata: metadata ?? {},
+  };
+
+  // Only include voice if explicitly provided and non-empty — let the server use its default
+  if (voice && String(voice).trim()) {
+    requestBody.voice = String(voice).trim();
+  }
+
   const response = await fetch("./api/mimo/tts", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      text: text.trim(),
-      scene: scene ?? "resident_dialogue",
-      voice: voice ?? "default",
-      emotion: emotion ?? "neutral",
-      speed: speed ?? 1.0,
-      metadata: metadata ?? {},
-    }),
+    body: JSON.stringify(requestBody),
   });
 
   const payload = await response.json().catch(() => ({}));

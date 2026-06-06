@@ -1856,11 +1856,18 @@ function renderVoicePlaybackBar(cvp, handlers) {
   }[status] || "voice-playback-bar--loading";
 
   const loadingLabel = status === "loading" ? "正在生成语音…" : "";
-  const errorLabel = status === "error" ? (error || "语音播放失败，请稍后重试。") : "";
+  const errorLabel = status === "error" ? (error || "播放失败") : "";
 
   const showPause = status === "playing";
   const showResume = status === "paused";
   const showStop = status === "playing" || status === "paused";
+
+  const statusTitle = {
+    loading: `${icon} ${loadingLabel}`,
+    playing: `${icon} 正在播放：${titleText}`,
+    paused:  `${icon} 已暂停：${titleText}`,
+    error:   `${icon} ${errorLabel}`,
+  }[status] ?? `${icon} ${titleText}`;
 
   return `
     <div class="voice-playback-bar ${statusClass}" role="status" aria-live="polite">
@@ -1868,7 +1875,7 @@ function renderVoicePlaybackBar(cvp, handlers) {
         <span class="voice-playback-bar__icon">${icon}</span>
         <div class="voice-playback-bar__info">
           <div class="voice-playback-bar__title">
-            ${status === "loading" ? `${icon} ${loadingLabel}` : `${icon} 正在播放：${titleText}`}
+            ${statusTitle}
             ${subtitle ? `<span class="voice-playback-bar__subtitle">${subtitle}</span>` : ""}
           </div>
           ${status !== "loading" && textPreview ? `<div class="voice-playback-bar__text">${textPreview}</div>` : ""}

@@ -1331,7 +1331,16 @@ async function handleMimoTts(request, response) {
 
   const scene = String(body?.scene ?? "resident_dialogue").trim();
   const emotion = String(body?.emotion ?? "neutral").trim();
-  const voice = String(body?.voice ?? mimoVoiceId).trim();
+  const rawVoice = String(body?.voice ?? mimoVoiceId).trim();
+  // Defensive normalization: reject the client-side sentinel "default" and fall back to the server default
+  const voice = (rawVoice === "default" || rawVoice === "") ? mimoVoiceId : rawVoice;
+  if (rawVoice === "default") {
+    console.warn(`[tts:mimo:voice-normalized] ${requestId}`, {
+      requestId,
+      from: "default",
+      to: mimoVoiceId,
+    });
+  }
   const speed = Number(body?.speed ?? mimoSpeed);
   const audioFormat = String(body?.format ?? "wav").trim();
 
