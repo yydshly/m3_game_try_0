@@ -86,6 +86,62 @@ npm run voice-playback-check     # 全局语音播放条
 - WebSocket 流式 TTS
 - 背景音乐生成（music_generation）
 
+### V1 Stable Checkpoint：voice-stable（2026-06-06）
+
+本 checkpoint 固化以下语音模块能力，验证通过 38 项 voice-lifecycle-check 断言。
+
+**已稳定能力：**
+
+| 能力 | 状态 |
+|------|------|
+| MiniMax 小镇广播 TTS（生成/播放/暂停/继续） | ✅ 稳定 |
+| MiMo 居民对白 TTS（生成/播放） | ✅ 稳定 |
+| MiMo 推荐收听语音（生成/播放） | ✅ 稳定 |
+| MiMo ready 状态重播（不重新请求 API） | ✅ 稳定 |
+| MiMo 居民切换播放（不串状态） | ✅ 稳定 |
+| MiniMax / MiMo 互切（互不干扰） | ✅ 稳定 |
+| 全局语音播放条（provider 标签正确） | ✅ 稳定 |
+| MiniMax 广播 TTS dry-run 验证 | ✅ 稳定 |
+| MiMo dry-run 验证 | ✅ 稳定 |
+| 错误状态隔离（不串 dayCycle） | ✅ 稳定 |
+| API Key 不泄露（前台脱敏） | ✅ 稳定 |
+
+**当前 TTS 分工：**
+
+- `MiniMax speech-2.8-hd`：小镇广播（`town_broadcast`）
+- `MiMo mimo-v2.5-tts`：居民对白、事件提示、选择反应、任务完成反馈、场景开场白
+
+**暂不继续扩展：**
+
+- 语音缓存持久化（localStorage sessionStorage）
+- 播放进度条
+- 多角色连续播报
+- 声音克隆 / 音色绑定
+- WebSocket 流式语音
+
+**voice-lifecycle-check 覆盖的 38 项断言：**
+
+```bash
+npm run voice-lifecycle-check   # 38 passed
+npm run voice-playback-check    # 98 passed
+npm run mimo-tts-check         # 141 passed
+npm run mimo-ui-voice-contract-check  # 13 passed
+npm run voice-ui-e2e-check     # 49 passed
+npm run voice-regression-check  # 39 passed
+npm run voice-handler-self-call-check  # 14 passed
+npm run voice-api-debug-check   # 45 passed
+```
+
+**后续开发约束：**
+
+语音模块当前已稳定，后续新增功能不得顺手修改以下文件底层逻辑：
+
+- `src/services/mimoClient.js`（MiMo 请求构造）
+- `src/services/minimaxTts.js`（MiniMax TTS）
+- `src/app.js` 中的 `playMimoAudio / resumeMimoAudio / pauseMimoAudio / stopAllMimoAudio`
+- `src/app.js` 中的 `playBroadcastAudio / pauseBroadcastAudio / stopBroadcastAudio`
+- `src/ui/render.js` 中的 TTS 按钮渲染函数
+
 ## 6. UI / 舞台演出验收
 
 ### 验收标准
@@ -143,6 +199,9 @@ git status                 # 检查无敏感文件
 - Phaser / Pixi / Canvas 重构
 - 多角色连续语音剧
 - 居民固定音色绑定
+- 语音缓存持久化（session/localStorage）
+- 语音播放进度条
+- WebSocket 流式语音
 
 ## 9. 下一阶段建议
 
