@@ -4618,3 +4618,185 @@ details summary {
   margin: 4px 0;
 }
 
+/* ============================================================
+   Desktop Layout Stability Patch — V1 closeout
+   Goal:
+   - Keep the town stage as the primary game window.
+   - Let left/right panels scroll internally.
+   - Prevent long right-panel content from stretching the whole page.
+   - Desktop-only; mobile/tablet layout keeps existing behavior.
+   ============================================================ */
+
+@media (min-width: 1180px) {
+  .shell {
+    width: min(1680px, calc(100vw - 28px));
+    min-height: 100vh;
+    padding: 12px 0 28px;
+  }
+
+  .game-hud {
+    margin-bottom: 12px;
+  }
+
+  .layout {
+    grid-template-columns:
+      minmax(200px, 220px)
+      minmax(760px, 1fr)
+      minmax(340px, 380px);
+    gap: 14px;
+    align-items: stretch;
+    min-height: calc(100vh - 142px);
+    max-height: calc(100vh - 142px);
+    overflow: visible;
+  }
+
+  .left-col,
+  .side-panel,
+  .map-panel {
+    min-height: 0;
+  }
+
+  .left-col,
+  .side-panel {
+    position: sticky;
+    top: 12px;
+    max-height: calc(100vh - 142px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    padding-right: 4px;
+  }
+
+  .left-col::before,
+  .side-panel::before {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 28px;
+    margin-bottom: 8px;
+    border-radius: 999px;
+    border: 1px solid rgba(212, 196, 168, 0.75);
+    background: rgba(255, 253, 248, 0.96);
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    box-shadow: var(--shadow-sm);
+    backdrop-filter: blur(8px);
+  }
+
+  .left-col::before {
+    content: "操作 / 目标";
+  }
+
+  .side-panel::before {
+    content: "当前详情";
+  }
+
+  .left-col::-webkit-scrollbar,
+  .side-panel::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .left-col::-webkit-scrollbar-thumb,
+  .side-panel::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: rgba(154, 139, 122, 0.35);
+  }
+
+  .left-col::-webkit-scrollbar-track,
+  .side-panel::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .map-panel {
+    position: sticky;
+    top: 12px;
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 142px);
+    padding: 14px;
+    overflow: hidden;
+  }
+
+  .map-panel .section-head {
+    flex: 0 0 auto;
+    margin-bottom: 10px;
+  }
+
+  .town-stage {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: clamp(520px, calc(100vh - 270px), 720px);
+    margin-bottom: 10px;
+  }
+
+  .location-codex {
+    flex: 0 0 auto;
+    margin-top: 0;
+  }
+
+  .side-panel .panel,
+  .left-col > * {
+    flex-shrink: 0;
+  }
+
+  .story-section {
+    margin-top: 20px;
+  }
+}
+
+@media (min-width: 1180px) and (max-height: 840px) {
+  .game-hud {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+
+  .game-hud__title {
+    font-size: clamp(1.35rem, 2.4vw, 1.8rem);
+  }
+
+  .layout {
+    min-height: calc(100vh - 118px);
+    max-height: calc(100vh - 118px);
+  }
+
+  .left-col,
+  .side-panel,
+  .map-panel {
+    max-height: calc(100vh - 118px);
+  }
+
+  .town-stage {
+    height: clamp(460px, calc(100vh - 230px), 640px);
+  }
+}
+
+@media (min-width: 1500px) {
+  .layout {
+    grid-template-columns:
+      minmax(210px, 230px)
+      minmax(880px, 1fr)
+      minmax(360px, 400px);
+  }
+
+  .town-stage {
+    height: clamp(600px, calc(100vh - 255px), 760px);
+  }
+}
+
+@media (max-width: 1179px) {
+  .left-col,
+  .side-panel,
+  .map-panel {
+    position: static;
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
+  }
+}
+
