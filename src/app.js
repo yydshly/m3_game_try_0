@@ -416,11 +416,26 @@ function render() {
         const currentHash = hashBroadcastScript(scriptText);
         const ba = uiState.broadcastAudio;
 
+        // If playing → pause
+        if (ba.status === "playing") {
+          handlers.onPauseTts();
+          return;
+        }
+
+        // If paused → resume
+        if (ba.status === "paused" && ba.audioUrl) {
+          handlers.onPlayTts();
+          return;
+        }
+
         // If same script already has audio ready, just play it
         if (ba.status === "ready" && ba.scriptHash === currentHash && ba.audioUrl) {
           handlers.onPlayTts();
           return;
         }
+
+        // If loading, ignore (already generating)
+        if (ba.status === "loading") return;
 
         // Stop any active audio before generating new one
         stopActiveAudio();

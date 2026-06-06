@@ -102,16 +102,93 @@ console.log("\n── broadcastAudio.status: idle / loading / ready / playing / 
 
 // ── Test: loading state disables button (no double-click) ───────────────────
 
-console.log("\n── loading state: button disabled ──");
+console.log("\n── TTS button disabled rules ──");
+// Only loading should be disabled; all other states are clickable
+{
+  const state = createInitialState();
+  const testCases = [
+    { status: "idle",     shouldBeDisabled: false, label: "idle" },
+    { status: "loading",   shouldBeDisabled: true,  label: "loading" },
+    { status: "ready",    shouldBeDisabled: false, label: "ready" },
+    { status: "playing",  shouldBeDisabled: false, label: "playing" },
+    { status: "paused",   shouldBeDisabled: false, label: "paused" },
+    { status: "error",    shouldBeDisabled: false, label: "error" },
+  ];
+  for (const tc of testCases) {
+    root.innerHTML = "";
+    renderApp(root, state, handlers, makeUiState({
+      latestBroadcast: { id: "bc1", title: "测试", script: "测试。", mood: "warm", placeId: "plaza" },
+      broadcastAudio: {
+        status: tc.status,
+        text: "测试。",
+        audioUrl: tc.status === "ready" || tc.status === "playing" || tc.status === "paused" ? "/mock.mp3" : null,
+        error: tc.status === "error" ? "生成失败。" : null,
+        scriptHash: "abc",
+      },
+    }));
+    const btnMatch = root.innerHTML.match(/<button[^>]*data-action="generate-tts"[^>]*>/);
+    const isDisabled = btnMatch !== null && btnMatch[0].includes("disabled");
+    assert(
+      isDisabled === tc.shouldBeDisabled,
+      `status="${tc.label}" button ${tc.shouldBeDisabled ? "is disabled" : "is clickable"}`
+    );
+  }
+}
+
+// ── Test: playing state shows 暂停广播 and is clickable ─────────────────────
+
+console.log("\n── playing state: shows 暂停广播 and is NOT disabled ──");
 {
   const state = createInitialState();
   root.innerHTML = "";
   renderApp(root, state, handlers, makeUiState({
     latestBroadcast: { id: "bc1", title: "测试", script: "测试。", mood: "warm", placeId: "plaza" },
-    broadcastAudio: { status: "loading", text: "测试。", audioUrl: null, error: null, scriptHash: "abc" },
+    broadcastAudio: {
+      status: "playing",
+      text: "测试。",
+      audioUrl: "/mock.mp3",
+      error: null,
+      scriptHash: "abc",
+    },
   }));
+  assert(root.innerHTML.includes("暂停广播"), "playing shows 暂停广播");
   const btnMatch = root.innerHTML.match(/<button[^>]*data-action="generate-tts"[^>]*>/);
-  assert(btnMatch !== null && btnMatch[0].includes("disabled"), "loading button is disabled");
+  assert(btnMatch !== null && !btnMatch[0].includes("disabled"), "playing button is NOT disabled");
+}
+
+// ── Test: paused state shows 继续播放 and is clickable ────────────────────
+
+console.log("\n── paused state: shows 继续播放 and is NOT disabled ──");
+{
+  const state = createInitialState();
+  root.innerHTML = "";
+  renderApp(root, state, handlers, makeUiState({
+    latestBroadcast: { id: "bc1", title: "测试", script: "测试。", mood: "warm", placeId: "plaza" },
+    broadcastAudio: {
+      status: "paused",
+      text: "测试。",
+      audioUrl: "/mock.mp3",
+      error: null,
+      scriptHash: "abc",
+    },
+  }));
+  assert(root.innerHTML.includes("继续播放"), "paused shows 继续播放");
+  const btnMatch = root.innerHTML.match(/<button[^>]*data-action="generate-tts"[^>]*>/);
+  assert(btnMatch !== null && !btnMatch[0].includes("disabled"), "paused button is NOT disabled");
+}
+
+// ── Test: no script → button disabled ────────────────────────────────────
+
+console.log("\n── No script: button disabled or not rendered ──");
+{
+  const state = createInitialState();
+  root.innerHTML = "";
+  renderApp(root, state, handlers, makeUiState({ latestBroadcast: null }));
+  const btnMatch = root.innerHTML.match(/<button[^>]*data-action="generate-tts"[^>]*>/);
+  // Button may not exist or be disabled — either is acceptable
+  const isAbsent = btnMatch === null;
+  const isDisabled = btnMatch !== null && btnMatch[0].includes("disabled");
+  assert(isAbsent || isDisabled, "no script → button absent or disabled");
 }
 
 // ── Test: Same script (same hash) does not regenerate ───────────────────────

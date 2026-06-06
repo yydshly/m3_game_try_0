@@ -422,7 +422,8 @@ function renderAtmospherePanel(state, uiState) {
     error: "button--broadcast",
   }[baStatus] ?? "button--broadcast";
 
-  const ttsDisabled = baStatus === "loading" || baStatus === "playing" ? "disabled" : "";
+  // Only loading is disabled; playing/paused/ready/error are all clickable (pause/resume/replay)
+  const ttsDisabled = baStatus === "loading" ? "disabled" : "";
   const hasAudio = (baStatus === "ready" || baStatus === "paused") && ba.audioUrl;
   const hasError = baStatus === "error" && ba.error;
 
