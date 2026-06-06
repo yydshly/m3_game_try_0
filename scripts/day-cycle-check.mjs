@@ -85,12 +85,16 @@ console.log("\n── onRunTownDayCycle handler ──");
   assert(appContent.includes("runTownDayCycle();"), "onRunTownDayCycle calls runTownDayCycle");
 }
 
-// ── 6. completeDayCycle called from onChooseEvent ────────────────────────────
-console.log("\n── completeDayCycle from onChooseEvent ──");
+// ── 6. transitionDayCycleToCompleted called from onChooseEvent ────────────────
+console.log("\n── transitionDayCycleToCompleted from onChooseEvent ──");
 {
   const fs = await import("fs");
   const appContent = fs.readFileSync("./src/app.js", "utf8");
-  assert(appContent.includes("completeDayCycle(nextState)"), "onChooseEvent calls completeDayCycle");
+  // onChooseEvent must call transitionDayCycleToCompleted (not completeDayCycle which has waiting_choice guard)
+  assert(appContent.includes("transitionDayCycleToCompleted()"), "onChooseEvent calls transitionDayCycleToCompleted");
+  // onChooseEvent must NOT call completeDayCycle(nextState) — that pattern has the waiting_choice guard bug
+  const chooseHandler = appContent.split("onChooseEvent:")[1]?.split("onMiniMaxBroadcast:")?.[0] ?? "";
+  assert(!chooseHandler.includes("completeDayCycle(nextState)"), "onChooseEvent does NOT call completeDayCycle(nextState)");
 }
 
 // ── 7. Day cycle button in render ────────────────────────────────────────────
