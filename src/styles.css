@@ -482,7 +482,7 @@ button, select {
   padding: 8px 0;
 }
 
-/* Stage Character Voice Indicator */
+/* Stage Character Voice Indicator (legacy span) */
 .stage-character__voice-indicator {
   position: absolute;
   top: -6px;
@@ -494,6 +494,61 @@ button, select {
 }
 .stage-character__voice-indicator--idle {
   opacity: 0.6;
+}
+
+/* Stage Character Voice Button (clickable) */
+.stage-character__voice-btn {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  font-size: 0.75rem;
+  line-height: 1;
+  z-index: 10;
+  border: none;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+  background: var(--bg-elevated);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+}
+.stage-character__voice-btn:hover {
+  transform: scale(1.15);
+}
+.stage-character__voice-btn:active {
+  transform: scale(0.95);
+}
+.stage-character__voice-btn--idle {
+  opacity: 0.8;
+  background: var(--accent);
+  color: #fff;
+}
+.stage-character__voice-btn--playing {
+  background: var(--accent);
+  color: #fff;
+  animation: pulse-voice 1s ease-in-out infinite;
+}
+.stage-character__voice-btn--loading {
+  opacity: 0.6;
+  cursor: wait;
+}
+.stage-character__voice-btn--paused {
+  opacity: 0.8;
+  background: var(--accent-muted);
+  color: #fff;
+}
+.stage-character__voice-btn--error {
+  background: var(--error);
+  color: #fff;
+}
+@keyframes pulse-voice {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(125,211,252,0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(125,211,252,0); }
 }
 
 /* Choice Aftermath Reaction Header */

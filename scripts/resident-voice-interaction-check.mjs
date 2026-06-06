@@ -115,13 +115,25 @@ console.log("\n── Choice aftermath reaction MiMo buttons ──");
   assert(content.includes("residentVoiceInteraction") || content.includes("voiceEnabled"), "reaction buttons gated by voice interaction");
 }
 
-// ── 11. Map stage character voice indicators ─────────────────────────────────
-console.log("\n── Map stage character voice indicators ──");
+// ── 11. Map stage character voice buttons (clickable) ─────────────────────────
+console.log("\n── Map stage character voice buttons (clickable) ──");
 {
   const fs = await import("fs");
   const content = fs.readFileSync("./src/ui/render.js", "utf8");
-  assert(content.includes("renderCharacterVoiceIndicator") || content.includes("stage-character__voice"), "stage character voice indicator exists");
-  assert(content.includes("stage-character__voice-indicator"), "stage-character__voice-indicator CSS class exists");
+  assert(content.includes("renderCharacterVoiceIndicator"), "renderCharacterVoiceIndicator function exists");
+  // Must return button, not span
+  const fnBody = content.split("function renderCharacterVoiceIndicator")[1]?.split("\n}\n")[0] ?? "";
+  assert(fnBody.includes("<button") && !fnBody.includes("<span class=\"stage-character__voice-indicator\""), "returns <button> not static <span>");
+  assert(fnBody.includes("data-action=") && (fnBody.includes('play-mimo-tts') || fnBody.includes('pause-mimo-tts') || fnBody.includes('resume-mimo-tts')), "has data-action for play/pause/resume");
+  assert(fnBody.includes("data-audio-key="), "has data-audio-key attribute");
+  assert(fnBody.includes("data-text="), "has data-text attribute");
+  assert(fnBody.includes("data-scene=") && fnBody.includes("resident_dialogue"), "has data-scene=resident_dialogue");
+  assert(fnBody.includes("data-resident-id="), "has data-resident-id attribute");
+  // CSS for button
+  const css = fs.readFileSync("./src/styles.css", "utf8");
+  assert(css.includes(".stage-character__voice-btn"), "stage-character__voice-btn CSS class exists");
+  assert(css.includes("cursor: pointer"), "voice button has cursor:pointer");
+  assert(css.includes("data-action=") === false, "CSS does not contain data-action (no inline handlers)");
 }
 
 // ── 12. Provider labels: MiniMax for broadcast ────────────────────────────

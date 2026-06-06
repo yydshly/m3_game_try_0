@@ -785,12 +785,18 @@ function renderCharacterVoiceIndicator(resident, beat, voiceState, ttsAudios) {
   const audioKey = 'resident_dialogue:' + resident.id + ':' + (beat.id ?? '');
   const ta = ttsAudios[audioKey] ?? {};
   if (ta.status === 'playing') {
-    return '<span class="stage-character__voice-indicator" aria-label="MiMo 语音播放中">🔊</span>';
+    return `<button class="stage-character__voice-btn stage-character__voice-btn--playing" type="button" data-action="pause-mimo-tts" data-audio-key="${escapeHtml(audioKey)}" title="暂停 ${escapeHtml(resident.name)} 的对白">🔊</button>`;
   }
   if (ta.status === 'loading') {
-    return '<span class="stage-character__voice-indicator" aria-label="MiMo 语音加载中">🔊…</span>';
+    return `<button class="stage-character__voice-btn stage-character__voice-btn--loading" type="button" disabled title="加载中">🔊…</button>`;
   }
-  return '<span class="stage-character__voice-indicator stage-character__voice-indicator--idle" aria-label="MiMo 语音可播放">🔈</span>';
+  if (ta.status === 'paused' || ta.status === 'ready') {
+    return `<button class="stage-character__voice-btn stage-character__voice-btn--paused" type="button" data-action="resume-mimo-tts" data-audio-key="${escapeHtml(audioKey)}" title="继续播放 ${escapeHtml(resident.name)} 的对白">▶️</button>`;
+  }
+  if (ta.status === 'error') {
+    return `<button class="stage-character__voice-btn stage-character__voice-btn--error" type="button" data-action="play-mimo-tts" data-audio-key="${escapeHtml(audioKey)}" data-text="${escapeHtml(beat.dialogue ?? '')}" data-scene="resident_dialogue" data-resident-id="${escapeHtml(resident.id)}" data-beat-id="${escapeHtml(beat.id ?? '')}" title="重试播放 ${escapeHtml(resident.name)} 的对白">⚠️</button>`;
+  }
+  return `<button class="stage-character__voice-btn stage-character__voice-btn--idle" type="button" data-action="play-mimo-tts" data-audio-key="${escapeHtml(audioKey)}" data-text="${escapeHtml(beat.dialogue ?? '')}" data-scene="resident_dialogue" data-resident-id="${escapeHtml(resident.id)}" data-beat-id="${escapeHtml(beat.id ?? '')}" title="播放 ${escapeHtml(resident.name)} 的对白">🔈</button>`;
 }
 
 function renderStageCharacter(resident, position, taskLabel, status, isSelected, anim, completionResult, moodView, activeScenario, beat, residentVoiceInteraction = null, ttsAudios = {}) {
