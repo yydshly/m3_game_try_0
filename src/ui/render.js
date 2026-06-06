@@ -323,6 +323,13 @@ function renderGameActions(state, safeUiState) {
         </button>
       </div>
       <div class="game-actions__section">
+        <p class="game-actions__section-label">🎙️ 居民语音互动</p>
+        <button class="button ${safeUiState.residentVoiceInteraction?.enabled ? "button--voice-on" : "button--voice-off"}" type="button" data-action="toggle-resident-voice">
+          ${safeUiState.residentVoiceInteraction?.enabled ? "🔊 居民语音 ON" : "🎙️ 居民语音 OFF"}
+        </button>
+        ${safeUiState.residentVoiceInteraction?.enabled ? '<p class="game-actions__voice-hint">开启后，可点击居民对白和选择反应播放 MiMo 语音</p>' : ""}
+      </div>
+      <div class="game-actions__section">
         <p class="game-actions__section-label">⚙️ 其他</p>
         <button class="button ${safeUiState.autoPlay ? "button--live" : "button--ghost"}" type="button" data-action="toggle-auto">
           ${safeUiState.autoPlay ? "⏸️ 暂停" : "▶️ 自动推进"}
@@ -353,6 +360,58 @@ function renderDayOpeningReflection(openingReflection) {
         <span class="day-opening-reflection__title">${escapeHtml(title ?? "昨日回响")}</span>
       </div>
       <p class="day-opening-reflection__summary">${escapeHtml(summary ?? "")}</p>
+    </div>
+  `;
+}
+
+/**
+ * Render the recommended resident voice clip when voice interaction is enabled.
+ * Shows a single highlighted clip with play button.
+ * @param {object} voiceState - residentVoiceInteraction from uiState
+ * @param {Array} clips - residentVoiceClips array
+ * @param {object} ttsAudios - tts audio cache
+ * @returns {string} HTML or empty string
+ */
+function renderRecommendedVoiceClip(voiceState, clips, ttsAudios) {
+  if (!voiceState?.enabled) return "";
+  const recommendedKey = voiceState.recommendedClipKey ?? "";
+  const clip = clips.find((c) => c.key === recommendedKey) ?? clips[0];
+  if (!clip) {
+    return voiceState.hint
+      ? `<div class="recommended-voice"><p class="recommended-voice__empty">${escapeHtml(voiceState.hint)}</p></div>`
+      : "";
+  }
+
+  const ta = ttsAudios[clip.key] ?? {};
+  const isLoading = ta.status === "loading";
+  const isPlaying = ta.status === "playing";
+  const isPaused = ta.status === "paused";
+  const isReady = ta.status === "ready";
+  const hasError = ta.status === "error";
+
+  let btn = "";
+  if (isLoading) {
+    btn = `<button class="mimo-tts-btn mimo-tts-btn--loading" disabled>🔊…</button>`;
+  } else if (isPlaying) {
+    btn = `<button class="mimo-tts-btn mimo-tts-btn--playing" data-action="pause-mimo-tts" data-audio-key="${escapeHtml(clip.key)}">⏸️</button>`;
+  } else if (isPaused || isReady) {
+    btn = `<button class="mimo-tts-btn mimo-tts-btn--ready" data-action="resume-mimo-tts" data-audio-key="${escapeHtml(clip.key)}">▶️</button>`;
+  } else if (hasError) {
+    btn = `<button class="mimo-tts-btn mimo-tts-btn--error" data-action="play-mimo-tts" data-audio-key="${escapeHtml(clip.key)}" data-text="${escapeHtml(clip.text)}" data-scene="${escapeHtml(clip.scene)}" data-resident-id="${escapeHtml(clip.residentId)}" data-beat-id="">⚠️</button>`;
+  } else {
+    btn = `<button class="mimo-tts-btn" data-action="play-mimo-tts" data-audio-key="${escapeHtml(clip.key)}" data-text="${escapeHtml(clip.text)}" data-scene="${escapeHtml(clip.scene)}" data-resident-id="${escapeHtml(clip.residentId)}" data-beat-id="">🔈 MiMo 播放</button>`;
+  }
+
+  return `
+    <div class="recommended-voice" aria-label="推荐收听" aria-live="polite">
+      <div class="recommended-voice__header">
+        <span>🎧</span>
+        <span class="recommended-voice__label">推荐收听：${escapeHtml(clip.title ?? clip.residentName ?? "")}</span>
+        <span class="recommended-voice__provider">MiMo</span>
+      </div>
+      <p class="recommended-voice__text">${escapeHtml(clip.text ?? "")}</p>
+      ${clip.reason ? `<p class="recommended-voice__reason">${escapeHtml(clip.reason)}</p>` : ""}
+      <div class="recommended-voice__actions">${btn}</div>
     </div>
   `;
 }
@@ -493,7 +552,7 @@ function renderEventDirectorStatus(uiState) {
 
 // ── Resident Dialogue Panel ──────────────────────────────────────────────────────
 
-function renderResidentDialoguePanel(beats, ttsAudios = {}, handlers = {}) {
+function renderResidentDialoguePanel(beats, ttsAudios = {}, residentVoiceInteraction = null) {
   if (!Array.isArray(beats) || beats.length === 0) return "";
   const itemsHtml = beats
     .filter((b) => b?.dialogue)
@@ -579,13 +638,13 @@ function renderAtmospherePanel(state, uiState) {
     error: "button--broadcast",
   }[baStatus] ?? "button--broadcast";
   const ttsButtonLabel = {
-    idle: "生成语音广播",
-    loading: "正在生成…",
-    ready: "播放广播",
-    playing: "暂停广播",
-    paused: "播放广播",
-    error: "重新生成",
-  }[baStatus] ?? "生成语音广播";
+    idle: "🔊 MiniMax 生成语音",
+    loading: "🔊 MiniMax 生成中…",
+    ready: "▶️ MiniMax 播放",
+    playing: "⏸️ MiniMax 暂停",
+    paused: "▶️ MiniMax 播放",
+    error: "⚠️ MiniMax 重新生成",
+  }[baStatus] ?? "🔊 MiniMax 生成语音";
   const ttsButtonIcon = {
     idle: "🔊",
     loading: "🔊",
@@ -630,7 +689,7 @@ function renderAtmospherePanel(state, uiState) {
       <div class="panel__head">
         <h2>🎧 小镇氛围</h2>
         <span class="panel-badge">${escapeHtml(statusText)}</span>
-        ${latestBc && ttsStatusLine ? `<span class="panel-badge panel-badge--tts">🎙️ ${escapeHtml(ttsStatusLine)}</span>` : ""}
+        ${latestBc && ttsStatusLine ? `<span class="panel-badge panel-badge--tts">🎙️ MiniMax ${escapeHtml(ttsStatusLine)}</span>` : ""}
       </div>
       ${uiState.activeScenario ? `
         <div class="atmosphere-scenario">
@@ -639,6 +698,7 @@ function renderAtmospherePanel(state, uiState) {
           <span class="atmosphere-scenario__tone">${escapeHtml(uiState.activeScenario.tone)}</span>
         </div>
       ` : ""}
+      ${renderRecommendedVoiceClip(uiState.residentVoiceInteraction, uiState.residentVoiceClips, uiState.ttsAudios)}
       ${latestBc ? `
         <div class="atmosphere-broadcast-preview">
           <p class="atmosphere-broadcast-preview__title">${escapeHtml(latestBc.title)}</p>
@@ -714,7 +774,26 @@ function renderPlaceLabel(placeId, isActive, anim) {
   `;
 }
 
-function renderStageCharacter(resident, position, taskLabel, status, isSelected, anim, completionResult, moodView, activeScenario, beat) {
+
+/**
+ * Render a small MiMo voice indicator on a stage character.
+ * Only shown when voice interaction is enabled and the resident has a dialogue beat.
+ */
+function renderCharacterVoiceIndicator(resident, beat, voiceState, ttsAudios) {
+  if (!voiceState?.enabled) return "";
+  if (!beat?.dialogue) return "";
+  const audioKey = 'resident_dialogue:' + resident.id + ':' + (beat.id ?? '');
+  const ta = ttsAudios[audioKey] ?? {};
+  if (ta.status === 'playing') {
+    return '<span class="stage-character__voice-indicator" aria-label="MiMo 语音播放中">🔊</span>';
+  }
+  if (ta.status === 'loading') {
+    return '<span class="stage-character__voice-indicator" aria-label="MiMo 语音加载中">🔊…</span>';
+  }
+  return '<span class="stage-character__voice-indicator stage-character__voice-indicator--idle" aria-label="MiMo 语音可播放">🔈</span>';
+}
+
+function renderStageCharacter(resident, position, taskLabel, status, isSelected, anim, completionResult, moodView, activeScenario, beat, residentVoiceInteraction = null, ttsAudios = {}) {
   const toX = position.x;
   const toY = position.y;
   const selectedClass = isSelected ? " stage-character--selected" : "";
@@ -803,6 +882,7 @@ function renderStageCharacter(resident, position, taskLabel, status, isSelected,
       ${!anim && task ? `<span class="stage-character__task">${escapeHtml(getEnhancedTaskLabel(task, activeScenario))}</span>` : ""}
       ${actionBubble}
       ${dialogueBubble}
+      ${renderCharacterVoiceIndicator(resident, beat, residentVoiceInteraction, ttsAudios)}
     </button>
   `;
 }
@@ -812,16 +892,18 @@ function renderStageCharacter(resident, position, taskLabel, status, isSelected,
  * @param {object|null} aftermath
  * @returns {string} HTML or empty string
  */
-function renderChoiceAftermath(aftermath) {
+function renderChoiceAftermath(aftermath, residentVoiceInteraction = null) {
   if (!aftermath || !aftermath.id) return "";
   const { choiceLabel, summary, residentReactions } = aftermath;
 
-  const reactionsHtml = (residentReactions ?? []).map((r) => `
-    <div class="choice-aftermath__reaction">
-      <span class="choice-aftermath__reaction-name">${escapeHtml(r.residentName ?? "")}：</span>
-      <span class="choice-aftermath__reaction-text">${escapeHtml(r.reaction ?? "")}</span>
-    </div>
-  `).join("");
+  const reactionsHtml = (residentReactions ?? []).map((r) => {
+    const voiceEnabled = residentVoiceInteraction?.enabled ?? false;
+    const audioKey = "choice_reaction:" + (r.residentId ?? "") + ":" + (aftermath?.id ?? "");
+    const btn = voiceEnabled
+      ? `<button class="mimo-tts-btn" data-action="play-mimo-tts" data-audio-key="${escapeHtml(audioKey)}" data-text="${escapeHtml(r.reaction ?? "")}" data-scene="choice_reaction" data-resident-id="${escapeHtml(r.residentId ?? "")}" data-beat-id="">🔈 MiMo</button>`
+      : "";
+    return `<div class="choice-aftermath__reaction"><span class="choice-aftermath__reaction-name">${escapeHtml(r.residentName ?? "")}：</span><span class="choice-aftermath__reaction-text">${escapeHtml(r.reaction ?? "")}</span>${btn}</div>`;
+  }).join("");
 
   return `
     <div class="choice-aftermath" aria-label="刚刚的选择影响" aria-live="polite">
@@ -835,7 +917,7 @@ function renderChoiceAftermath(aftermath) {
       ${summary ? `<p class="choice-aftermath__summary">${escapeHtml(summary)}</p>` : ""}
       ${reactionsHtml ? `
         <div class="choice-aftermath__reactions">
-          <div class="choice-aftermath__reaction" style="font-size:0.75rem;color:var(--ink-light);margin-bottom:4px;">居民反应：</div>
+          <div class="choice-aftermath__reaction-header">居民反应：</div>
           ${reactionsHtml}
         </div>
       ` : ""}
@@ -923,6 +1005,8 @@ function renderTownStage(state, uiState) {
         moodView,
         uiState.activeScenario,
         beat,
+        uiState.residentVoiceInteraction,
+        uiState.ttsAudios,
       );
     })
     .join("");
@@ -1504,6 +1588,7 @@ function renderReports(state) {
 function bindEvents(root, handlers) {
   root.querySelector("[data-action='advance']").addEventListener("click", handlers.onAdvance);
   root.querySelector("[data-action='run-day']").addEventListener("click", handlers.onRunDay);
+  root.querySelector("[data-action='toggle-resident-voice']")?.addEventListener("click", handlers.onToggleResidentVoice);
   root.querySelector("[data-action='toggle-auto']").addEventListener("click", handlers.onToggleAutoPlay);
   root.querySelector("[data-action='minimax-plan']").addEventListener("click", handlers.onMiniMaxPlan);
   root.querySelector("[data-action='minimax-event']").addEventListener("click", handlers.onMiniMaxEvent);
@@ -1593,6 +1678,8 @@ export function renderApp(root, state, handlers, uiState = {}) {
     currentVoicePlayback: uiState.currentVoicePlayback ?? null,
     choiceAftermath: uiState.choiceAftermath ?? null,
     dayOpeningReflection: uiState.dayOpeningReflection ?? null,
+    residentVoiceInteraction: uiState.residentVoiceInteraction ?? { enabled: false, recommendedClipKey: "", lastTriggeredAt: 0, hint: "" },
+    residentVoiceClips: Array.isArray(uiState.residentVoiceClips) ? uiState.residentVoiceClips : [],
   };
 
   const safeHandlers = {
@@ -1630,8 +1717,8 @@ export function renderApp(root, state, handlers, uiState = {}) {
           ${renderLlmStatus(safeUiState)}
           ${renderEventDirectorStatus(safeUiState)}
           ${renderAtmospherePanel(state, safeUiState)}
-          ${renderResidentDialoguePanel(safeUiState.residentSceneBeats, safeUiState.ttsAudios, safeHandlers)}
-          ${renderChoiceAftermath(safeUiState.choiceAftermath)}
+          ${renderResidentDialoguePanel(safeUiState.residentSceneBeats, safeUiState.ttsAudios, safeUiState.residentVoiceInteraction)}
+          ${renderChoiceAftermath(safeUiState.choiceAftermath, safeUiState.residentVoiceInteraction)}
           ${renderSpotlight(state, safeUiState)}
         </aside>
       </main>

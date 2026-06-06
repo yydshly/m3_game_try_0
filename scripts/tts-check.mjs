@@ -248,7 +248,7 @@ renderApp(root, stateWithBroadcast, noopHandlers, {
   broadcastAudio: { status: "generating", text: "亲爱的居民们，下午好。", audioUrl: null, error: null, traceId: null, generatedAt: null },
 });
 
-assert(root.innerHTML.includes("正在生成"), "generating status shown");
+assert(root.innerHTML.includes("生成中") || root.innerHTML.includes("正在生成"), "generating status shown");
 
 // With error state
 root.innerHTML = "";

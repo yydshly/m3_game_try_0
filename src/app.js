@@ -72,6 +72,13 @@ let uiState = {
   currentVoicePlayback: makeVoicePlaybackState(), // unified global voice playback state
   choiceAftermath: null, // { id, eventId, choiceId, choiceLabel, summary, residentReactions, stageEffect, memoryLabels, createdAt }
   dayOpeningReflection: null, // { id, sourceType, sourceId, title, summary, memoryLabels, scenarioHint, createdAt }
+  residentVoiceInteraction: {
+    enabled: false,
+    recommendedClipKey: "",
+    lastTriggeredAt: 0,
+    hint: "",
+  },
+  residentVoiceClips: [],
 };
 let autoPlayTimer = null;
 let animationTimer = null;
@@ -701,6 +708,122 @@ function buildDayOpeningReflection(state, uiState) {
     scenarioHint: "",
     createdAt: Date.now(),
   };
+}
+
+// ── Resident Voice Clips ────────────────────────────────────────────────────────────
+
+/**
+ * Build a list of playable resident voice clips from current state and UI state.
+ * Each clip has an audioKey, resident info, text, and priority for recommendation.
+ * This is a UI-only derivation — does not modify simulation state.
+ *
+ * @param {object} state
+ * @param {object} uiState
+ * @returns {Array} residentVoiceClips
+ */
+function buildResidentVoiceClips(state, uiState) {
+  const clips = [];
+  const residents = state.residents ?? [];
+  const beats = uiState.residentSceneBeats ?? [];
+  const aftermath = uiState.choiceAftermath;
+  const activeScenario = uiState.activeScenario;
+
+  // 1. Add clips from residentSceneBeats
+  for (const beat of beats) {
+    if (!beat?.dialogue || !beat?.residentId) continue;
+    const resident = residents.find((r) => r.id === beat.residentId);
+    const audioKey = `resident_dialogue:${beat.residentId}:${beat.id}`;
+    const priority = (activeScenario?.id === beat.scenarioId) ? 80 : 50;
+    clips.push({
+      key: audioKey,
+      residentId: beat.residentId,
+      residentName: beat.residentName ?? resident?.name ?? "",
+      scene: "resident_dialogue",
+      sourceType: "resident_dialogue",
+      title: `${beat.residentName ?? resident?.name ?? ""}的对白`,
+      text: beat.dialogue,
+      reason: beat.actionHint ? `正在${beat.actionHint}` : "",
+      priority,
+    });
+  }
+
+  // 2. Add clips from choiceAftermath resident reactions
+  if (aftermath?.residentReactions?.length > 0) {
+    for (const reaction of aftermath.residentReactions) {
+      if (!reaction?.reaction) continue;
+      const audioKey = `choice_reaction:${reaction.residentId}:${aftermath.id}`;
+      clips.push({
+        key: audioKey,
+        residentId: reaction.residentId,
+        residentName: reaction.residentName ?? "",
+        scene: "choice_reaction",
+        sourceType: "choice_reaction",
+        title: `${reaction.residentName ?? ""}的反应`,
+        text: reaction.reaction,
+        reason: "刚刚的选择反应",
+        priority: 95,
+      });
+    }
+  }
+
+  // 3. Add clips from low-mood residents (no beat yet)
+  for (const resident of residents) {
+    if (resident.mood < 45) {
+      // Find if already in clips
+      const already = clips.find((c) => c.residentId === resident.id);
+      if (!already) {
+        clips.push({
+          key: `low_mood:${resident.id}`,
+          residentId: resident.id,
+          residentName: resident.name,
+          scene: "resident_mood",
+          sourceType: "resident_mood",
+          title: `${resident.name}的心情`,
+          text: `${resident.name}今天心情有点低落，可能需要关心一下。`,
+          reason: "心情较低",
+          priority: 40,
+        });
+      }
+    }
+  }
+
+  return clips;
+}
+
+/**
+ * Select the recommended resident voice clip based on current state.
+ * Priority: choiceAftermath reactions > matching scenario beats > low-mood > fallback
+ *
+ * @param {Array} clips
+ * @param {object} state
+ * @param {object} uiState
+ * @returns {object|null} recommendedClip or null
+ */
+function selectRecommendedResidentVoiceClip(clips, state, uiState) {
+  if (!clips || clips.length === 0) return null;
+
+  // Highest priority: choice aftermath reactions
+  const reactionClips = clips.filter((c) => c.sourceType === "choice_reaction");
+  if (reactionClips.length > 0) return reactionClips[0];
+
+  // Second: active scenario matching beats
+  const scenario = uiState.activeScenario?.id;
+  if (scenario) {
+    const scenarioClips = clips.filter(
+      (c) => c.scene === "resident_dialogue" && c.sourceType === "resident_dialogue"
+    );
+    if (scenarioClips.length > 0) return scenarioClips[0];
+  }
+
+  // Third: any resident dialogue clip
+  const dialogueClips = clips.filter((c) => c.scene === "resident_dialogue");
+  if (dialogueClips.length > 0) return dialogueClips[0];
+
+  // Fourth: low-mood resident
+  const moodClips = clips.filter((c) => c.sourceType === "resident_mood");
+  if (moodClips.length > 0) return moodClips[0];
+
+  return clips[0] ?? null;
 }
 
 // ── Day Cycle Orchestration ─────────────────────────────────────────────────────
@@ -1536,6 +1659,22 @@ function render() {
         render();
       },
       onResetAssignments: () => commit(resetAssignments(state)),
+      onToggleResidentVoice: () => {
+        const current = uiState.residentVoiceInteraction?.enabled ?? false;
+        const clips = buildResidentVoiceClips(state, uiState);
+        const recommended = selectRecommendedResidentVoiceClip(clips, state, uiState);
+        uiState = {
+          ...uiState,
+          residentVoiceClips: clips,
+          residentVoiceInteraction: {
+            enabled: !current,
+            recommendedClipKey: recommended?.key ?? "",
+            lastTriggeredAt: Date.now(),
+            hint: !current && !recommended ? "暂无可播放居民语音" : "",
+          },
+        };
+        render();
+      },
       onRunTownDayCycle: () => {
         runTownDayCycle();
       },
@@ -1566,6 +1705,7 @@ function render() {
           currentVoicePlayback: makeVoicePlaybackState(),
           choiceAftermath: null,
           dayOpeningReflection: null,
+          residentVoiceInteraction: { enabled: false, recommendedClipKey: "", lastTriggeredAt: 0, hint: "" },
         };
         commit(createInitialState());
       },

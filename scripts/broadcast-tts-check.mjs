@@ -76,13 +76,14 @@ console.log("\n── broadcastAudio.status: idle / loading / ready / playing / 
 {
   const state = createInitialState();
   const statuses = ["idle", "loading", "ready", "playing", "paused", "error"];
+  // New MiniMax-branded labels
   const expectedTexts = {
-    idle: "生成语音广播",
-    loading: "正在生成…",
-    ready: "播放广播",
-    playing: "暂停广播",
-    paused: "播放广播",
-    error: "重新生成",
+    idle: "MiniMax 生成语音",
+    loading: "MiniMax 生成中",
+    ready: "MiniMax 播放",
+    playing: "MiniMax 暂停",
+    paused: "MiniMax 播放",
+    error: "MiniMax 重新生成",
   };
   for (const status of statuses) {
     root.innerHTML = "";
@@ -152,7 +153,7 @@ console.log("\n── playing state: shows 暂停广播 and is disabled ──")
       scriptHash: "abc",
     },
   }));
-  assert(root.innerHTML.includes("暂停广播"), "playing shows 暂停广播");
+  assert(root.innerHTML.includes("MiniMax 暂停"), "playing shows MiniMax 暂停");
   const btnMatch = root.innerHTML.match(/<button[^>]*data-action="generate-tts"[^>]*>/);
   // TTS button is disabled during playback to prevent interruption
   assert(btnMatch !== null && btnMatch[0].includes("disabled"), "playing button is disabled");
@@ -175,7 +176,7 @@ console.log("\n── paused state: shows 播放广播 and is disabled ──");
     },
   }));
   // Paused shows "播放广播" as status label (TTS button disabled; resume via play button)
-  assert(root.innerHTML.includes("播放广播"), "paused shows 播放广播");
+  assert(root.innerHTML.includes("MiniMax 播放"), "paused shows MiniMax 播放");
   const btnMatch = root.innerHTML.match(/<button[^>]*data-action="generate-tts"[^>]*>/);
   assert(btnMatch !== null && btnMatch[0].includes("disabled"), "paused button is disabled");
 }
@@ -213,9 +214,9 @@ console.log("\n── Same script hash: no regeneration needed ──");
       scriptHash: "abc123",
     },
   }));
-  // Button should show "播放广播" not "正在生成"
-  assert(root.innerHTML.includes("播放广播"), "ready state shows 播放广播");
-  assert(!root.innerHTML.includes("正在生成"), "ready state does NOT show 正在生成");
+  // Button should show "MiniMax 播放" not "MiniMax 生成中"
+  assert(root.innerHTML.includes("MiniMax 播放"), "ready state shows MiniMax 播放");
+  assert(!root.innerHTML.includes("MiniMax 生成中") && !root.innerHTML.includes("正在生成"), "ready state does NOT show generating");
 }
 
 // ── Test: Different script allows regeneration ────────────────────────────────
@@ -234,8 +235,8 @@ console.log("\n── Different script: regeneration allowed ──");
       scriptHash: "oldhash",
     },
   }));
-  // Should show "播放广播" (ready to play) — the UI knows it's a different script
-  assert(root.innerHTML.includes("播放广播") || root.innerHTML.includes("生成语音"), "different script shows generate or play");
+  // Should show "MiniMax 播放" (ready to play) — the UI knows it's a different script
+  assert(root.innerHTML.includes("MiniMax 播放") || root.innerHTML.includes("MiniMax 生成"), "different script shows MiniMax play or generate");
 }
 
 // ── Test: Playing state shows broadcast indicator on map ─────────────────────
