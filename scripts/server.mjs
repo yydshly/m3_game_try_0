@@ -1333,12 +1333,15 @@ async function handleMimoTts(request, response) {
   const emotion = String(body?.emotion ?? "neutral").trim();
   const voice = String(body?.voice ?? mimoVoiceId).trim();
   const speed = Number(body?.speed ?? mimoSpeed);
+  const audioFormat = String(body?.format ?? "wav").trim();
 
   // Build Chat Completions body per Token Plan spec:
   // - user role: style/emotion/instruction
   // - assistant role: the text to synthesize
   const styleInstruction = buildMimoStyleInstruction(emotion, speed);
 
+  // NOTE: scene, emotion, speed, metadata, text are used only for local logic
+  // (style instruction). They are NEVER forwarded as top-level payload fields.
   const chatPayload = {
     model: mimoModel,
     messages: [
@@ -1346,7 +1349,7 @@ async function handleMimoTts(request, response) {
       { role: "assistant", content: text },
     ],
     audio: {
-      format: "wav",
+      format: audioFormat || "wav",
       voice: voice || "mimo_default",
     },
   };

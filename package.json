@@ -47,6 +47,7 @@
     "resident-voice-interaction-check": "node scripts/resident-voice-interaction-check.mjs",
     "voice-regression-check": "node scripts/voice-regression-check.mjs",
     "voice-ui-e2e-check": "node scripts/voice-ui-e2e-check.mjs",
-    "mimo-tts-param-probe": "node scripts/mimo-tts-param-probe.mjs"
+    "mimo-tts-param-probe": "node scripts/mimo-tts-param-probe.mjs",
+    "tts-official-contract-check": "node scripts/tts-official-contract-check.mjs"
   }
 }
