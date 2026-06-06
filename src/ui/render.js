@@ -170,6 +170,46 @@ function renderGameHud(state) {
   `;
 }
 
+// ── Day Cycle Status Banner ─────────────────────────────────────────────────────
+
+function renderDayCycleStatus(safeUiState) {
+  const dc = safeUiState.dayCycle;
+  if (!dc || dc.status === "idle") return "";
+
+  const statusIcons = {
+    running: "⚙️",
+    waiting_choice: "🎯",
+    completed: "✅",
+    error: "⚠️",
+  };
+  const statusClasses = {
+    running: "day-cycle-status--running",
+    waiting_choice: "day-cycle-status--waiting",
+    completed: "day-cycle-status--completed",
+    error: "day-cycle-status--error",
+  };
+
+  const icon = statusIcons[dc.status] ?? "⚙️";
+  const cls = statusClasses[dc.status] ?? "";
+  const stepText = dc.step || "处理中……";
+  const isRunning = dc.status === "running";
+  const isWaiting = dc.status === "waiting_choice";
+  const isCompleted = dc.status === "completed";
+  const isError = dc.status === "error";
+
+  return `
+    <div class="day-cycle-status ${cls}" aria-live="polite">
+      <div class="day-cycle-status__header">
+        <span class="day-cycle-status__icon">${icon}</span>
+        <span class="day-cycle-status__label">${isRunning ? "🏠 小镇一天" : isWaiting ? "🎯 等待选择" : isCompleted ? "✅ 完成" : "⚠️ 出错"}</span>
+      </div>
+      <p class="day-cycle-status__step">${escapeHtml(stepText)}</p>
+      ${dc.scenarioId && isRunning ? `<p class="day-cycle-status__scenario">🎬 ${escapeHtml(dc.scenarioId)}</p>` : ""}
+      ${isError && dc.error ? `<p class="day-cycle-status__error">${escapeHtml(dc.error)}</p>` : ""}
+    </div>
+  `;
+}
+
 // ── Left Column: Game Actions + Compact Goals ───────────────────────────────────
 
 function renderGameActions(state, safeUiState) {
@@ -195,6 +235,16 @@ function renderGameActions(state, safeUiState) {
   const eventLoading = safeUiState.eventDirectorStatus === "loading" ? "disabled" : "";
   const broadcastLoading = safeUiState.broadcastStatus === "loading" ? "disabled" : "";
 
+  const dc = safeUiState.dayCycle ?? {};
+  const dayCycleRunning = dc.status === "running";
+  const dayCycleWaiting = dc.status === "waiting_choice";
+  const dayCycleCompleted = dc.status === "completed";
+  const dayCycleError = dc.status === "error";
+  const dayCycleActive = dayCycleRunning || dayCycleWaiting || dayCycleCompleted || dayCycleError;
+  const dayCycleDisabled = dayCycleActive || isAnimating ? "disabled" : "";
+
+  const dayCycleBanner = dayCycleActive ? renderDayCycleStatus(safeUiState) : "";
+
   return `
     <div class="game-actions">
       <p class="game-actions__title">🎮 游戏操作</p>
@@ -207,6 +257,13 @@ function renderGameActions(state, safeUiState) {
       </div>
       ${animBanner}
       ${completionBanner}
+      ${dayCycleBanner}
+      <div class="game-actions__section">
+        <p class="game-actions__section-label">🏠 一日闭环</p>
+        <button class="button button--primary button--day-cycle" type="button" data-action="run-town-day-cycle" ${dayCycleDisabled}>
+          ${dayCycleRunning ? "⚙️ 推进中……" : dayCycleWaiting ? "🎯 等待选择……" : dayCycleCompleted ? "✅ 已完成" : dayCycleError ? "⚠️ 出错重试" : "🏠 推进小镇一天"}
+        </button>
+      </div>
       <div class="game-actions__section">
         <p class="game-actions__section-label">⏭️ 推进</p>
         <button class="button button--primary" type="button" data-action="advance" ${advancingDisabled}>
@@ -1299,6 +1356,7 @@ function bindEvents(root, handlers) {
   root.querySelector("[data-action='generate-tts']")?.addEventListener("click", handlers.onGenerateTts);
   root.querySelector("[data-action='play-tts']")?.addEventListener("click", handlers.onPlayTts);
   root.querySelector("[data-action='reset-assignments']").addEventListener("click", handlers.onResetAssignments);
+  root.querySelector("[data-action='run-town-day-cycle']")?.addEventListener("click", handlers.onRunTownDayCycle);
   root.querySelector("[data-action='new-town']").addEventListener("click", handlers.onNewTown);
   root.querySelectorAll("[data-action='select-resident']").forEach((button) => {
     button.addEventListener("click", () => {
@@ -1351,6 +1409,7 @@ export function renderApp(root, state, handlers, uiState = {}) {
     completionFeedback: uiState.completionFeedback ?? null,
     activeScenario: uiState.activeScenario ?? null,
     residentSceneBeats: uiState.residentSceneBeats ?? [],
+    dayCycle: uiState.dayCycle ?? { status: "idle", step: "", scenarioId: "", error: "", startedAt: 0, completedAt: 0 },
   };
 
   root.innerHTML = `

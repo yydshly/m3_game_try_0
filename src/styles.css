@@ -395,12 +395,92 @@ button, select {
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+/* Day Cycle Status */
+.day-cycle-status {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  animation: animBannerIn 300ms ease-out;
+}
+
+.day-cycle-status--running {
+  background: linear-gradient(135deg, #fff8e6, var(--panel));
+  border: 1.5px solid var(--gold);
+  color: #8a6020;
+}
+
+.day-cycle-status--waiting {
+  background: linear-gradient(135deg, #e8f5e9, var(--panel));
+  border: 1.5px solid var(--green);
+  color: var(--green-deep);
+}
+
+.day-cycle-status--completed {
+  background: linear-gradient(135deg, #e8f5e9, var(--panel));
+  border: 1.5px solid var(--green);
+  color: var(--green-deep);
+}
+
+.day-cycle-status--error {
+  background: linear-gradient(135deg, #fff3e0, var(--panel));
+  border: 1.5px solid #e65100;
+  color: #bf360c;
+}
+
+.day-cycle-status__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 800;
+}
+
+.day-cycle-status__icon {
+  font-size: 0.95rem;
+}
+
+.day-cycle-status__label {
+  font-weight: 800;
+}
+
+.day-cycle-status__step {
+  margin: 0;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.day-cycle-status__scenario {
+  margin: 0;
+  font-size: 0.72rem;
+  opacity: 0.7;
+}
+
+.day-cycle-status__error {
+  margin: 0;
+  font-size: 0.75rem;
+  opacity: 0.9;
+}
+
 /* Primary action buttons in left panel */
 .game-actions .button--primary,
 .game-actions .button--ai {
   width: 100%;
   min-height: 40px;
   font-size: 0.85rem;
+}
+
+/* Day cycle main button */
+.game-actions .button--day-cycle {
+  background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
+  border-color: var(--green);
+  color: var(--green-deep);
+  font-weight: 900;
+}
+
+.game-actions .button--day-cycle:hover:not(:disabled) {
+  background: linear-gradient(135deg, #c8e6c9, #a5d6a7);
 }
 
 /* Secondary action buttons in left panel */

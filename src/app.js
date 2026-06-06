@@ -24,6 +24,28 @@ const TASK_ANIMATION_DURATION_MS = TRAVEL_ANIMATION_MS + TASK_ACTION_MS; // 3250
 const AUTO_PLAY_DELAY_MS = TASK_ANIMATION_DURATION_MS + 700; // ~4000ms
 const COMPLETION_FEEDBACK_MS = 2200;
 
+// ── Day Cycle UI State ────────────────────────────────────────────────────────────
+
+/**
+ * @typedef {Object} DayCycle
+ * @property {"idle"|"running"|"waiting_choice"|"completed"|"error"} status
+ * @property {string} step          - current step description
+ * @property {string} scenarioId    - active scenario id
+ * @property {string} error        - error message if status === "error"
+ * @property {number} startedAt    - timestamp when cycle started
+ * @property {number} completedAt  - timestamp when cycle completed
+ */
+
+/** @type {DayCycle} */
+const DAY_CYCLE_DEFAULT = {
+  status: "idle",
+  step: "",
+  scenarioId: "",
+  error: "",
+  startedAt: 0,
+  completedAt: 0,
+};
+
 // ── UI State ──────────────────────────────────────────────────────────────────────
 
 let uiState = {
@@ -43,6 +65,7 @@ let uiState = {
   completionFeedback: null,
   activeScenario: selectTownLifeScenario(state),
   residentSceneBeats: [],
+  dayCycle: { ...DAY_CYCLE_DEFAULT },
 };
 let autoPlayTimer = null;
 let animationTimer = null;
@@ -237,6 +260,237 @@ function showTaskAnimations(prevState, nextState, options = {}) {
   }, TASK_ANIMATION_DURATION_MS);
 }
 
+// ── Day Cycle Orchestration ─────────────────────────────────────────────────────
+
+/**
+ * Advance through all remaining phases, then orchestrate AI Director,
+ * resident dialogues, broadcast, and events — all in one player-initiated flow.
+ *
+ * Fallback at each step ensures the day cycle is never fully broken.
+ *
+ * @returns {Promise<void>}
+ */
+async function runTownDayCycle() {
+  // Guard: don't run while animating or already cycling
+  if (uiState.isAnimating) return;
+  if (uiState.dayCycle.status === "running") return;
+
+  stopAutoPlay();
+
+  // Reset cycle state
+  uiState = {
+    ...uiState,
+    dayCycle: {
+      status: "running",
+      step: "正在启动小镇一天……",
+      scenarioId: "",
+      error: "",
+      startedAt: Date.now(),
+      completedAt: 0,
+    },
+  };
+  render();
+
+  try {
+    // ── Step 1: Advance all remaining phases ──────────────────────────────────
+    uiState = { ...uiState, dayCycle: { ...uiState.dayCycle, step: "居民正在行动……" } };
+    render();
+
+    let prev = state;
+    let next = state;
+    const steps = 3 - state.phaseIndex;
+    for (let i = 0; i < steps; i += 1) {
+      next = advancePhase(next);
+    }
+
+    // Select scenario and generate fallback beats (synchronous, no M3 call)
+    const scenario = selectTownLifeScenario(next);
+    const beats = buildFallbackResidentSceneBeats(next, null);
+
+    // Apply the advanced state
+    commit(next);
+    uiState = {
+      ...uiState,
+      activeScenario: scenario,
+      residentSceneBeats: beats,
+      dayCycle: { ...uiState.dayCycle, scenarioId: scenario.id, step: "行动完成，正在生成对白……" },
+    };
+    render();
+
+    // ── Step 2: AI Director context ───────────────────────────────────────────
+    let directorCtx;
+    try {
+      directorCtx = buildAiDirectorContext(next);
+    } catch (dirErr) {
+      console.warn("[dayCycle] AI Director context fallback:", dirErr);
+      directorCtx = { activeScenario: scenario };
+    }
+
+    // ── Step 3: Resident dialogues (async, fallback on failure) ───────────────
+    uiState = { ...uiState, dayCycle: { ...uiState.dayCycle, step: "生成居民对白……" } };
+    render();
+
+    let dialogueBeats = beats; // use fallback beats as base
+    try {
+      const m3Dialogue = await requestMiniMaxResidentDialogues(next, directorCtx);
+      if (Array.isArray(m3Dialogue) && m3Dialogue.length > 0) {
+        dialogueBeats = m3Dialogue;
+      }
+    } catch (diagErr) {
+      console.warn("[dayCycle] Resident dialogue fallback:", diagErr);
+    }
+    uiState = { ...uiState, residentSceneBeats: dialogueBeats };
+
+    // ── Step 4: Broadcast (async, fallback on failure) ───────────────────────
+    uiState = { ...uiState, dayCycle: { ...uiState.dayCycle, step: "生成小镇广播……" } };
+    render();
+
+    try {
+      const bcResult = await requestMiniMaxBroadcast(next, directorCtx);
+      const bc = bcResult.broadcast;
+      if (bc && bc.id) {
+        const currentPhase = phases[state.phaseIndex];
+        const newBcEvent = {
+          id: bc.id ?? `broadcast-${Date.now()}`,
+          type: "town-broadcast",
+          day: state.day,
+          phase: currentPhase.label,
+          title: bc.title,
+          text: bc.script,
+          mood: bc.mood,
+          musicMood: bc.musicMood,
+          musicPrompt: bc.musicPrompt,
+          residentIds: bc.relatedResidentIds ?? [],
+          placeId: bc.placeId ?? "plaza",
+          durationHint: bc.durationHint ?? "15-30s",
+          memoryReferences: buildPromptMemoryNarrative(state).uiLabels,
+        };
+        state = { ...state, events: [...(state.events ?? []), newBcEvent] };
+        uiState = {
+          ...uiState,
+          latestBroadcast: { ...bc, memoryReferences: newBcEvent.memoryReferences },
+          broadcastAudio: makeAudioState({
+            text: bc.script ?? "",
+            scriptHash: hashBroadcastScript(bc.script ?? ""),
+          }),
+          dayCycle: { ...uiState.dayCycle, step: "广播已生成。" },
+        };
+        saveState(state);
+      }
+    } catch (bcErr) {
+      console.warn("[dayCycle] Broadcast fallback:", bcErr);
+      uiState = {
+        ...uiState,
+        broadcastStatus: "error",
+        broadcastMessage: "广播生成失败，使用本地广播。",
+        dayCycle: { ...uiState.dayCycle, step: "广播已生成（本地）。" },
+      };
+    }
+    render();
+
+    // ── Step 5: Event (async, fallback on failure) ────────────────────────────
+    uiState = { ...uiState, dayCycle: { ...uiState.dayCycle, step: "生成小镇事件……" } };
+    render();
+
+    try {
+      const evtResult = await requestMiniMaxEvent(next, directorCtx);
+      const evt = evtResult.event;
+      if (evt && evt.id) {
+        const currentPhase = phases[state.phaseIndex];
+        const newEvent = {
+          id: evt.id ?? `m3-event-${Date.now()}`,
+          type: "m3-event",
+          day: state.day,
+          phase: currentPhase.label,
+          title: evt.title,
+          text: evt.text,
+          tone: evt.tone ?? "cozy",
+          residentIds: evt.residentIds ?? [],
+          placeId: evt.placeId ?? "plaza",
+          suggestedFollowUp: evt.suggestedFollowUp ?? "",
+          choices: evt.choices ?? [],
+          chosenChoiceId: null,
+          choiceResultText: null,
+          memoryReferences: buildPromptMemoryNarrative(state).uiLabels,
+        };
+        state = { ...state, events: [...(state.events ?? []), newEvent] };
+        saveState(state);
+        uiState = {
+          ...uiState,
+          eventDirectorStatus: "ready",
+          eventDirectorMessage: "小镇事件已加入动态。",
+        };
+      }
+    } catch (evtErr) {
+      console.warn("[dayCycle] Event fallback:", evtErr);
+      uiState = {
+        ...uiState,
+        eventDirectorStatus: "error",
+        eventDirectorMessage: "事件生成失败，请稍后重试。",
+      };
+    }
+
+    // ── Step 6: Waiting for player choice ────────────────────────────────────
+    uiState = {
+      ...uiState,
+      dayCycle: {
+        status: "waiting_choice",
+        step: "等待你的选择……",
+        scenarioId: uiState.dayCycle.scenarioId,
+        error: "",
+        startedAt: uiState.dayCycle.startedAt,
+        completedAt: 0,
+      },
+    };
+    render();
+
+  } catch (err) {
+    console.error("[dayCycle] Unexpected error:", err);
+    uiState = {
+      ...uiState,
+      dayCycle: {
+        status: "error",
+        step: "流程出错",
+        scenarioId: uiState.dayCycle.scenarioId,
+        error: "小镇一天遇到了一点问题，请重试。",
+        startedAt: uiState.dayCycle.startedAt,
+        completedAt: 0,
+      },
+    };
+    render();
+  }
+}
+
+/**
+ * Complete the day cycle after a player choice has been made.
+ * Called automatically when onChooseEvent is invoked.
+ *
+ * @param {object} nextState - the state after choice has been applied
+ */
+function completeDayCycle(nextState) {
+  if (uiState.dayCycle.status !== "waiting_choice") return;
+  state = nextState;
+  saveState(state);
+  uiState = {
+    ...uiState,
+    dayCycle: {
+      status: "completed",
+      step: "已完成",
+      scenarioId: uiState.dayCycle.scenarioId,
+      error: "",
+      startedAt: uiState.dayCycle.startedAt,
+      completedAt: Date.now(),
+    },
+  };
+  render();
+
+  // Reset dayCycle to idle after a short display
+  setTimeout(() => {
+    uiState = { ...uiState, dayCycle: { ...DAY_CYCLE_DEFAULT } };
+    render();
+  }, 2500);
+}
+
 function stopAutoPlay() {
   if (autoPlayTimer) {
     clearTimeout(autoPlayTimer);
@@ -398,7 +652,8 @@ function render() {
 
         const currentPhase = phases[state.phaseIndex];
         const nextState = applyChoiceMemory(state, sourceEvent, choice, currentPhase);
-        commit(nextState);
+        // Advance day cycle to completed after player choice
+        completeDayCycle(nextState);
       },
       onMiniMaxBroadcast: async () => {
         stopAutoPlay();
@@ -571,6 +826,9 @@ function render() {
         render();
       },
       onResetAssignments: () => commit(resetAssignments(state)),
+      onRunTownDayCycle: () => {
+        runTownDayCycle();
+      },
       onNewTown: () => {
         stopAutoPlay();
         if (animationTimer) { clearTimeout(animationTimer); animationTimer = null; }
@@ -593,6 +851,7 @@ function render() {
           completionFeedback: null,
           activeScenario: null,
           residentSceneBeats: [],
+          dayCycle: { ...DAY_CYCLE_DEFAULT },
         };
         commit(createInitialState());
       },
