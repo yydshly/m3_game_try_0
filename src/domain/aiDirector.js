@@ -144,7 +144,7 @@ export function selectTownLifeScenario(state) {
  * @param {object} state
  * @returns {object}
  */
-export function buildAiDirectorContext(state) {
+export function buildAiDirectorContext(state, choiceAftermath = null) {
   const residents = state.residents ?? [];
   const tm = state.townMemory ?? [];
   const phase = ["早上", "下午", "晚上"];
@@ -193,11 +193,17 @@ export function buildAiDirectorContext(state) {
   // Available places
   const availablePlaces = [...new Set(residents.map((r) => r.locationId).filter(Boolean))];
 
+  // Recent choice aftermath (from current session, not yet in townMemory)
+  const recentAftermath = choiceAftermath
+    ? `你的选择「${choiceAftermath.choiceLabel}」：${choiceAftermath.summary}`
+    : "";
+
   // Build narrative prompt text for LLM
   const promptText = buildDirectorPromptText(scenario, residentSnapshots, {
     townMemorySummary,
     residentMemorySummary,
     recentChoices,
+    recentAftermath,
     availablePlaces,
     taskDistribution,
     phase: phase[state.phaseIndex] ?? "早上",
@@ -210,6 +216,7 @@ export function buildAiDirectorContext(state) {
     townMemorySummary,
     residentMemorySummary,
     recentChoices,
+    recentAftermath,
     availablePlaces,
     taskDistribution,
     promptText,
@@ -221,6 +228,7 @@ function buildDirectorPromptText(scenario, residentSnapshots, extras) {
     townMemorySummary,
     residentMemorySummary,
     recentChoices,
+    recentAftermath,
     availablePlaces,
     taskDistribution,
     phase,
@@ -242,6 +250,9 @@ function buildDirectorPromptText(scenario, residentSnapshots, extras) {
   }
   if (recentChoices) {
     ctx += ` 玩家最近的行动：${recentChoices}。`;
+  }
+  if (recentAftermath) {
+    ctx += ` 刚刚的选择影响：${recentAftermath}。`;
   }
 
   ctx += ` 居民当前分布在${placeList}。`;

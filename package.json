@@ -40,6 +40,7 @@
     "ai-director-check": "node scripts/ai-director-check.mjs",
     "resident-dialogue-check": "node scripts/resident-dialogue-check.mjs",
     "mimo-tts-integration-check": "node scripts/mimo-tts-integration-check.mjs",
-    "voice-playback-check": "node scripts/voice-playback-check.mjs"
+    "voice-playback-check": "node scripts/voice-playback-check.mjs",
+    "choice-aftermath-check": "node scripts/choice-aftermath-check.mjs"
   }
 }

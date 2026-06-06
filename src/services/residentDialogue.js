@@ -14,7 +14,7 @@ import { selectTownLifeScenario } from "../domain/aiDirector.js";
  * @param {object} directorContext - output of buildAiDirectorContext(state)
  * @returns {object}
  */
-export function buildResidentDialogueContext(state, directorContext = null) {
+export function buildResidentDialogueContext(state, directorContext = null, choiceAftermath = null) {
   const residents = state.residents ?? [];
   const tm = state.townMemory ?? [];
   const phase = ["早上", "下午", "晚上"];
@@ -63,6 +63,11 @@ export function buildResidentDialogueContext(state, directorContext = null) {
     .filter(Boolean)
     .join("；");
 
+  // Recent choice aftermath (from current session, not yet in townMemory)
+  const recentAftermath = choiceAftermath
+    ? `你的选择「${choiceAftermath.choiceLabel}」：${choiceAftermath.summary}`
+    : "";
+
   // Current broadcast summary (if any)
   const latestBc = state.events?.slice(-1).find((e) => e.type === "town-broadcast");
   const currentBroadcastSummary = latestBc ? `${latestBc.title}：${(latestBc.text ?? "").slice(0, 60)}` : "";
@@ -78,6 +83,7 @@ export function buildResidentDialogueContext(state, directorContext = null) {
     townMemorySummary,
     residentMemorySummary,
     recentChoices,
+    recentAftermath,
     currentBroadcastSummary,
     currentEventSummary,
     phase: phaseLabel,
@@ -90,6 +96,7 @@ export function buildResidentDialogueContext(state, directorContext = null) {
     townMemorySummary,
     residentMemorySummary,
     recentChoices,
+    recentAftermath,
     currentBroadcastSummary,
     currentEventSummary,
     promptText,
@@ -102,6 +109,7 @@ function buildResidentDialoguePromptText({
   townMemorySummary,
   residentMemorySummary,
   recentChoices,
+  recentAftermath,
   currentBroadcastSummary,
   currentEventSummary,
   phase,
@@ -121,6 +129,9 @@ function buildResidentDialoguePromptText({
   }
   if (recentChoices) {
     ctx += ` 玩家行动：${recentChoices}。`;
+  }
+  if (recentAftermath) {
+    ctx += ` 刚刚的选择影响：${recentAftermath}。`;
   }
   if (currentBroadcastSummary) {
     ctx += ` 当前广播：${currentBroadcastSummary}。`;
@@ -164,8 +175,8 @@ function getTaskLabel(taskId) {
  * @param {object} directorContext
  * @returns {Promise<Array>} residentSceneBeats array
  */
-export async function requestMiniMaxResidentDialogues(state, directorContext = null) {
-  const ctx = buildResidentDialogueContext(state, directorContext);
+export async function requestMiniMaxResidentDialogues(state, directorContext = null, choiceAftermath = null) {
+  const ctx = buildResidentDialogueContext(state, directorContext, choiceAftermath);
 
   let raw;
   try {

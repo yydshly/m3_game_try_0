@@ -3560,3 +3560,117 @@ details summary {
   padding: 4px 10px;
 }
 
+/* ── Stage Choice Aftermath ── */
+.stage-choice-aftermath {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 253, 248, 0.92);
+  border: 1.5px solid var(--gold);
+  border-radius: 20px;
+  padding: 5px 14px;
+  font-size: 0.8rem;
+  color: var(--ink);
+  box-shadow: var(--shadow-sm);
+  animation: choiceAftermathPop 0.3s ease-out;
+  z-index: 10;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+@keyframes choiceAftermathPop {
+  from { opacity: 0; transform: translateX(-50%) scale(0.8) translateY(-4px); }
+  to   { opacity: 1; transform: translateX(-50%) scale(1) translateY(0); }
+}
+
+.stage-choice-aftermath__icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.stage-choice-aftermath__label {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* ── Choice Aftermath Right Panel ── */
+.choice-aftermath {
+  background: var(--panel);
+  border: 1.5px solid var(--gold);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-top: 8px;
+  box-shadow: var(--shadow-sm);
+  animation: choiceAftermathFadeIn 0.3s ease-out;
+}
+
+@keyframes choiceAftermathFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.choice-aftermath__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.choice-aftermath__title {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+
+.choice-aftermath__choice-label {
+  font-size: 0.8rem;
+  color: var(--ink-light);
+  margin-bottom: 8px;
+  padding: 4px 8px;
+  background: var(--gold-soft);
+  border-radius: 6px;
+  display: inline-block;
+}
+
+.choice-aftermath__summary {
+  font-size: 0.8rem;
+  color: var(--ink);
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+
+.choice-aftermath__reactions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.choice-aftermath__reaction {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 0.8rem;
+}
+
+.choice-aftermath__reaction-name {
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.choice-aftermath__reaction-text {
+  color: var(--ink-light);
+  line-height: 1.4;
+}
+
+

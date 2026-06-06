@@ -783,6 +783,66 @@ function renderStageCharacter(resident, position, taskLabel, status, isSelected,
   `;
 }
 
+/**
+ * Render the choice aftermath summary panel shown in the right side panel.
+ * @param {object|null} aftermath
+ * @returns {string} HTML or empty string
+ */
+function renderChoiceAftermath(aftermath) {
+  if (!aftermath || !aftermath.id) return "";
+  const { choiceLabel, summary, residentReactions } = aftermath;
+
+  const reactionsHtml = (residentReactions ?? []).map((r) => `
+    <div class="choice-aftermath__reaction">
+      <span class="choice-aftermath__reaction-name">${escapeHtml(r.residentName ?? "")}：</span>
+      <span class="choice-aftermath__reaction-text">${escapeHtml(r.reaction ?? "")}</span>
+    </div>
+  `).join("");
+
+  return `
+    <div class="choice-aftermath" aria-label="刚刚的选择影响" aria-live="polite">
+      <div class="choice-aftermath__header">
+        <span>✨</span>
+        <span>刚刚的选择</span>
+      </div>
+      <div class="choice-aftermath__choice-label">
+        你选择了：${escapeHtml(choiceLabel ?? "")}
+      </div>
+      ${summary ? `<p class="choice-aftermath__summary">${escapeHtml(summary)}</p>` : ""}
+      ${reactionsHtml ? `
+        <div class="choice-aftermath__reactions">
+          <div class="choice-aftermath__reaction" style="font-size:0.75rem;color:var(--ink-light);margin-bottom:4px;">居民反应：</div>
+          ${reactionsHtml}
+        </div>
+      ` : ""}
+    </div>
+  `;
+}
+
+/**
+ * Render a stage indicator for the player's choice aftermath.
+ * Shows as a floating badge near the relevant place.
+ * @param {object|null} aftermath
+ * @returns {string} HTML or empty string
+ */
+function renderChoiceAftermathStageIndicator(aftermath) {
+  if (!aftermath || !aftermath.id) return "";
+  // Only show if the aftermath is recent (within 30 seconds)
+  const age = Date.now() - (aftermath.createdAt ?? 0);
+  if (age > 30_000) return "";
+
+  const { stageEffect } = aftermath;
+  const icon = stageEffect?.icon ?? "✨";
+  const label = stageEffect?.label ?? "你的选择产生了影响";
+
+  return `
+    <div class="stage-choice-aftermath" aria-label="选择影响" aria-live="polite">
+      <span class="stage-choice-aftermath__icon">${icon}</span>
+      <span class="stage-choice-aftermath__label">${escapeHtml(label)}</span>
+    </div>
+  `;
+}
+
 function renderTownStage(state, uiState) {
   const latestEvent = [...state.events].reverse().find((event) => event.type !== "system");
   const phase = getCurrentPhase(state);
@@ -882,6 +942,7 @@ function renderTownStage(state, uiState) {
           <span class="stage-broadcast-indicator__text">广播播放中…</span>
         </div>
       ` : ""}
+      ${renderChoiceAftermathStageIndicator(uiState.choiceAftermath)}
     </section>
   `;
 }
@@ -1500,6 +1561,7 @@ export function renderApp(root, state, handlers, uiState = {}) {
     dayCycle: uiState.dayCycle ?? { status: "idle", step: "", scenarioId: "", error: "", startedAt: 0, completedAt: 0 },
     ttsAudios: uiState.ttsAudios ?? {},
     currentVoicePlayback: uiState.currentVoicePlayback ?? null,
+    choiceAftermath: uiState.choiceAftermath ?? null,
   };
 
   const safeHandlers = {
@@ -1538,6 +1600,7 @@ export function renderApp(root, state, handlers, uiState = {}) {
           ${renderEventDirectorStatus(safeUiState)}
           ${renderAtmospherePanel(state, safeUiState)}
           ${renderResidentDialoguePanel(safeUiState.residentSceneBeats, safeUiState.ttsAudios, safeHandlers)}
+          ${renderChoiceAftermath(safeUiState.choiceAftermath)}
           ${renderSpotlight(state, safeUiState)}
         </aside>
       </main>

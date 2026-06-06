@@ -70,6 +70,7 @@ let uiState = {
   dayCycle: { ...DAY_CYCLE_DEFAULT },
   ttsAudios: {},   // { [audioKey]: { status, audioUrl, textHash, error, generatedAt } }
   currentVoicePlayback: makeVoicePlaybackState(), // unified global voice playback state
+  choiceAftermath: null, // { id, eventId, choiceId, choiceLabel, summary, residentReactions, stageEffect, memoryLabels, createdAt }
 };
 let autoPlayTimer = null;
 let animationTimer = null;
@@ -196,6 +197,90 @@ function makeMimoVoicePlayback(audioKey, ttsAudio, scene, sourceType, sourceId, 
     startedAt: ttsAudio.startedAt || Date.now(),
     updatedAt: Date.now(),
   });
+}
+
+/**
+ * Build a choice aftermath object from the player's choice.
+ * This is a lightweight rule-based summary — no extra M3 call needed.
+ * @param {object} sourceEvent
+ * @param {object} choice
+ * @param {object} currentState
+ * @returns {object} choiceAftermath
+ */
+function buildChoiceAftermath(sourceEvent, choice, currentState) {
+  const residents = currentState?.residents ?? [];
+  const phase = ["早上", "下午", "晚上"];
+  const phaseLabel = phase[currentState?.phaseIndex ?? 0];
+
+  // Build summary text from choice result
+  const resultText = choice?.resultText ?? "";
+  const choiceLabel = choice?.label ?? "做出了选择";
+
+  // Build summary: human-readable consequence
+  let summary = resultText;
+  if (!summary || summary.length < 4) {
+    summary = `小镇居民们开始根据你的选择行动。`;
+  }
+
+  // Pick reacting residents
+  const eventResidentIds = sourceEvent?.residentIds ?? [];
+  const mentionedNames = [];
+  // Try to detect resident names mentioned in choice label or result
+  const allText = `${choiceLabel} ${resultText}`;
+  for (const r of residents) {
+    if (allText.includes(r.name)) mentionedNames.push(r);
+  }
+  const reactingResidents = mentionedNames.length > 0
+    ? mentionedNames.slice(0, 3)
+    : residents.slice(0, 2);
+
+  // Generate short resident reactions
+  const REACTION_TEMPLATES = [
+    "好，我去准备一下。",
+    "明白了，我这就去。",
+    "明白了，我留下。",
+    "那我去通知大家。",
+    "好的，我来分工。",
+    "没问题，交给我吧。",
+    "那我去花园看看。",
+    "我去工坊拿工具。",
+    "好的，我在广场等大家。",
+    "好，我先去森林看看情况。",
+    "明白了，我去安排。",
+    "好的，我去整理一下。",
+  ];
+
+  const residentReactions = reactingResidents.slice(0, 3).map((r, i) => ({
+    residentId: r.id,
+    residentName: r.name,
+    reaction: REACTION_TEMPLATES[(r.name.length + i * 3) % REACTION_TEMPLATES.length],
+    emotion: "认真",
+  }));
+
+  // Stage effect: choose a relevant place
+  const placeId = sourceEvent?.placeId ?? residents[0]?.locationId ?? "plaza";
+  const PLACE_ICONS = {
+    garden: "🌸", cafe: "🍲", workshop: "🔨", plaza: "⛲", forest: "🌲",
+  };
+  const stageEffect = {
+    type: "choice-ripple",
+    placeId,
+    icon: PLACE_ICONS[placeId] ?? "✨",
+    label: "你的选择产生了影响",
+  };
+
+  return {
+    id: `aftermath-${Date.now()}`,
+    eventId: sourceEvent?.id ?? "",
+    choiceId: choice?.id ?? "",
+    choiceLabel,
+    scenarioId: currentState?.activeScenario?.id ?? "",
+    summary,
+    residentReactions,
+    stageEffect,
+    memoryLabels: [],
+    createdAt: Date.now(),
+  };
 }
 
 /**
@@ -594,7 +679,7 @@ async function runTownDayCycle() {
     // ── Step 2: AI Director context ───────────────────────────────────────────
     let directorCtx;
     try {
-      directorCtx = buildAiDirectorContext(next);
+      directorCtx = buildAiDirectorContext(next, uiState.choiceAftermath);
     } catch (dirErr) {
       console.warn("[dayCycle] AI Director context fallback:", dirErr);
       directorCtx = { activeScenario: scenario };
@@ -606,7 +691,7 @@ async function runTownDayCycle() {
 
     let dialogueBeats = beats; // use fallback beats as base
     try {
-      const m3Dialogue = await requestMiniMaxResidentDialogues(next, directorCtx);
+      const m3Dialogue = await requestMiniMaxResidentDialogues(next, directorCtx, uiState.choiceAftermath);
       if (Array.isArray(m3Dialogue) && m3Dialogue.length > 0) {
         dialogueBeats = m3Dialogue;
       }
@@ -783,7 +868,7 @@ function stopAutoPlay() {
  */
 function generateResidentBeats(currentState) {
   try {
-    const directorCtx = buildAiDirectorContext(currentState);
+    const directorCtx = buildAiDirectorContext(currentState, uiState.choiceAftermath);
     return buildFallbackResidentSceneBeats(currentState, directorCtx);
   } catch {
     return [];
@@ -878,7 +963,7 @@ function render() {
         render();
         try {
           const directorCtx = {
-            ...buildAiDirectorContext(state),
+            ...buildAiDirectorContext(state, uiState.choiceAftermath),
             residentBeatsSummary: buildBeatsSummary(uiState.residentSceneBeats),
           };
           const result = await requestMiniMaxEvent(state, directorCtx);
@@ -926,6 +1011,22 @@ function render() {
 
         const currentPhase = phases[state.phaseIndex];
         const nextState = applyChoiceMemory(state, sourceEvent, choice, currentPhase);
+
+        // Build choice aftermath for immediate UI feedback
+        const aftermath = buildChoiceAftermath(sourceEvent, choice, state);
+        const phaseLabel = currentPhase.label;
+
+        // Set completion feedback (stage-banner style)
+        uiState = {
+          ...uiState,
+          completionFeedback: {
+            residentResults: [],
+            phase: phaseLabel,
+            generatedAt: Date.now(),
+          },
+          choiceAftermath: aftermath,
+        };
+
         // Advance day cycle to completed after player choice
         completeDayCycle(nextState);
       },
@@ -935,7 +1036,7 @@ function render() {
         render();
         try {
           const directorCtx = {
-            ...buildAiDirectorContext(state),
+            ...buildAiDirectorContext(state, uiState.choiceAftermath),
             residentBeatsSummary: buildBeatsSummary(uiState.residentSceneBeats),
           };
           const result = await requestMiniMaxBroadcast(state, directorCtx);
@@ -1374,6 +1475,7 @@ function render() {
           dayCycle: { ...DAY_CYCLE_DEFAULT },
           ttsAudios: {},
           currentVoicePlayback: makeVoicePlaybackState(),
+          choiceAftermath: null,
         };
         commit(createInitialState());
       },
