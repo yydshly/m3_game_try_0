@@ -10,7 +10,7 @@ import { loadState, saveState, clearState } from "./services/persistence.js";
 import { renderApp } from "./ui/render.js";
 import { phases } from "./data/seed.js";
 import { buildResidentDialogueContext, buildFallbackResidentSceneBeats, requestMiniMaxResidentDialogues, buildBeatsSummary } from "./services/residentDialogue.js";
-import { buildResidentDialogueTurns } from "./services/dialogueGenerator.js";
+import { buildResidentDialogueTurns, buildResidentConversationSession } from "./services/dialogueGenerator.js";
 
 const root = document.querySelector("#app");
 let state = loadState();
@@ -92,6 +92,7 @@ let uiState = {
     error: "",
     runId: "",      // unique id to invalidate old timers after stop/restart
     startedCount: 0, // increments each time conversation starts (for template rotation)
+    sessionState: null, // buildResidentConversationSession result
   },
 };
 let autoPlayTimer = null;
@@ -160,44 +161,44 @@ function makeVoicePlaybackState(overrides = {}) {
 // ── Resident Conversation ─────────────────────────────────────────────────────
 
 /**
- * Build a resident conversation queue using scene-aware dialogue turns (no M3 call).
- * Returns 3-6 short dialogue lines based on scenario, task, location, and phase.
+ * Build a resident conversation queue using scene-aware session (no M3 call).
+ * Returns a session with a fixed pair of participants and validated lines.
  * @param {object} state - game state
  * @param {object} conversationState - residentConversation uiState slice
- * @returns {Array} queue of conversation lines
+ * @returns {object} { session, queue } — session from buildResidentConversationSession, queue for backward compat
  */
 function buildResidentConversationQueue(state, conversationState) {
   const residents = state.residents ?? [];
-  if (residents.length < 2) return [];
+  if (residents.length < 2) return { session: null, queue: [] };
 
   const startedCount = conversationState?.startedCount ?? 0;
   const seed = (state.day * 17 + state.phaseIndex * 7 + startedCount);
 
-  // Use buildResidentDialogueTurns for scene-aware generation
-  const turns = buildResidentDialogueTurns(state, {
+  // Build session with fixed pair of participants
+  const session = buildResidentConversationSession(state, {
     activeScenario: state.activeScenario ?? null,
     completionFeedback: null,
     rotationSeed: seed,
   });
 
-  // Convert structured turns to conversation queue format
-  const queue = turns.slice(0, 6).map((turn, i) => {
-    const lineId = `conv-line-${i + 1}`;
-    const audioKey = `conversation:${turn.speakerId}:${lineId}`;
+  // Convert session lines to queue format (backward compat)
+  const queue = (session.lines ?? []).map((line, i) => {
+    const lineId = line.id ?? `conv-line-${i + 1}`;
+    const audioKey = `conversation:${line.speakerId}:${lineId}`;
     return {
       id: lineId,
-      speakerId: turn.speakerId,
-      targetId: turn.targetId,
-      speakerName: turn.speakerName ?? "居民",
-      targetName: turn.targetName ?? "邻居",
-      text: (turn.text ?? "").slice(0, 50),
+      speakerId: line.speakerId,
+      targetId: line.targetId,
+      speakerName: line.speakerName ?? "居民",
+      targetName: line.targetName ?? "邻居",
+      text: (line.text ?? "").slice(0, 50),
       scene: "conversation",
       audioKey,
       status: "idle",
     };
   });
 
-  return queue;
+  return { session, queue };
 }
 
 /**
@@ -431,11 +432,11 @@ function startConversationTypewriter(line, audioUrl) {
 }
 
 /**
- * Start the conversation: generate queue and begin first line.
+ * Start the conversation: generate session+queue and begin first line.
  */
 function startResidentConversation() {
-  const queue = buildResidentConversationQueue(state, uiState);
-  if (!queue || queue.length === 0) return;
+  const { session, queue } = buildResidentConversationQueue(state, uiState);
+  if (!queue || queue.length === 0 || !session) return;
 
   // Stop any existing audio
   stopBroadcastAudio({ reason: "conversation-start" });
@@ -459,6 +460,7 @@ function startResidentConversation() {
       error: "",
       runId,
       startedCount: prevStartedCount + 1,
+      sessionState: session,
     },
   };
   render();
@@ -590,6 +592,7 @@ function stopResidentConversation() {
       visibleText: "",
       typingTimerId: null,
       runId: "",
+      sessionState: null,
     },
     currentVoicePlayback: makeVoicePlaybackState(),
   };
@@ -2619,7 +2622,7 @@ function render() {
           choiceAftermath: null,
           dayOpeningReflection: null,
           residentVoiceInteraction: { enabled: false, recommendedClipKey: "", lastTriggeredAt: 0, hint: "" },
-          residentConversation: { enabled: false, status: "idle", queue: [], currentIndex: 0, currentLineId: "", visibleText: "", typingTimerId: null, autoPlayVoice: true, error: "" },
+          residentConversation: { enabled: false, status: "idle", queue: [], currentIndex: 0, currentLineId: "", visibleText: "", typingTimerId: null, autoPlayVoice: true, error: "", runId: "", startedCount: 0, sessionState: null },
         };
         commit(createInitialState());
       },

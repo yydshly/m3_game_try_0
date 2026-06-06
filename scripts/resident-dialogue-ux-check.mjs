@@ -265,6 +265,21 @@ console.log("\n── Map bubbles: only current speaker shows bubble ──");
       currentIndex: 0,
       currentLineId: "conv-line-1",
       visibleText: "早上的光刚好。",
+      sessionState: {
+        id: "conv-d1-p0-hua-yuan",
+        status: "playing",
+        locationId: "garden",
+        locationLabel: "花园",
+        participants: [
+          { residentId: "hua", residentName: "小花", role: "speaker" },
+          { residentId: "yuan", residentName: "阿远", role: "listener" },
+        ],
+        currentIndex: 0,
+        lines: [
+          { id: "conv-line-1", speakerId: "hua", speakerName: "小花", targetId: "yuan", targetName: "阿远", text: "早上的光刚好。", reason: "morning-task" },
+          { id: "conv-line-2", speakerId: "yuan", speakerName: "阿远", targetId: "hua", targetName: "小花", text: "是啊。", reason: "morning-checkin" },
+        ],
+      },
     },
   });
   // Count stage-character__dialogue--conversation elements

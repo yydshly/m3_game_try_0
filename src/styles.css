@@ -1615,6 +1615,33 @@ button, select {
   50% { box-shadow: 0 0 0 6px rgba(91, 164, 212, 0.2); }
 }
 
+/* ── Listener Highlight ─────────────────────────────────────────────── */
+.stage-character--listening .stage-character__sprite {
+  box-shadow: 0 0 0 3px rgba(91, 164, 212, 0.3);
+}
+
+/* ── Conversation Participant ─────────────────────────────────────── */
+.stage-character--conversation-participant {
+  /* subtle ring to show involvement in conversation */
+}
+
+/* ── Listen Indicator ─────────────────────────────────────────────── */
+.stage-character__listen-indicator {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  font-size: 12px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 5;
+  animation: listenIndicatorPulse 2s ease-in-out infinite;
+}
+
+@keyframes listenIndicatorPulse {
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
 /* ── Right Panel: Resident Dialogue Beats ────────────────────────────────── */
 
 .dialogue-beats-panel {
@@ -1663,6 +1690,40 @@ button, select {
   padding: 12px;
   color: var(--muted);
   font-size: 0.8rem;
+}
+
+/* Session header for conversation panel */
+.dialogue-session__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  background: rgba(91, 164, 212, 0.1);
+  border: 1px solid rgba(91, 164, 212, 0.2);
+  font-size: 0.75rem;
+}
+
+.dialogue-session__location {
+  color: var(--ink-light);
+  font-weight: 600;
+}
+
+.dialogue-session__participants {
+  color: var(--ink);
+  font-weight: 700;
+  margin-left: auto;
+}
+
+/* Empty state text when no conversation active */
+.dialogue-beats-empty {
+  text-align: center;
+  padding: 16px 12px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-style: italic;
+  margin: 0;
 }
 
 /* ── Character Body Shadow ─────────────────────────────────────────────────── */

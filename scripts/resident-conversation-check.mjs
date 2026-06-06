@@ -86,8 +86,8 @@ assert(
   "queue line includes speakerId and targetId"
 );
 assert(
-  appContent.includes("text:") && appContent.includes("turn."),
-  "queue line text sourced from turn.text"
+  appContent.includes("text:") && (appContent.includes("line.text") || appContent.includes("turn.text")),
+  "queue line text sourced from line.text (session lines)"
 );
 assert(
   appContent.includes("conversation:") && (appContent.includes("audioKey") || appContent.includes("audio_key")),

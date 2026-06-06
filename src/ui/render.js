@@ -578,16 +578,22 @@ function renderEventDirectorStatus(uiState) {
 /**
  * Render the right-panel resident dialogue/conversation record.
  * No TTS buttons here — voice playback is handled by the compact chip in town-stage.
- * Shows either a conversation queue (from residentConversation) or scene beats.
+ * Shows either a session-style conversation record or scene beats.
  * @param {object} params
  * @param {Array} [params.beats] - scene beats (fallback when no conversation active)
  * @param {object} [params.conversationQueue] - conversation queue from residentConversation
  * @param {number} [params.currentLineIndex] - current conversation line index
  * @param {string} [params.visibleText] - current typewriter text
+ * @param {object} [params.sessionState] - session from buildResidentConversationSession
  */
-function renderResidentDialoguePanel({ beats = [], conversationQueue = [], currentLineIndex = 0, visibleText = "" } = {}) {
+function renderResidentDialoguePanel({ beats = [], conversationQueue = [], currentLineIndex = 0, visibleText = "", sessionState = null } = {}) {
   // Prefer active conversation queue if available
   if (conversationQueue && conversationQueue.length > 0) {
+    const participants = sessionState?.participants ?? [];
+    const locationLabel = sessionState?.locationLabel ?? "";
+    const locationHtml = locationLabel ? `<span class="dialogue-session__location">📍 ${escapeHtml(locationLabel)}</span>` : "";
+    const participantNames = participants.map((p) => escapeHtml(p.residentName)).join(" ↔ ");
+
     const itemsHtml = conversationQueue
       .map((line, idx) => {
         const isCurrent = idx === currentLineIndex;
@@ -608,6 +614,7 @@ function renderResidentDialoguePanel({ beats = [], conversationQueue = [], curre
         <div class="panel__head">
           <h2>💬 居民对话</h2>
         </div>
+        ${participantNames ? `<div class="dialogue-session__header">${locationHtml}<span class="dialogue-session__participants">${participantNames}</span></div>` : ""}
         <div class="dialogue-beats-list">
           ${itemsHtml}
         </div>
@@ -615,29 +622,13 @@ function renderResidentDialoguePanel({ beats = [], conversationQueue = [], curre
     `;
   }
 
-  // Fallback: show scene beats as a compact record (no TTS buttons)
-  if (!Array.isArray(beats) || beats.length === 0) return "";
-
-  const itemsHtml = beats
-    .filter((b) => b?.dialogue)
-    .map((beat) => {
-      return `<div class="dialogue-beat">
-        <span class="dialogue-beat__name">${escapeHtml(beat.residentName ?? "居民")}：</span>
-        <span class="dialogue-beat__text">${escapeHtml(beat.dialogue)}</span>
-      </div>`;
-    })
-    .join("");
-
-  if (!itemsHtml) return "";
-
+  // No conversation active — show empty state message
   return `
     <div class="panel dialogue-beats-panel">
       <div class="panel__head">
-        <h2>💬 居民小对白</h2>
+        <h2>💬 居民对话</h2>
       </div>
-      <div class="dialogue-beats-list">
-        ${itemsHtml}
-      </div>
+      <p class="dialogue-beats-empty">居民们还没有开始聊天</p>
     </div>
   `;
 }
@@ -832,7 +823,7 @@ function renderCharacterVoiceIndicator(resident, beat, voiceState, ttsAudios) {
   return `<button class="stage-character__voice-btn stage-character__voice-btn--idle" type="button" data-action="play-mimo-tts" data-audio-key="${escapeHtml(audioKey)}" data-text="${escapeHtml(beat.dialogue ?? '')}" data-scene="resident_dialogue" data-resident-id="${escapeHtml(resident.id)}" data-beat-id="${escapeHtml(beat.id ?? '')}" title="播放 ${escapeHtml(resident.name)} 的对白">🔈</button>`;
 }
 
-function renderStageCharacter(resident, position, taskLabel, status, isSelected, anim, completionResult, moodView, activeScenario, beat, residentVoiceInteraction = null, ttsAudios = {}, residentConversation = null) {
+function renderStageCharacter(resident, position, taskLabel, status, isSelected, anim, completionResult, moodView, activeScenario, beat, residentVoiceInteraction = null, ttsAudios = {}, residentConversation = null, conversationRole = null) {
   const toX = position.x;
   const toY = position.y;
   const selectedClass = isSelected ? " stage-character--selected" : "";
@@ -883,9 +874,10 @@ function renderStageCharacter(resident, position, taskLabel, status, isSelected,
     ? `<span class="stage-character__action-bubble">${escapeHtml(anim.bubble)}</span>`
     : "";
 
-  // Scene dialogue bubble — shown below the character, below action bubble
-  // When anim is active, show a lighter version; otherwise full display
-  const dialogueBubble = (beat?.dialogue)
+  // Scene dialogue bubble — hidden for conversation participants (speaker bubble takes over)
+  // Non-participants still show their scene beat bubble
+  const isParticipant = conversationRole?.isParticipant ?? false;
+  const dialogueBubble = (!isParticipant && beat?.dialogue)
     ? (anim
         ? `<span class="stage-character__dialogue stage-character__dialogue--light">${escapeHtml(beat.dialogue.slice(0, 20))}</span>`
         : `<span class="stage-character__dialogue stage-character__dialogue--scenario">${escapeHtml(beat.dialogue.slice(0, 28))}</span>`)
@@ -893,14 +885,16 @@ function renderStageCharacter(resident, position, taskLabel, status, isSelected,
 
   // Conversation bubble — shown when this resident is the current speaker
   const currentLine = residentConversation?.queue?.[residentConversation?.currentIndex];
-  const isConversationSpeaker = currentLine?.speakerId === resident.id;
-  const isConversationActive = residentConversation?.status === "playing" || residentConversation?.status === "paused";
-  const conversationBubble = (isConversationActive && isConversationSpeaker && residentConversation?.visibleText)
+  const isSpeaker = conversationRole?.isSpeaker ?? false;
+  const isConversationActive = conversationRole?.isConversationActive ?? false;
+  const conversationBubble = (isConversationActive && isSpeaker && residentConversation?.visibleText)
     ? `<span class="stage-character__dialogue stage-character__dialogue--conversation" data-conversation-visible-text="${escapeHtml(currentLine?.id ?? '')}">${escapeHtml(residentConversation.visibleText)}</span>`
     : "";
 
-  // Speaker highlight when conversation is active
-  const speakerClass = (isConversationActive && isConversationSpeaker) ? " stage-character--speaking" : "";
+  // Speaker / listener CSS classes
+  const speakerClass = isSpeaker ? " stage-character--speaking" : "";
+  const listenerClass = (isConversationActive && conversationRole?.isListener) ? " stage-character--listening" : "";
+  const participantClass = isParticipant ? " stage-character--conversation-participant" : "";
 
   // Completion badge shown after animation
   const completionBadge = completionResult
@@ -914,7 +908,7 @@ function renderStageCharacter(resident, position, taskLabel, status, isSelected,
 
   return `
     <button
-      class="stage-character${selectedClass}${statusClass}${extraClasses}${speakerClass}"
+      class="stage-character${selectedClass}${statusClass}${extraClasses}${speakerClass}${listenerClass}${participantClass}"
       style="${extraStyles}"
       data-action="select-resident"
       data-resident-id="${escapeHtml(resident.id)}"
@@ -929,7 +923,7 @@ function renderStageCharacter(resident, position, taskLabel, status, isSelected,
       ${completionBadge}
       ${moodIconHtml}
       <span class="stage-character__name">${escapeHtml(resident.name)}</span>
-      ${!anim && task ? `<span class="stage-character__task">${escapeHtml(getEnhancedTaskLabel(task, activeScenario))}</span>` : ""}
+      ${!anim && task && !isParticipant ? `<span class="stage-character__task">${escapeHtml(getEnhancedTaskLabel(task, activeScenario))}</span>` : ""}
       ${actionBubble}
       ${dialogueBubble}
       ${conversationBubble}
@@ -1112,10 +1106,16 @@ function renderTownStage(state, uiState, handlers = {}) {
         activeAnimations,
       });
       const beat = (uiState.residentSceneBeats ?? []).find((b) => b.residentId === resident.id) ?? null;
-      // Only pass conversation info if this resident is the current speaker (for bubble noise reduction)
+      // Determine conversation role: speaker, listener, or null
       const conversationActive = uiState.residentConversation?.status === "playing" || uiState.residentConversation?.status === "paused";
-      const currentSpeakerId = uiState.residentConversation?.queue?.[uiState.residentConversation?.currentIndex]?.speakerId ?? null;
-      const conversationForChar = conversationActive && resident.id === currentSpeakerId
+      const currentLine = uiState.residentConversation?.queue?.[uiState.residentConversation?.currentIndex];
+      const currentSpeakerId = currentLine?.speakerId ?? null;
+      const sessionState = uiState.residentConversation?.sessionState ?? null;
+      const participantIds = sessionState?.participants?.map((p) => p.residentId) ?? [];
+      const isParticipant = participantIds.includes(resident.id);
+      const isSpeaker = isParticipant && resident.id === currentSpeakerId;
+      const isListener = isParticipant && !isSpeaker;
+      const conversationForChar = conversationActive && isSpeaker
         ? uiState.residentConversation
         : null;
       return renderStageCharacter(
@@ -1132,6 +1132,7 @@ function renderTownStage(state, uiState, handlers = {}) {
         uiState.residentVoiceInteraction,
         uiState.ttsAudios,
         conversationForChar,
+        { isConversationActive: conversationActive, isSpeaker, isListener, isParticipant },
       );
     })
     .join("");
@@ -1881,6 +1882,7 @@ export function renderApp(root, state, handlers, uiState = {}) {
             conversationQueue: safeUiState.residentConversation?.queue ?? [],
             currentLineIndex: safeUiState.residentConversation?.currentIndex ?? 0,
             visibleText: safeUiState.residentConversation?.visibleText ?? "",
+            sessionState: safeUiState.residentConversation?.sessionState ?? null,
           })}
           ${renderChoiceAftermath(safeUiState.choiceAftermath, safeUiState.residentVoiceInteraction)}
           ${renderSpotlight(state, safeUiState)}

@@ -53,6 +53,7 @@
     "resident-conversation-check": "node scripts/resident-conversation-check.mjs",
     "resident-conversation-refresh-check": "node scripts/resident-conversation-refresh-check.mjs",
     "resident-conversation-semantics-check": "node scripts/resident-conversation-semantics-check.mjs",
+    "resident-conversation-session-check": "node scripts/resident-conversation-session-check.mjs",
     "completion-feedback-check": "node scripts/completion-feedback-check.mjs",
     "layout-stability-check": "node scripts/layout-stability-check.mjs",
     "desktop-stage-acting-check": "node scripts/desktop-stage-acting-check.mjs",

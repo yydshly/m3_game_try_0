@@ -31,11 +31,12 @@ assert(
   "turns have from: 'speaker' and from: 'target' in dialogueGenerator"
 );
 
-// 3. buildResidentConversationQueue uses structured turns from buildResidentDialogueTurns
-// (speakerId/targetId are derived from turn.from/turn.to in buildResidentDialogueTurns)
+// 3. buildResidentConversationQueue uses buildResidentConversationSession for fixed-pair turns
+// (speakerId/targetId come from the session's fixed participants)
 assert(
-  appContent.includes("buildResidentDialogueTurns") && appContent.includes("turn.speakerId"),
-  "buildResidentConversationQueue uses structured turns (speakerId from turn.from)"
+  (appContent.includes("buildResidentConversationSession") || appContent.includes("session")) &&
+  appContent.includes("line.speakerId"),
+  "buildResidentConversationQueue uses session-based turns (speakerId from session lines)"
 );
 
 // 4. No raw speaker.name / target.name substitution in templates (dialogueGenerator uses placeholder substitution)
