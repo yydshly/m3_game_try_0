@@ -1,24 +1,131 @@
 # AI Town Life
 
-A lightweight, friendly multi-agent town life simulation prototype.
+A lightweight, friendly multi-agent AI-driven town life simulation prototype.
 
-The first release focuses on a complete playable loop without external dependencies: residents, places, tasks, mood, energy, relationships, memories, event feed, town tips, and daily reports. Later, `services/narrator.js` can be replaced with a real LLM or multi-agent backend without rewriting the UI.
+The V1 prototype validates a complete playable loop: residents move through daily phases, receive AI-generated tasks, perform on an illustrated stage, generate short dialogues, receive town broadcasts and events, and let players make choices that the town remembers the next day.
 
 ## Why This Project Exists
 
-AI Town Life is not only a cozy town simulation prototype. It is also an experiment in using MiniMax-M3 as a planning brain for AI-driven game worlds.
+AI Town Life is not only a cozy town simulation prototype. It is also an experiment in using MiniMax-M3 as a planning brain, narrative director, broadcast writer, dialogue generator, and memory system for an AI-driven game world.
 
 The project explores three questions:
 
 1. Can a lightweight web game make AI agent behavior visible and playable?
-2. Can MiniMax-M3 plan resident actions based on state, memory, needs, and town goals?
+2. Can MiniMax-M3 act as a town planner, event director, broadcast narrator, and memory anchor?
 3. Can a small town simulation become a practical prototype for a new kind of AI game experience?
 
-The current version is still a prototype, but it already validates an important direction: large language models can be more than NPC dialogue generators. They can act as planners, narrators, and observers inside living game systems.
+The V1 prototype validates an important direction: large language models can be more than NPC dialogue generators. They can act as planners, narrators, observers, and memory keepers inside living game systems.
 
 ## 项目意义
 
 这个项目不是单纯的小镇模拟页面，而是一个 AI 游戏方向实验。它试图验证：大模型是否可以成为游戏世界中的规划者、叙事者和观察者，而不仅仅是 NPC 台词生成器。
+
+## V1 主循环
+
+V1 实现了完整的可玩闭环：
+
+```
+玩家点击「推进小镇一天」
+  → AI Director 根据小镇状态选择今日生活场景
+  → 居民任务推进（早上/下午/晚上）
+  → 地图舞台演出（居民移动 + 任务动画 + 气泡反馈）
+  → 居民生成短对白（M3 或本地 fallback）
+  → 小镇广播生成（M3）
+  → 小镇事件生成（M3）
+  → 玩家选择事件选项
+  → 选择后果即时演出 + choiceAftermath 反馈
+  → 写入 townMemory / residentMemory（选择记忆链路）
+  → 第二天开场生成「昨日回响」
+  → 后续广播 / 事件 / 居民对白引用昨日回响
+```
+
+关键约束：玩家选择**不直接修改** mood / energy / supplies 等数值，只记录记忆，用于后续 AI 内容生成的叙事引用。
+
+## 当前已完成能力（V1）
+
+### AI Director
+
+- 根据居民任务分布、心情、小镇记忆自动选择 8 种生活场景（邻里互助、花园日、集市采购、设施修理、安静阅读、节日准备、天气变化、居民心情）
+- 为 M3 广播和事件提供叙事上下文（townMemory、residentMemory、recentChoices、openingReflection）
+
+### 居民任务与舞台演出
+
+- 5 位居民 × 5 个地点 × 6 种任务类型
+- 纯 DOM/CSS 任务动画层（travel + work/chat/rest + 气泡 + 地点特效）
+- CSS 关键帧居民移动动画（采集 = run，休息 = slow，低体力慢行）
+- 任务完成徽章（🌸 🍲 🔧 💬 🌿 💤）
+- `prefers-reduced-motion` 动画降级
+
+### 居民对白
+
+- M3 生成每位居民 12-28 字短对白 + 动作提示
+- 本地 fallback（基于任务类型 × 场景矩阵，无 M3 调用）
+- MiMo TTS 语音播放（每个居民独立按钮）
+
+### 小镇广播
+
+- M3 生成小镇广播（标题、文案、氛围、音乐提示词）
+- memoryNarrative 注入广播 prompt，引用近期记忆
+- MiniMax speech-2.8-hd TTS 合成 + 全局语音播放条
+
+### 小镇事件与玩家选择
+
+- M3 生成小镇事件（标题、文案、基调、地点、涉及居民、选项）
+- 玩家二选一，结果写入 choiceAftermath 即时反馈
+- 选择写入 townMemory + residentMemory，选择记忆链路闭环
+
+### 记忆系统
+
+- townMemory：玩家选择记忆（player-choice 类型）
+- residentMemory：每位居民最近 8 条记忆
+- buildPromptMemoryNarrative：为 M3 prompt 生成自然语言记忆摘要
+- choiceAftermath 即时 UI 反馈（右侧面板 + 地图舞台浮动徽章）
+
+### 第二天开场回响
+
+- `buildDayOpeningReflection()`：优先级 choiceAftermath > townMemory player-choice > residentMemory > fallback
+- 左侧一日闭环区域显示「🌿 昨日回响」
+- 地图舞台右上角显示「🌿 小镇记得昨天的选择」
+- M3 广播/事件/居民对白 prompt 注入 openingReflection，自然引用不机械复述
+
+### 全局语音播放条
+
+- MiniMax 广播 TTS 与 MiMo 场景 TTS 共用统一状态
+- 播放/暂停/停止控制，自动拦截二次播放
+- day-opening 场景复用 MiMo 播放按钮
+
+### 验证脚本
+
+所有验证脚本均可在无 MiniMax API Key 的情况下运行（使用模拟数据）：
+
+| 脚本 | 验证内容 |
+|------|---------|
+| `check` | 3 阶段推进 → day 2 + 日报 |
+| `agent-check` | ResidentAgent model: needs 0-100, decisionReason |
+| `smoke` | HTTP server 200 |
+| `render-check` | DOM 完整性 |
+| `config-check` | API Style 配置 |
+| `day-cycle-check` | 一日闭环状态机 |
+| `ai-director-check` | AI Director context + 场景规则 |
+| `resident-dialogue-check` | 对白生成 + fallback |
+| `broadcast-tts-check` | MiniMax TTS 按钮状态机 |
+| `mimo-tts-check` | MiMo TTS 配置 + 端点 |
+| `choice-aftermath-check` | choiceAftermath 状态 + UI |
+| `day-reflection-check` | 昨日回响完整链路 |
+| `memory-continuity-check` | memoryNarrative → broadcast/event |
+| `tts-check` | MiniMax TTS 配置 |
+| `voice-playback-check` | 全局语音播放条 |
+| `completion-feedback-check` | 任务完成反馈 |
+| `stage-acting-check` | 舞台演出 CSS 类 |
+| `event-director-check` | 事件导演 M3 解析 |
+| `event-choice-check` | 事件选项 normalized |
+| `memory-reference-check` | 记忆引用 prompt |
+| `resident-feedback-check` | 心情表情渲染 |
+| `stage-check` | 地图舞台 DOM 完整性 |
+| `animation-check` | 任务动画 DOM |
+| `travel-animation-check` | 居民移动动画 |
+| `animation-sync-check` | 动画锁步 |
+| `mimo-tts-integration-check` | MiMo TTS dry-run |
 
 ## Run Locally
 
@@ -56,7 +163,7 @@ Edit `config.local.json`:
   },
   "minimax": {
     "apiStyle": "anthropic",
-    "apiKey": "your_real_key_here",
+    "apiKey": "YOUR_API_KEY_HERE",  // placeholder — replace with your actual key
     "model": "MiniMax-M3",
     "anthropicBaseUrl": "https://api.minimaxi.com/anthropic",
     "timeoutMs": 30000
@@ -78,7 +185,7 @@ PowerShell example:
 
 ```powershell
 cd ai-town-life
-$env:ANTHROPIC_API_KEY="your_real_key_here"
+$env:ANTHROPIC_API_KEY="YOUR_API_KEY_HERE"
 $env:MINIMAX_MODEL="MiniMax-M3"
 $env:MINIMAX_API_STYLE="anthropic"
 node scripts/server.mjs
@@ -156,9 +263,28 @@ This feedback is visual only. It does not change simulation resources, mood, ene
 
 ## 小镇氛围与广播
 
-AI 小镇生活新增了轻量氛围层。MiniMax-M3 可以根据当前天数、阶段、居民状态、小镇资源、最近事件和日报生成一段小镇广播文案。
+AI 小镇生活新增了轻量氛围层。MiniMax-M3 可以根据当前天数、阶段、居民状态、小镇资源、最近事件和日报生成一段小镇广播文案，并附上建议音乐氛围提示词。
 
-当前版本只生成广播文字和建议音乐氛围，不生成真实音频，这样先验证广播内容是否有游戏魅力，再逐步接入 TTS 和背景音乐生成。
+点击左侧 `📻 生成小镇广播`，广播出现在小镇动态中，包含标题、文案、氛围、地点和音乐提示词。
+
+### 当前 TTS 能力边界
+
+**MiniMax TTS（speech-2.8-hd）**
+- 用于小镇广播语音合成
+- 点击 `🔊 生成语音广播` → MiniMax TTS → 全局语音播放条播放
+- 只合成广播，不合成其他内容
+
+**MiMo TTS（mimo-v2.5-tts / Token Plan）**
+- 用于居民对白、事件提示、任务完成反馈、今日场景开场白
+- 每个场景独立按钮播放，不自动连续播报
+- Token Plan 端点验证通过（dry-run）
+
+**当前明确不做**
+- 多角色连续播报（多角色剧本式 TTS）
+- 声音克隆 / Voice Design
+- WebSocket 流式 TTS
+- 背景音乐生成（music_generation）
+- 实时语音交互
 
 ## 事件选择
 
@@ -378,6 +504,19 @@ Import as a static site:
 Framework Preset: Other
 Output Directory: .
 ```
+
+## 暂缓能力（V1 明确不做）
+
+以下能力在本版本中暂不实现，留给后续阶段：
+
+- **移动端布局优化** — 当前桌面优先，暂不优化手机布局
+- **背景音乐生成** — music_generation 接口暂不接入
+- **Sprite Sheet 帧动画** — 当前为 DOM/CSS 动画，后续可升级
+- **居民自由聊天输入框** — 当前为预设对白，暂无 NL 输入
+- **完整关系系统** — 当前为数值好感度，暂无对话式关系发展
+- **Phaser / Pixi / Canvas 重构** — 当前纯 DOM/CSS，无需游戏引擎
+- **多角色连续语音剧** — TTS 当前按场景独立播放，不做连续剧本式播报
+- **居民固定音色绑定** — MiMo 当前为默认音色，暂无角色音色设计
 
 ## Product Roadmap
 

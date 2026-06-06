@@ -41,6 +41,7 @@
     "resident-dialogue-check": "node scripts/resident-dialogue-check.mjs",
     "mimo-tts-integration-check": "node scripts/mimo-tts-integration-check.mjs",
     "voice-playback-check": "node scripts/voice-playback-check.mjs",
-    "choice-aftermath-check": "node scripts/choice-aftermath-check.mjs"
+    "choice-aftermath-check": "node scripts/choice-aftermath-check.mjs",
+    "v1-acceptance-check": "node scripts/v1-acceptance-check.mjs"
   }
 }
