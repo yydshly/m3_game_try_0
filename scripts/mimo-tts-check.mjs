@@ -1,4 +1,4 @@
-// mimo-tts-check — validates MiMo TTS Provider integration
+// mimo-tts-check — validates MiMo TTS Provider integration (Token Plan mode)
 import { resolveTtsProviderForScene, buildAudioKey, hashText, validateSceneText } from "../src/services/ttsService.js";
 
 const root = {
@@ -74,7 +74,7 @@ console.log("\n── buildAudioKey ──");
   assert(buildAudioKey("completion_feedback") === "completion_feedback:current", "key scene-only");
 }
 
-// ── 4. hashText ────────────────────────────────────────────────────────────
+// ── 4. hashText ─────────────────────────────────────────────────────────────
 console.log("\n── hashText ──");
 {
   assert(typeof hashText === "function", "hashText is a function");
@@ -83,7 +83,7 @@ console.log("\n── hashText ──");
   assert(hashText("") !== undefined, "empty string handled");
 }
 
-// ── 5. validateSceneText ──────────────────────────────────────────────────
+// ── 5. validateSceneText ───────────────────────────────────────────────────
 console.log("\n── validateSceneText ──");
 {
   assert(typeof validateSceneText === "function", "validateSceneText is a function");
@@ -105,18 +105,16 @@ console.log("\n── mimoClient.js exists ──");
   assert(content.includes("./api/mimo/tts"), "calls /api/mimo/tts endpoint");
 }
 
-// ── 7. /api/mimo/tts endpoint in server.mjs ─────────────────────────────
-console.log("\n── /api/mimo/tts server endpoint ──");
+// ── 7. server.mjs has handleMimoTts ──────────────────────────────────────
+console.log("\n── server.mjs handleMimoTts ──");
 {
   const fs = await import("fs");
   const content = fs.readFileSync("./scripts/server.mjs", "utf8");
   assert(content.includes("handleMimoTts"), "handleMimoTts function exists");
   assert(content.includes("/api/mimo/tts"), "endpoint routed to /api/mimo/tts");
-  assert(content.includes("mimoApiKey"), "reads mimoApiKey config");
-  assert(content.includes("mimoEnabled"), "checks mimoEnabled flag");
 }
 
-// ── 8. MiniMax TTS endpoint still exists ─────────────────────────────────
+// ── 8. MiniMax TTS endpoint still exists ────────────────────────────────
 console.log("\n── MiniMax TTS endpoint preserved ──");
 {
   const fs = await import("fs");
@@ -125,7 +123,7 @@ console.log("\n── MiniMax TTS endpoint preserved ──");
   assert(content.includes("/api/minimax/tts"), "/api/minimax/tts still routed");
 }
 
-// ── 9. No API key in frontend bundle (mimoClient.js) ──────────────────────
+// ── 9. No API key in frontend bundle (mimoClient.js) ─────────────────────
 console.log("\n── No MiMo API key in frontend ──");
 {
   const fs = await import("fs");
@@ -140,25 +138,191 @@ console.log("\n── No .env committed ──");
 {
   const fs = await import("fs");
   const gitignoreContent = fs.readFileSync("./.gitignore", "utf8");
-  // .env should be in .gitignore to prevent committing secrets
   const envIgnored = gitignoreContent.includes(".env");
   assert(envIgnored, ".env is in .gitignore to prevent committing secrets");
 }
 
-// ── 11. server.mjs has sanitized error responses ───────────────────────────
-console.log("\n── Server error sanitization ──");
+// ── 11. Token Plan: default baseUrl uses token-plan-cn ──────────────────────
+console.log("\n── Token Plan default baseUrl ──");
 {
   const fs = await import("fs");
   const content = fs.readFileSync("./scripts/server.mjs", "utf8");
-  // handleMimoTts function body
-  const mimoFn = content.split("async function handleMimoTts")[1]?.split("\n\n")[0] ?? "";
-  // All error strings in sendJson calls should be user-friendly, not contain raw keys
-  const errorStrings = [...mimoFn.matchAll(/error:\s*"([^"]+)"/g)].map((m) => m[1]);
-  const hasKeyLeak = errorStrings.some((e) => /sk-|Bearer |api[_-]?key|token|secret/i.test(e));
+  // Default should be token-plan-cn, NOT api.mimo.ai
+  assert(
+    !content.includes('"https://api.mimo.ai/v1"') &&
+    !content.includes("'https://api.mimo.ai/v1'"),
+    "no hardcoded api.mimo.ai/v1 default"
+  );
+  // Should reference token-plan-cn in the defaults
+  assert(
+    content.includes("token-plan-cn") || content.includes("token_plan"),
+    "token-plan-cn referenced in server.mjs config"
+  );
+}
+
+// ── 12. Token Plan endpoint: /chat/completions ─────────────────────────────
+console.log("\n── Token Plan endpoint construction ──");
+{
+  const fs = await import("fs");
+  const content = fs.readFileSync("./scripts/server.mjs", "utf8");
+  // Isolate the MiMo handler section only
+  const mimoSection = content.split("// ── MiMo TTS ─────────────────────────────────────────────────────────────────")[1]?.split("function resolvePath")[0] ?? "";
+  // Must use /chat/completions
+  assert(mimoSection.includes("/chat/completions"), "/chat/completions used in handleMimoTts");
+  // Must NOT use /t2a_v2, /tts, /audio/speech in MiMo handler
+  assert(!mimoSection.includes("/t2a_v2"), "no /t2a_v2 endpoint in MiMo handler");
+  assert(!mimoSection.includes("/tts"), "no /tts endpoint in MiMo handler");
+  assert(!mimoSection.includes("/audio/speech"), "no /audio/speech endpoint in MiMo handler");
+}
+
+// ── 13. Auth header uses api-key (not Bearer) ────────────────────────────
+console.log("\n── Auth header uses api-key ──");
+{
+  const fs = await import("fs");
+  const content = fs.readFileSync("./scripts/server.mjs", "utf8");
+  // Must use "api-key" header
+  assert(content.includes('"api-key"'), 'uses "api-key" header');
+  // Must NOT use Authorization: Bearer for MiMo
+  const mimoSection = content.split("handleMimoTts")[1]?.split("function resolvePath")[0] ?? "";
+  assert(!mimoSection.includes("Bearer"), "no Bearer token in handleMimoTts");
+}
+
+// ── 14. Request body uses Chat Completions format ─────────────────────────
+console.log("\n── Chat Completions request body ──");
+{
+  const fs = await import("fs");
+  const content = fs.readFileSync("./scripts/server.mjs", "utf8");
+  const fn = content.split("handleMimoTts")[1]?.split("function resolvePath")[0] ?? "";
+  // Must have messages array
+  assert(fn.includes("messages:"), "messages array in request body");
+  // Must have user role for style instruction
+  assert(fn.includes('role: "user"') || fn.includes("role: 'user'"), "user role for style");
+  // Must have assistant role for text to synthesize
+  assert(fn.includes('role: "assistant"') || fn.includes("role: 'assistant'"), "assistant role for TTS text");
+  // Must have audio object
+  assert(fn.includes("audio:"), "audio config in request body");
+  // Must NOT have old t2a_v2 payload fields like voice_setting, stream
+  assert(!fn.includes("voice_setting:"), "no voice_setting field (old format)");
+  assert(!fn.includes("stream:"), "no stream field in TTS payload");
+}
+
+// ── 15. audio.voice and audio.format defaults ───────────────────────────────
+console.log("\n── audio.voice and audio.format defaults ──");
+{
+  const fs = await import("fs");
+  const content = fs.readFileSync("./scripts/server.mjs", "utf8");
+  const fn = content.split("handleMimoTts")[1]?.split("function resolvePath")[0] ?? "";
+  // Default voice should be mimo_default
+  assert(fn.includes("mimo_default"), "mimo_default as default voice");
+  // Default format should be wav
+  assert(fn.includes('format: "wav"') || fn.includes("format: 'wav'"), "wav as default format");
+}
+
+// ── 16. TTS text goes to assistant role, not user role ────────────────────
+console.log("\n── TTS text in assistant role ──");
+{
+  const fs = await import("fs");
+  const content = fs.readFileSync("./scripts/server.mjs", "utf8");
+  const fn = content.split("handleMimoTts")[1]?.split("function resolvePath")[0] ?? "";
+  // The text variable should be placed in the assistant message
+  const assistantContentMatch = fn.match(/role:\s*["']assistant["']\s*,\s*content:\s*text/);
+  assert(assistantContentMatch, "TTS text assigned to assistant role content");
+}
+
+// ── 17. mimo-v2.5-tts model used ───────────────────────────────────────────
+console.log("\n── mimo-v2.5-tts model ──");
+{
+  const fs = await import("fs");
+  const content = fs.readFileSync("./scripts/server.mjs", "utf8");
+  assert(content.includes("mimo-v2.5-tts"), "mimo-v2.5-tts model referenced");
+}
+
+// ── 18. MIMO_API_MODE config supported ─────────────────────────────────────
+console.log("\n── MIMO_API_MODE config ──");
+{
+  const fs = await import("fs");
+  const content = fs.readFileSync("./scripts/server.mjs", "utf8");
+  assert(content.includes("mimoApiMode"), "mimoApiMode variable exists");
+  assert(content.includes("MIMO_API_MODE"), "MIMO_API_MODE env/config key exists");
+}
+
+// ── 19. Token Plan key prefix tp- and payg key prefix sk- ──────────────────
+console.log("\n── Key prefix detection ──");
+{
+  const fs = await import("fs");
+  const content = fs.readFileSync("./scripts/server.mjs", "utf8");
+  assert(content.includes("isTokenPlanKey"), "isTokenPlanKey check exists");
+  assert(content.includes("isPaygKey"), "isPaygKey check exists");
+  assert(content.includes('"tp-'), "tp- prefix mentioned in config");
+  assert(content.includes('"sk-'), "sk- prefix mentioned in config");
+}
+
+// ── 20. config.example updated for Token Plan ─────────────────────────────
+console.log("\n── config.example updated for Token Plan ──");
+{
+  const fs = await import("fs");
+  const content = fs.readFileSync("./config.example.json", "utf8");
+  const parsed = JSON.parse(content);
+  const mimo = parsed?.mimo?.tts;
+  assert(mimo?.baseUrl?.includes("token-plan-cn"), "config.example default baseUrl is Token Plan");
+  assert(mimo?.apiMode === "token_plan", "config.example apiMode is token_plan");
+  assert(mimo?.voiceId === "mimo_default", "config.example default voice is mimo_default");
+  assert(!mimo?.baseUrl?.includes("api.mimo.ai"), "config.example does not use api.mimo.ai");
+}
+
+// ── 21. getMimoRuntimeConfig function exists ───────────────────────────────
+console.log("\n── getMimoRuntimeConfig function ──");
+{
+  const fs = await import("fs");
+  const content = fs.readFileSync("./scripts/server.mjs", "utf8");
+  assert(content.includes("function getMimoRuntimeConfig"), "getMimoRuntimeConfig function exists");
+  assert(content.includes("keyPrefix"), "keyPrefix used in getMimoRuntimeConfig");
+  assert(content.includes("isTokenPlanKey"), "isTokenPlanKey in getMimoRuntimeConfig");
+  assert(content.includes("warnings:"), "warnings array in getMimoRuntimeConfig");
+}
+
+// ── 22. getMimoRuntimeConfig does not expose full key ─────────────────────
+console.log("\n── getMimoRuntimeConfig key sanitization ──");
+{
+  const fs = await import("fs");
+  const content = fs.readFileSync("./scripts/server.mjs", "utf8");
+  const fnBody = content.split("function getMimoRuntimeConfig")[1]?.split("\n}")[0] ?? "";
+  // Should use slice(0,3) and slice(-4) for prefix
+  assert(fnBody.includes("slice(0, 3)") && fnBody.includes("slice(-4)"), "key prefix shown as ***");
+  // Should not expose full mimoApiKey
+  assert(!fnBody.includes("mimoApiKey,"), "full mimoApiKey not returned directly");
+}
+
+// ── 23. dry-run endpoint works ──────────────────────────────────────────────
+console.log("\n── dry-run endpoint support ──");
+{
+  const fs = await import("fs");
+  const content = fs.readFileSync("./scripts/server.mjs", "utf8");
+  const fn = content.split("handleMimoTts")[1]?.split("function resolvePath")[0] ?? "";
+  assert(fn.includes("isDryRun"), "isDryRun variable exists");
+  assert(fn.includes('dryRun=1') || fn.includes('dryRun"'), "dryRun query param checked");
+  assert(fn.includes("keyPrefix:"), "dry-run response includes keyPrefix");
+  assert(fn.includes("endpoint:"), "dry-run response includes endpoint");
+  // Verify the dry-run response block doesn't include mimoApiKey directly
+  const dryRunBlock = fn.slice(fn.indexOf("isDryRun"), fn.indexOf("mimoEnabled"));
+  assert(!dryRunBlock.includes("mimoApiKey:"), "dry-run response does not include mimoApiKey field");
+}
+
+// ── 24. Error messages are user-friendly ───────────────────────────────────
+console.log("\n── Error message sanitization ──");
+{
+  const fs = await import("fs");
+  const content = fs.readFileSync("./scripts/server.mjs", "utf8");
+  const fn = content.split("handleMimoTts")[1]?.split("function resolvePath")[0] ?? "";
+  // Error strings should not contain actual API key patterns (sk-xxx, tp-xxx, long Bearer tokens)
+  const errorStrings = [...fn.matchAll(/error:\s*"([^"]+)"/g)].map((m) => m[1]);
+  const hasKeyLeak = errorStrings.some(
+    (e) => /sk-[A-Za-z0-9]{10,}|tp-[A-Za-z0-9]{10,}|Bearer [A-Za-z0-9._-]{20,}/.test(e)
+  );
   assert(!hasKeyLeak, "error strings are user-friendly, no API key leaked");
 }
 
-// ── 12. ttsAudios in uiState ────────────────────────────────────────────────
+// ── 25. ttsAudios in uiState ────────────────────────────────────────────────
 console.log("\n── ttsAudios in uiState ──");
 {
   const fs = await import("fs");
@@ -167,7 +331,7 @@ console.log("\n── ttsAudios in uiState ──");
   assert(content.includes("ttsAudios: {}"), "ttsAudios reset in onNewTown");
 }
 
-// ── 13. onPlayMimoTts handler exists in app.js ────────────────────────────
+// ── 26. onPlayMimoTts handler exists in app.js ────────────────────────────
 console.log("\n── onPlayMimoTts handler ──");
 {
   const fs = await import("fs");
@@ -179,18 +343,18 @@ console.log("\n── onPlayMimoTts handler ──");
   assert(content.includes("resolveTtsProviderForScene"), "resolves provider per scene");
 }
 
-// ── 14. MiMo TTS button in render ──────────────────────────────────────────
+// ── 27. MiMo TTS button in render ──────────────────────────────────────────
 console.log("\n── MiMo TTS buttons in render ──");
 {
   const fs = await import("fs");
   const content = fs.readFileSync("./src/ui/render.js", "utf8");
-  assert(content.includes("data-action=\"play-mimo-tts\""), "play-mimo-tts button exists");
-  assert(content.includes("data-action=\"pause-mimo-tts\""), "pause-mimo-tts button exists");
-  assert(content.includes("data-action=\"resume-mimo-tts\""), "resume-mimo-tts button exists");
+  assert(content.includes('data-action="play-mimo-tts"'), "play-mimo-tts button exists");
+  assert(content.includes('data-action="pause-mimo-tts"'), "pause-mimo-tts button exists");
+  assert(content.includes('data-action="resume-mimo-tts"'), "resume-mimo-tts button exists");
   assert(content.includes("mimo-tts-btn"), "mimo-tts-btn CSS class exists");
 }
 
-// ── 15. activeMimoAudios Map in app.js ────────────────────────────────────
+// ── 28. activeMimoAudios Map in app.js ────────────────────────────────────
 console.log("\n── activeMimoAudios Map ──");
 {
   const fs = await import("fs");
@@ -200,7 +364,7 @@ console.log("\n── activeMimoAudios Map ──");
   assert(content.includes("stopAllMimoAudio"), "stopAllMimoAudio function exists");
 }
 
-// ── 16. Same-text dedup (textHash check) ───────────────────────────────────
+// ── 29. Same-text dedup (textHash check) ───────────────────────────────────
 console.log("\n── Same-text dedup ──");
 {
   const fs = await import("fs");
@@ -209,19 +373,17 @@ console.log("\n── Same-text dedup ──");
   assert(content.includes("hashText(text)"), "hashText used to compute hash");
 }
 
-// ── 17. MiMo failure doesn't crash dayCycle ────────────────────────────────
+// ── 30. MiMo failure doesn't crash dayCycle ────────────────────────────────
 console.log("\n── MiMo failure isolation ──");
 {
   const fs = await import("fs");
   const content = fs.readFileSync("./src/app.js", "utf8");
-  // The onPlayMimoTts handler uses .then().catch() — failure in generation is caught
   assert(content.includes(".catch((err) => {"), "MiMo generation has .catch()");
-  // dayCycle is not modified on MiMo error
   const catchBlock = content.split(".catch((err) =>")[1]?.split("};")[0] ?? "";
   assert(!catchBlock.includes("dayCycle"), "dayCycle not modified in MiMo error catch");
 }
 
-// ── 18. MiniMax TTS still works (no regression) ──────────────────────────
+// ── 31. MiniMax TTS still works (no regression) ──────────────────────────
 console.log("\n── MiniMax TTS preserved ──");
 {
   const fs = await import("fs");
@@ -232,7 +394,7 @@ console.log("\n── MiniMax TTS preserved ──");
   assert(content.includes("onPauseTts:"), "onPauseTts handler still exists");
 }
 
-// ── 19. MiniMax speech-t2a-http not modified ──────────────────────────────
+// ── 32. MiniMax speech-t2a-http not modified ──────────────────────────────
 console.log("\n── MiniMax speech-t2a-http not modified ──");
 {
   const fs = await import("fs");
@@ -240,7 +402,7 @@ console.log("\n── MiniMax speech-t2a-http not modified ──");
   assert(ttsContent.includes("speech-2.8-hd"), "speech-2.8-hd model still in minimaxTts.js");
 }
 
-// ── 20. music_generation not modified ─────────────────────────────────────
+// ── 33. music_generation not modified ─────────────────────────────────────
 console.log("\n── music_generation not modified ──");
 {
   const fs = await import("fs");
@@ -250,7 +412,7 @@ console.log("\n── music_generation not modified ──");
   assert(!clientContent.includes("music_generation"), "music_generation not in minimaxClient.js");
 }
 
-// ── 21. Game values not modified ───────────────────────────────────────────
+// ── 34. Game values not modified ───────────────────────────────────────────
 console.log("\n── Game values not modified ──");
 {
   const fs = await import("fs");
@@ -258,7 +420,7 @@ console.log("\n── Game values not modified ──");
   assert(simContent.includes("mood") && simContent.includes("energy"), "mood and energy still in simulation.js");
 }
 
-// ── 22. No new frameworks ─────────────────────────────────────────────────
+// ── 35. No new frameworks ─────────────────────────────────────────────────
 console.log("\n── No new frameworks ──");
 {
   const fs = await import("fs");
@@ -269,7 +431,7 @@ console.log("\n── No new frameworks ──");
   assert(found.length === 0, `no forbidden frameworks (found: ${found.join(", ") || "none"})`);
 }
 
-// ── 23. No API keys committed in app.js ───────────────────────────────────
+// ── 36. No API keys committed in app.js ───────────────────────────────────
 console.log("\n── No API keys committed in app.js ──");
 {
   const fs = await import("fs");
@@ -278,7 +440,7 @@ console.log("\n── No API keys committed in app.js ──");
   assert(!hasKey, "no sk- API keys in app.js");
 }
 
-// ── 24. renderApp: ttsAudios in safeUiState ────────────────────────────────
+// ── 37. ttsAudios in safeUiState ──────────────────────────────────────────
 console.log("\n── ttsAudios in safeUiState ──");
 {
   const fs = await import("fs");
@@ -288,7 +450,7 @@ console.log("\n── ttsAudios in safeUiState ──");
   assert(content.includes("onPlayMimoTts:"), "onPlayMimoTts in safeHandlers");
 }
 
-// ── 25. resident dialogue TTS button in render ────────────────────────────
+// ── 38. resident dialogue TTS button in render ────────────────────────────
 console.log("\n── Resident dialogue TTS button ──");
 {
   const fs = await import("fs");
@@ -296,7 +458,7 @@ console.log("\n── Resident dialogue TTS button ──");
   assert(content.includes("renderResidentDialoguePanel(safeUiState.residentSceneBeats, safeUiState.ttsAudios, safeHandlers)"), "dialogue panel gets ttsAudios");
 }
 
-// ── 26. event TTS button in render ───────────────────────────────────────
+// ── 39. event TTS button in render ───────────────────────────────────────
 console.log("\n── Event TTS button ──");
 {
   const fs = await import("fs");
@@ -305,16 +467,16 @@ console.log("\n── Event TTS button ──");
   assert(content.includes("event_prompt:"), "event uses event_prompt scene");
 }
 
-// ── 27. completion TTS button in render ───────────────────────────────────
+// ── 40. completion TTS button in render ───────────────────────────────────
 console.log("\n── Completion feedback TTS button ──");
 {
   const fs = await import("fs");
   const content = fs.readFileSync("./src/ui/render.js", "utf8");
   assert(content.includes("completion_feedback:current"), "completion uses completion_feedback scene");
-  assert(content.includes("cfText = \"本阶段行动完成\""), "completion text hardcoded");
+  assert(content.includes('cfText = "本阶段行动完成"'), "completion text hardcoded");
 }
 
-// ── 28. day_opening TTS button in render ──────────────────────────────────
+// ── 41. day_opening TTS button in render ─────────────────────────────────
 console.log("\n── Day-opening TTS button ──");
 {
   const fs = await import("fs");
@@ -323,7 +485,7 @@ console.log("\n── Day-opening TTS button ──");
   assert(content.includes("今天的小镇围绕"), "day-opening text uses scenario");
 }
 
-// ── 29. activeMimoAudios isolation ─────────────────────────────────────────
+// ── 42. activeMimoAudios isolation ─────────────────────────────────────────
 console.log("\n── activeMimoAudios isolation ──");
 {
   const fs = await import("fs");
@@ -334,13 +496,21 @@ console.log("\n── activeMimoAudios isolation ──");
   assert(content.includes("audio.onerror ="), "audio has onerror assignment");
 }
 
-// ── 30. config.example has MiMo placeholder ───────────────────────────────────
-console.log("\n── config.example has MiMo placeholder ──");
+// ── 43. No Bearer token in config.example mimo section ───────────────────
+console.log("\n── No Bearer in config.example ──");
 {
   const fs = await import("fs");
   const content = fs.readFileSync("./config.example.json", "utf8");
-  const hasMimoSection = content.includes("mimo") && content.includes("your_mimo_api_key_here");
-  assert(hasMimoSection, "config.example has mimo section with placeholder key");
+  assert(!content.includes("Bearer"), "no Bearer token in config.example");
+}
+
+// ── 44. dayCycle not modified ─────────────────────────────────────────────
+console.log("\n── dayCycle not modified ──");
+{
+  const fs = await import("fs");
+  const content = fs.readFileSync("./src/app.js", "utf8");
+  const cycleFns = ["advancePhase", "runTownDayCycle", "onRunTownDayCycle"];
+  cycleFns.forEach((fn) => assert(content.includes(fn), `${fn} still in app.js`));
 }
 
 // ── Results ───────────────────────────────────────────────────────────────

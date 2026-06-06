@@ -58,10 +58,21 @@ const mimoApiKey =
   envValue("MIMO_API_KEY") ??
   config.mimo?.tts?.apiKey ??
   "";
-const mimoBaseUrl =
-  envValue("MIMO_BASE_URL") ??
-  config.mimo?.tts?.baseUrl ??
-  "https://api.mimo.ai/v1";
+const mimoApiMode =
+  envValue("MIMO_API_MODE") ??
+  config.mimo?.tts?.apiMode ??
+  "token_plan";
+const mimoBaseUrl = (() => {
+  const configured =
+    envValue("MIMO_BASE_URL") ??
+    config.mimo?.tts?.baseUrl ??
+    "";
+  if (configured) return configured;
+  // Default baseUrl based on mode
+  return mimoApiMode === "payg"
+    ? "https://api.xiaomimimo.com/v1"
+    : "https://token-plan-cn.xiaomimimo.com/v1";
+})();
 const mimoModel =
   envValue("MIMO_TTS_MODEL") ??
   config.mimo?.tts?.model ??
@@ -69,13 +80,54 @@ const mimoModel =
 const mimoVoiceId =
   envValue("MIMO_TTS_VOICE_ID") ??
   config.mimo?.tts?.voiceId ??
-  "default";
+  "mimo_default";
 const mimoSpeed = Number(
   envValue("MIMO_TTS_SPEED") ?? config.mimo?.tts?.speed ?? 1.0
 );
 const mimoTimeoutMs = Number(
   envValue("MIMO_TTS_TIMEOUT_MS") ?? config.mimo?.tts?.timeoutMs ?? 20_000
 );
+
+// ── MiMo Runtime Config Accessor ────────────────────────────────────────────────
+
+/**
+ * Returns a safe view of the MiMo TTS runtime config for debugging/dry-run.
+ * Never exposes the full API key.
+ */
+function getMimoRuntimeConfig() {
+  const keyPrefix = mimoApiKey
+    ? `${mimoApiKey.slice(0, 3)}***${mimoApiKey.slice(-4)}`
+    : "";
+  const isTokenPlanKey = mimoApiKey.startsWith("tp-");
+  const isPaygKey = mimoApiKey.startsWith("sk-");
+  const modeLabel = mimoApiMode === "payg" ? "payg" : "token_plan";
+  return {
+    enabled: mimoEnabled,
+    mode: modeLabel,
+    baseUrl: mimoBaseUrl,
+    model: mimoModel,
+    voice: mimoVoiceId,
+    speed: mimoSpeed,
+    timeoutMs: mimoTimeoutMs,
+    keyPrefix,
+    isTokenPlanKey,
+    isPaygKey,
+    // Config validation warnings (not errors — server keeps running)
+    warnings: [
+      mimoApiMode === "token_plan" && !isTokenPlanKey && mimoApiKey
+        ? "MIMO_API_MODE=token_plan but key does not start with tp-"
+        : null,
+      mimoApiMode === "payg" && !isPaygKey && mimoApiKey
+        ? "MIMO_API_MODE=payg but key does not start with sk-"
+        : null,
+      mimoApiMode === "token_plan" &&
+      !mimoBaseUrl.includes("token-plan") &&
+      mimoBaseUrl
+        ? "Token Plan mode but baseUrl does not contain token-plan"
+        : null,
+    ].filter(Boolean),
+  };
+}
 
 const mimeTypes = {
   ".css": "text/css; charset=utf-8",
@@ -1069,7 +1121,45 @@ async function handleMiniMaxTts(request, response) {
 
 // ── MiMo TTS ─────────────────────────────────────────────────────────────────
 
+/**
+ * Build the instruction string for the user role (style guidance).
+ * emotion and speed are folded into the instruction text.
+ */
+function buildMimoStyleInstruction(emotion, speed) {
+  const parts = ["请用"];
+  if (emotion && emotion !== "neutral") {
+    parts.push(`${emotion}、`);
+  }
+  parts.push("自然、轻松的语气朗读。");
+  if (speed && speed !== 1.0) {
+    parts.push(` 语速保持正常。`);
+  }
+  return parts.join("");
+}
+
 async function handleMimoTts(request, response) {
+  // Support ?dryRun=1 to validate request construction without calling MiMo
+  const url = new URL(request.url, `http://localhost:${port}`);
+  const isDryRun = url.searchParams.get("dryRun") === "1";
+
+  if (isDryRun) {
+    const cfg = getMimoRuntimeConfig();
+    const body = await readJson(request).catch(() => ({}));
+    const text = String(body?.text ?? "").trim();
+    sendJson(response, 200, {
+      ok: true,
+      provider: "mimo",
+      mode: cfg.mode,
+      endpoint: `${mimoBaseUrl.replace(/\/$/, "")}/chat/completions`,
+      model: mimoModel,
+      authHeader: "api-key",
+      keyPrefix: cfg.keyPrefix,
+      assistantTextLength: text.length,
+      warnings: cfg.warnings,
+    });
+    return;
+  }
+
   if (!mimoEnabled) {
     sendJson(response, 501, {
       ok: false,
@@ -1107,34 +1197,39 @@ async function handleMimoTts(request, response) {
     return;
   }
 
-  const scene = String(body?.scene ?? "resident_dialogue").trim();
-  const voice = String(body?.voice ?? mimoVoiceId).trim();
   const emotion = String(body?.emotion ?? "neutral").trim();
+  const voice = String(body?.voice ?? mimoVoiceId).trim();
   const speed = Number(body?.speed ?? mimoSpeed);
 
-  try {
-    const ttsPayload = {
-      model: mimoModel,
-      text,
-      stream: false,
-      voice_setting: {
-        voice_id: voice,
-        speed,
-        vol: 1,
-        pitch: 0,
-      },
-    };
+  // Build Chat Completions body per Token Plan spec:
+  // - user role: style/emotion/instruction
+  // - assistant role: the text to synthesize
+  const styleInstruction = buildMimoStyleInstruction(emotion, speed);
 
+  const chatPayload = {
+    model: mimoModel,
+    messages: [
+      { role: "user", content: styleInstruction },
+      { role: "assistant", content: text },
+    ],
+    audio: {
+      format: "wav",
+      voice: voice || "mimo_default",
+    },
+  };
+
+  try {
+    const endpoint = `${mimoBaseUrl.replace(/\/$/, "")}/chat/completions`;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), mimoTimeoutMs);
 
-    const ttsResponse = await fetch(`${mimoBaseUrl}/t2a_v2`, {
+    const ttsResponse = await fetch(endpoint, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${mimoApiKey}`,
+        "api-key": mimoApiKey,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(ttsPayload),
+      body: JSON.stringify(chatPayload),
       signal: controller.signal,
     });
 
@@ -1145,25 +1240,18 @@ async function handleMimoTts(request, response) {
     if (!ttsResponse.ok) {
       sendJson(response, ttsResponse.status, {
         ok: false,
-        error: "MiMo 语音生成失败，请稍后重试。",
-        statusCode: payload?.base_resp?.status_code ?? ttsResponse.status,
-        statusMsg: payload?.base_resp?.status_msg ?? "",
+        error: "MiMo 语音生成失败，请检查 Token Plan 配置。",
       });
       return;
     }
 
-    if (payload?.base_resp?.status_code !== 0) {
-      sendJson(response, 502, {
-        ok: false,
-        error: "MiMo 语音生成失败。",
-        statusCode: payload?.base_resp?.status_code,
-        statusMsg: payload?.base_resp?.status_msg ?? "",
-      });
-      return;
-    }
+    // Token Plan returns base64 audio in choices[].message.audio or similar
+    const audioBase64 =
+      payload?.choices?.[0]?.message?.audio?.data ??
+      payload?.audio?.data ??
+      null;
 
-    const audioHex = payload?.data?.audio;
-    if (!audioHex || typeof audioHex !== "string" || audioHex.length === 0) {
+    if (!audioBase64 || typeof audioBase64 !== "string" || audioBase64.length === 0) {
       sendJson(response, 502, {
         ok: false,
         error: "MiMo 未返回音频数据。",
@@ -1171,9 +1259,7 @@ async function handleMimoTts(request, response) {
       return;
     }
 
-    const audioBuffer = Buffer.from(audioHex, "hex");
-    const audioBase64 = audioBuffer.toString("base64");
-    const audioUrl = `data:audio/mp3;base64,${audioBase64}`;
+    const audioUrl = `data:audio/wav;base64,${audioBase64}`;
 
     sendJson(response, 200, {
       ok: true,
