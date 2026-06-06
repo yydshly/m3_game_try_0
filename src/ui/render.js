@@ -1472,6 +1472,9 @@ function bindEvents(root, handlers) {
       handlers.onResumeMimoTts(button.dataset.audioKey);
     });
   });
+  root.querySelector("[data-action='voice-pause']")?.addEventListener("click", handlers.onVoicePause);
+  root.querySelector("[data-action='voice-resume']")?.addEventListener("click", handlers.onVoiceResume);
+  root.querySelector("[data-action='voice-stop']")?.addEventListener("click", handlers.onVoiceStop);
 }
 
 // ── Main Render ───────────────────────────────────────────────────────────────
@@ -1496,17 +1499,22 @@ export function renderApp(root, state, handlers, uiState = {}) {
     residentSceneBeats: uiState.residentSceneBeats ?? [],
     dayCycle: uiState.dayCycle ?? { status: "idle", step: "", scenarioId: "", error: "", startedAt: 0, completedAt: 0 },
     ttsAudios: uiState.ttsAudios ?? {},
+    currentVoicePlayback: uiState.currentVoicePlayback ?? null,
   };
 
   const safeHandlers = {
     onPlayMimoTts: handlers.onPlayMimoTts ?? (() => {}),
     onPauseMimoTts: handlers.onPauseMimoTts ?? (() => {}),
     onResumeMimoTts: handlers.onResumeMimoTts ?? (() => {}),
+    onVoicePause: handlers.onVoicePause ?? (() => {}),
+    onVoiceResume: handlers.onVoiceResume ?? (() => {}),
+    onVoiceStop: handlers.onVoiceStop ?? (() => {}),
   };
 
   root.innerHTML = `
     <div class="shell">
       ${renderGameHud(state)}
+      ${renderVoicePlaybackBar(safeUiState.currentVoicePlayback, safeHandlers)}
 
       <main class="layout">
         <div class="left-col">
@@ -1568,4 +1576,64 @@ export function renderApp(root, state, handlers, uiState = {}) {
   `;
 
   bindEvents(root, handlers);
+}
+
+// ── Voice Playback Bar ─────────────────────────────────────────────────────────────────
+
+const VOICE_PLAYBACK_LABELS = {
+  town_broadcast:       { title: "小镇广播",    icon: "📻" },
+  resident_dialogue:    { title: "居民对白",    icon: "💬" },
+  event_prompt:        { title: "事件提示",    icon: "🎭" },
+  completion_feedback: { title: "任务完成",    icon: "✅" },
+  day_opening:        { title: "今日场景",    icon: "🏠" },
+};
+
+/**
+ * Render the global voice playback bar shown at the top of the page.
+ * Only visible when currentVoicePlayback is not idle.
+ * @param {object|null} cvp
+ * @param {object} handlers
+ */
+function renderVoicePlaybackBar(cvp, handlers) {
+  if (!cvp || cvp.status === "idle") return "";
+
+  const { status, provider, title, subtitle, textPreview, error } = cvp;
+  const label = VOICE_PLAYBACK_LABELS[cvp.sourceType] || { title: cvp.title || cvp.scene || "语音", icon: "🔊" };
+  const icon = label.icon;
+  const titleText = label.title;
+
+  const statusClass = {
+    loading: "voice-playback-bar--loading",
+    playing: "voice-playback-bar--playing",
+    paused:  "voice-playback-bar--paused",
+    error:   "voice-playback-bar--error",
+  }[status] || "voice-playback-bar--loading";
+
+  const loadingLabel = status === "loading" ? "正在生成语音…" : "";
+  const errorLabel = status === "error" ? (error || "语音播放失败，请稍后重试。") : "";
+
+  const showPause = status === "playing";
+  const showResume = status === "paused";
+  const showStop = status === "playing" || status === "paused";
+
+  return `
+    <div class="voice-playback-bar ${statusClass}" role="status" aria-live="polite">
+      <div class="voice-playback-bar__main">
+        <span class="voice-playback-bar__icon">${icon}</span>
+        <div class="voice-playback-bar__info">
+          <div class="voice-playback-bar__title">
+            ${status === "loading" ? `${icon} ${loadingLabel}` : `${icon} 正在播放：${titleText}`}
+            ${subtitle ? `<span class="voice-playback-bar__subtitle">${subtitle}</span>` : ""}
+          </div>
+          ${status !== "loading" && textPreview ? `<div class="voice-playback-bar__text">${textPreview}</div>` : ""}
+          ${status === "error" ? `<div class="voice-playback-bar__error">${errorLabel}</div>` : ""}
+        </div>
+      </div>
+      <div class="voice-playback-bar__actions">
+        ${showPause  ? `<button class="button--ghost button--sm" data-action="voice-pause">⏸️ 暂停</button>` : ""}
+        ${showResume ? `<button class="button--ghost button--sm" data-action="voice-resume">▶️ 继续</button>` : ""}
+        ${showStop   ? `<button class="button--ghost button--sm" data-action="voice-stop">⏹️ 停止</button>` : ""}
+      </div>
+    </div>
+  `;
 }

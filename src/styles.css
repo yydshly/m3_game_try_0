@@ -3458,3 +3458,105 @@ details summary {
     transition-duration: 1ms !important;
   }
 }
+
+/* ── Voice Playback Bar ── */
+.voice-playback-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  box-shadow: var(--shadow-md);
+  margin: 0 auto 8px;
+  max-width: 680px;
+  animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.voice-playback-bar--playing {
+  background: linear-gradient(135deg, #e3f0e8 0%, #f0ede6 100%);
+  border: 1.5px solid var(--green);
+}
+
+.voice-playback-bar--paused {
+  background: linear-gradient(135deg, #f5f0e8 0%, #ede6d9 100%);
+  border: 1.5px solid var(--gold);
+}
+
+.voice-playback-bar--loading {
+  background: linear-gradient(135deg, #f5f0e8 0%, #ede6d9 100%);
+  border: 1.5px solid var(--muted);
+}
+
+.voice-playback-bar--error {
+  background: linear-gradient(135deg, #fce8e8 0%, #f5e0e0 100%);
+  border: 1.5px solid var(--rose);
+}
+
+.voice-playback-bar__main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.voice-playback-bar__icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.voice-playback-bar__info {
+  min-width: 0;
+}
+
+.voice-playback-bar__title {
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.voice-playback-bar__subtitle {
+  font-weight: 400;
+  color: var(--ink-light);
+  margin-left: 4px;
+}
+
+.voice-playback-bar__text {
+  font-size: 0.8rem;
+  color: var(--ink-light);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+.voice-playback-bar__error {
+  font-size: 0.8rem;
+  color: var(--rose);
+  margin-top: 2px;
+}
+
+.voice-playback-bar__actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.voice-playback-bar__actions .button--sm {
+  font-size: 0.8rem;
+  padding: 4px 10px;
+}
+

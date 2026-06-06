@@ -69,6 +69,7 @@ let uiState = {
   residentSceneBeats: [],
   dayCycle: { ...DAY_CYCLE_DEFAULT },
   ttsAudios: {},   // { [audioKey]: { status, audioUrl, textHash, error, generatedAt } }
+  currentVoicePlayback: makeVoicePlaybackState(), // unified global voice playback state
 };
 let autoPlayTimer = null;
 let animationTimer = null;
@@ -108,6 +109,113 @@ function makeAudioState(overrides = {}) {
     scriptHash: "",
     ...overrides,
   };
+}
+
+/**
+ * Make a clean currentVoicePlayback object.
+ * @param {object} overrides
+ */
+function makeVoicePlaybackState(overrides = {}) {
+  return {
+    key: "",
+    provider: "",
+    scene: "",
+    sourceType: "",
+    sourceId: "",
+    title: "",
+    subtitle: "",
+    textPreview: "",
+    status: "idle", // idle | loading | playing | paused | error
+    error: "",
+    startedAt: 0,
+    updatedAt: 0,
+    ...overrides,
+  };
+}
+
+/**
+ * Build title/subtitle metadata for the voice playback bar from scene info.
+ * @param {string} audioKey
+ * @param {string} scene
+ * @param {string} [residentId]
+ * @param {string} [beatId]
+ * @returns {{ title: string, subtitle: string }}
+ */
+function buildVoicePlaybackMeta(audioKey, scene, residentId, beatId) {
+  switch (scene) {
+    case "resident_dialogue": {
+      const resident = state?.residents?.find((r) => r.id === residentId);
+      return { title: "居民对白", subtitle: resident ? `${resident.name}的对白` : "" };
+    }
+    case "event_prompt":
+      return { title: "事件提示", subtitle: "" };
+    case "completion_feedback":
+      return { title: "任务完成", subtitle: "本阶段行动完成" };
+    case "day_opening":
+      return { title: "今日场景", subtitle: "" };
+    default:
+      return { title: scene, subtitle: "" };
+  }
+}
+
+/**
+ * Build a voice playback state from MiniMax broadcast audio.
+ */
+function makeBroadcastVoicePlayback(ba) {
+  return makeVoicePlaybackState({
+    key: "minimax-broadcast",
+    provider: "minimax",
+    scene: "town_broadcast",
+    sourceType: "town_broadcast",
+    sourceId: "",
+    title: "小镇广播",
+    subtitle: "",
+    textPreview: (ba.text || "").slice(0, 40),
+    status: ba.status,
+    error: ba.error || "",
+    startedAt: ba.startedAt || Date.now(),
+    updatedAt: Date.now(),
+  });
+}
+
+/**
+ * Build a voice playback state from a MiMo ttsAudio entry.
+ */
+function makeMimoVoicePlayback(audioKey, ttsAudio, scene, sourceType, sourceId, title, subtitle) {
+  return makeVoicePlaybackState({
+    key: audioKey,
+    provider: "mimo",
+    scene,
+    sourceType,
+    sourceId,
+    title: title || scene,
+    subtitle: subtitle || "",
+    textPreview: (ttsAudio.textPreview || "").slice(0, 40),
+    status: ttsAudio.status,
+    error: ttsAudio.error || "",
+    startedAt: ttsAudio.startedAt || Date.now(),
+    updatedAt: Date.now(),
+  });
+}
+
+/**
+ * Sync currentVoicePlayback from an existing audio entry.
+ */
+function syncCurrentVoicePlayback(audioKey, provider) {
+  if (provider === "minimax") {
+    const ba = uiState.broadcastAudio;
+    if (ba && ba.status !== "idle") {
+      uiState = { ...uiState, currentVoicePlayback: makeBroadcastVoicePlayback(ba) };
+    }
+  } else if (provider === "mimo") {
+    const ttsAudio = uiState.ttsAudios[audioKey];
+    if (ttsAudio) {
+      // We need scene info — look up from audioKey pattern
+      const [scene] = audioKey.split(":");
+      const sourceType = scene;
+      uiState = { ...uiState, currentVoicePlayback: makeMimoVoicePlayback(audioKey, ttsAudio, scene, sourceType, "", scene, "") };
+    }
+  }
 }
 
 /**
@@ -164,6 +272,17 @@ function playMimoAudio(audioKey, audioUrl) {
     activeMimoAudios.delete(audioKey);
   }
 
+  // Clear any stale global playback state from a different source
+  if (uiState.currentVoicePlayback && uiState.currentVoicePlayback.key !== audioKey) {
+    // Stop any other audio from the opposite provider
+    if (uiState.currentVoicePlayback.provider === "minimax") {
+      stopActiveAudio();
+    } else if (uiState.currentVoicePlayback.provider === "mimo") {
+      stopAllMimoAudio();
+    }
+    uiState = { ...uiState, currentVoicePlayback: makeVoicePlaybackState() };
+  }
+
   const audio = new Audio(audioUrl);
   activeMimoAudios.set(audioKey, audio);
 
@@ -172,7 +291,13 @@ function playMimoAudio(audioKey, audioUrl) {
     if (entry) {
       uiState = {
         ...uiState,
-        ttsAudios: { ...uiState.ttsAudios, [audioKey]: { ...entry, status: "playing" } },
+        ttsAudios: { ...uiState.ttsAudios, [audioKey]: { ...entry, status: "playing", startedAt: Date.now() } },
+        currentVoicePlayback: {
+          ...uiState.currentVoicePlayback,
+          status: "playing",
+          error: "",
+          updatedAt: Date.now(),
+        },
       };
       render();
     }
@@ -184,6 +309,11 @@ function playMimoAudio(audioKey, audioUrl) {
       uiState = {
         ...uiState,
         ttsAudios: { ...uiState.ttsAudios, [audioKey]: { ...entry, status: "paused" } },
+        currentVoicePlayback: {
+          ...uiState.currentVoicePlayback,
+          status: "paused",
+          updatedAt: Date.now(),
+        },
       };
       render();
     }
@@ -196,6 +326,7 @@ function playMimoAudio(audioKey, audioUrl) {
         ...uiState.ttsAudios,
         [audioKey]: { ...(uiState.ttsAudios[audioKey] ?? {}), status: "ready" },
       },
+      currentVoicePlayback: makeVoicePlaybackState(), // clear
     };
     activeMimoAudios.delete(audioKey);
     render();
@@ -209,8 +340,14 @@ function playMimoAudio(audioKey, audioUrl) {
         [audioKey]: {
           ...(uiState.ttsAudios[audioKey] ?? {}),
           status: "error",
-          error: "音频播放失败。",
+          error: "音频播放失败，请稍后重试。",
         },
+      },
+      currentVoicePlayback: {
+        ...uiState.currentVoicePlayback,
+        status: "error",
+        error: "音频播放失败，请稍后重试。",
+        updatedAt: Date.now(),
       },
     };
     activeMimoAudios.delete(audioKey);
@@ -224,6 +361,11 @@ function playMimoAudio(audioKey, audioUrl) {
       uiState = {
         ...uiState,
         ttsAudios: { ...uiState.ttsAudios, [audioKey]: { ...entry, status: "paused" } },
+        currentVoicePlayback: {
+          ...uiState.currentVoicePlayback,
+          status: "paused",
+          updatedAt: Date.now(),
+        },
       };
       render();
     }
@@ -243,6 +385,8 @@ function makeTtsAudio(overrides = {}) {
     textHash: "",
     error: null,
     generatedAt: null,
+    startedAt: null,  // when playback started
+    textPreview: "",   // truncated text for voice playback bar
     ...overrides,
   };
 }
@@ -900,26 +1044,57 @@ function render() {
           return;
         }
 
-        // Stop any previous audio instance
+        // Stop any other audio before playing
         stopActiveAudio();
+        stopAllMimoAudio();
+
+        // Sync global voice playback state
+        uiState = {
+          ...uiState,
+          currentVoicePlayback: makeVoicePlaybackState({
+            key: "minimax-broadcast",
+            provider: "minimax",
+            scene: "town_broadcast",
+            sourceType: "town_broadcast",
+            sourceId: "",
+            title: "小镇广播",
+            subtitle: "",
+            textPreview: (ba.text || "").slice(0, 40),
+            status: "playing",
+            startedAt: Date.now(),
+            updatedAt: Date.now(),
+          }),
+        };
 
         activeAudio = new Audio(ba.audioUrl);
 
         activeAudio.onplay = () => {
-          uiState = { ...uiState, broadcastAudio: { ...uiState.broadcastAudio, status: "playing" } };
+          uiState = {
+            ...uiState,
+            broadcastAudio: { ...uiState.broadcastAudio, status: "playing" },
+            currentVoicePlayback: { ...uiState.currentVoicePlayback, status: "playing", updatedAt: Date.now() },
+          };
           render();
         };
 
         activeAudio.onpause = () => {
           // Only mark paused if it wasn't ended naturally (ended → ready, paused → paused)
           if (uiState.broadcastAudio.status === "playing") {
-            uiState = { ...uiState, broadcastAudio: { ...uiState.broadcastAudio, status: "paused" } };
+            uiState = {
+              ...uiState,
+              broadcastAudio: { ...uiState.broadcastAudio, status: "paused" },
+              currentVoicePlayback: { ...uiState.currentVoicePlayback, status: "paused", updatedAt: Date.now() },
+            };
             render();
           }
         };
 
         activeAudio.onended = () => {
-          uiState = { ...uiState, broadcastAudio: { ...uiState.broadcastAudio, status: "ready" } };
+          uiState = {
+            ...uiState,
+            broadcastAudio: { ...uiState.broadcastAudio, status: "ready" },
+            currentVoicePlayback: makeVoicePlaybackState(), // clear
+          };
           activeAudio = null;
           render();
         };
@@ -932,6 +1107,12 @@ function render() {
               status: "error",
               error: "音频播放失败，请稍后重试。",
             },
+            currentVoicePlayback: {
+              ...uiState.currentVoicePlayback,
+              status: "error",
+              error: "音频播放失败，请稍后重试。",
+              updatedAt: Date.now(),
+            },
           };
           activeAudio = null;
           render();
@@ -939,7 +1120,11 @@ function render() {
 
         activeAudio.play().catch(() => {
           // Autoplay blocked — treat as paused
-          uiState = { ...uiState, broadcastAudio: { ...uiState.broadcastAudio, status: "paused" } };
+          uiState = {
+            ...uiState,
+            broadcastAudio: { ...uiState.broadcastAudio, status: "paused" },
+            currentVoicePlayback: { ...uiState.currentVoicePlayback, status: "paused", updatedAt: Date.now() },
+          };
           activeAudio = null;
           render();
         });
@@ -964,14 +1149,41 @@ function render() {
       onPlayMimoTts: (audioKey, text, scene, residentId, beatId) => {
         if (!text || !text.trim()) return;
 
-        // Stop all other MiMo audio to avoid chaos
+        // Stop all other audio (MiniMax broadcast or other MiMo)
+        stopActiveAudio();
         stopAllMimoAudio();
 
         const currentHash = hashText(text);
         const existing = uiState.ttsAudios[audioKey];
 
+        // Build title/subtitle for the playback bar
+        const sourceType = scene;
+        const sourceId = residentId || beatId || "";
+        const meta = buildVoicePlaybackMeta(audioKey, scene, residentId, beatId, state);
+
         // If already generated with same hash, just play
         if (existing && existing.status === "ready" && existing.textHash === currentHash && existing.audioUrl) {
+          uiState = {
+            ...uiState,
+            ttsAudios: {
+              ...uiState.ttsAudios,
+              [audioKey]: { ...existing, startedAt: Date.now(), textPreview: text.slice(0, 40) },
+            },
+            currentVoicePlayback: makeVoicePlaybackState({
+              key: audioKey,
+              provider: "mimo",
+              scene,
+              sourceType,
+              sourceId,
+              title: meta.title,
+              subtitle: meta.subtitle,
+              textPreview: text.slice(0, 40),
+              status: "playing",
+              startedAt: Date.now(),
+              updatedAt: Date.now(),
+            }),
+          };
+          render();
           playMimoAudio(audioKey, existing.audioUrl);
           return;
         }
@@ -984,13 +1196,26 @@ function render() {
           ...uiState,
           ttsAudios: {
             ...uiState.ttsAudios,
-            [audioKey]: makeTtsAudio({ status: "loading", textHash: currentHash }),
+            [audioKey]: makeTtsAudio({ status: "loading", textHash: currentHash, textPreview: text.slice(0, 40) }),
           },
+          currentVoicePlayback: makeVoicePlaybackState({
+            key: audioKey,
+            provider: "mimo",
+            scene,
+            sourceType,
+            sourceId,
+            title: meta.title,
+            subtitle: meta.subtitle,
+            textPreview: text.slice(0, 40),
+            status: "loading",
+            startedAt: Date.now(),
+            updatedAt: Date.now(),
+          }),
         };
         render();
 
         // Resolve provider and call appropriate generator
-        const provider = resolveTtsProviderForScene(scene);
+        resolveTtsProviderForScene(scene); // no-op, provider is always mimo
         generateMimoSpeech({ scene, text, voice: "default", emotion: "neutral", speed: 1.0 })
           .then((result) => {
             uiState = {
@@ -1002,6 +1227,7 @@ function render() {
                   audioUrl: result.audioUrl,
                   textHash: currentHash,
                   generatedAt: Date.now(),
+                  textPreview: text.slice(0, 40),
                 }),
               },
             };
@@ -1017,8 +1243,15 @@ function render() {
                 [audioKey]: makeTtsAudio({
                   status: "error",
                   textHash: currentHash,
+                  textPreview: text.slice(0, 40),
                   error: "MiMo 语音生成失败，请稍后重试。",
                 }),
+              },
+              currentVoicePlayback: {
+                ...uiState.currentVoicePlayback,
+                status: "error",
+                error: "MiMo 语音生成失败，请稍后重试。",
+                updatedAt: Date.now(),
               },
             };
             render();
@@ -1035,6 +1268,11 @@ function render() {
               ...uiState.ttsAudios,
               [audioKey]: { ...existing, status: "paused" },
             },
+            currentVoicePlayback: {
+              ...uiState.currentVoicePlayback,
+              status: "paused",
+              updatedAt: Date.now(),
+            },
           };
           render();
         }
@@ -1042,8 +1280,65 @@ function render() {
       onResumeMimoTts: (audioKey) => {
         const existing = uiState.ttsAudios[audioKey];
         if (existing && existing.status === "paused" && existing.audioUrl) {
+          uiState = {
+            ...uiState,
+            currentVoicePlayback: {
+              ...uiState.currentVoicePlayback,
+              status: "playing",
+              error: "",
+              updatedAt: Date.now(),
+            },
+          };
+          render();
           playMimoAudio(audioKey, existing.audioUrl);
         }
+      },
+      // ── Unified voice playback controls ──────────────────────────────────────
+      /** Pause whatever is currently playing (MiniMax or MiMo) */
+      onVoicePause: () => {
+        const cvp = uiState.currentVoicePlayback;
+        if (!cvp || cvp.status !== "playing") return;
+        if (cvp.provider === "minimax") {
+          handlers.onPauseTts();
+        } else if (cvp.provider === "mimo" && cvp.key) {
+          handlers.onPauseMimoTts(cvp.key);
+        }
+      },
+      /** Resume whatever is currently paused */
+      onVoiceResume: () => {
+        const cvp = uiState.currentVoicePlayback;
+        if (!cvp || cvp.status !== "paused") return;
+        if (cvp.provider === "minimax") {
+          handlers.onPlayTts();
+        } else if (cvp.provider === "mimo" && cvp.key) {
+          handlers.onResumeMimoTts(cvp.key);
+        }
+      },
+      /** Stop all audio and clear the global playback state */
+      onVoiceStop: () => {
+        const cvp = uiState.currentVoicePlayback;
+        if (cvp?.provider === "minimax") {
+          stopActiveAudio();
+          uiState = {
+            ...uiState,
+            broadcastAudio: { ...uiState.broadcastAudio, status: "ready" },
+            currentVoicePlayback: makeVoicePlaybackState(),
+          };
+        } else if (cvp?.provider === "mimo" && cvp.key) {
+          stopMimoAudio(cvp.key);
+          const entry = uiState.ttsAudios[cvp.key];
+          if (entry) {
+            uiState = {
+              ...uiState,
+              ttsAudios: { ...uiState.ttsAudios, [cvp.key]: { ...entry, status: "ready" } },
+              currentVoicePlayback: makeVoicePlaybackState(),
+            };
+          }
+        } else {
+          // Nothing playing, just clear
+          uiState = { ...uiState, currentVoicePlayback: makeVoicePlaybackState() };
+        }
+        render();
       },
       onAssignTask: (residentId, taskId) => commit(assignTask(state, residentId, taskId)),
       onSelectResident: (residentId) => {
@@ -1078,6 +1373,7 @@ function render() {
           residentSceneBeats: [],
           dayCycle: { ...DAY_CYCLE_DEFAULT },
           ttsAudios: {},
+          currentVoicePlayback: makeVoicePlaybackState(),
         };
         commit(createInitialState());
       },
