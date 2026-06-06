@@ -1659,6 +1659,74 @@ button, select {
   overflow: hidden;
 }
 
+/* ── Task Result Panel ───────────────────────────────────────────────── */
+.deed-outcome-panel {
+  position: absolute;
+  right: 14px;
+  bottom: 90px;
+  z-index: 6;
+  width: 300px;
+  border-radius: 12px;
+  border: 1.5px solid var(--green);
+  background: rgba(255, 253, 248, 0.96);
+  box-shadow: var(--shadow-md);
+  padding: 10px 12px;
+  transition: opacity .2s ease;
+}
+
+.deed-outcome-panel--empty {
+  opacity: 0;
+  pointer-events: none;
+  height: 0;
+  padding: 0;
+  border: none;
+  overflow: hidden;
+}
+
+.deed-outcome-panel--active {
+  animation: popIn 300ms ease-out;
+}
+
+.deed-outcome-panel__hint {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.deed-outcome-panel__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.task-completion-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 3px 4px;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: var(--panel-soft);
+}
+
+.task-completion-item--warm   { background: var(--green-soft); border-left: 3px solid var(--green); }
+.task-completion-item--cozy   { background: #f5efe0; border-left: 3px solid var(--gold); }
+.task-completion-item--steady { background: var(--panel-soft); border-left: 3px solid var(--muted); }
+.task-completion-item--fresh  { background: #e8f4ec; border-left: 3px solid #6aaf82; }
+.task-completion-item--calm   { background: #e8ecf4; border-left: 3px solid #7a9ccf; }
+
+.task-completion-item__icon { font-size: 0.9rem; flex-shrink: 0; }
+.task-completion-item__resident { font-weight: 700; color: var(--ink); }
+.task-completion-item__sep { color: var(--muted); }
+.task-completion-item__task { font-weight: 600; color: var(--ink); }
+.task-completion-item__result { color: var(--ink-light); font-size: 0.75rem; }
+.task-completion-item__deltas { font-size: 0.72rem; color: var(--muted); margin-left: auto; white-space: nowrap; }
+
 /* Stage Legend */
 .stage-legend {
   position: absolute;

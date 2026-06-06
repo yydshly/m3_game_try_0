@@ -1,6 +1,9 @@
 // Resident mood view — pure UI helper, no DOM, no API calls
 // Produces display-only mood view objects from resident state
 
+import { getLocation } from "./selectors.js";
+import { tasks } from "../data/seed.js";
+
 export const MOOD_VIEW_MAP = {
   tired: {
     icon: "😴",
@@ -142,4 +145,88 @@ export function buildResidentMoodView(resident, options = {}) {
     statusCssClass: "",
     energyLabel,
   };
+}
+
+// ── Task Completion Feedback ───────────────────────────────────────────────────
+
+const TASK_RESULT_TEXTS = {
+  plant:   "整理好了花圃，花园看起来清爽了一些。",
+  cook:    "准备好了一顿餐点，小镇飘着香味。",
+  repair:  "修好了工坊的设施，一切都运转正常。",
+  chat:    "和邻居聊了聊天，关系更近了一步。",
+  forage:  "从森林带回了一些东西，满载而归。",
+  rest:    "休息了一会儿，精神恢复了不少。",
+};
+
+const MOOD_DELTA_MAP = {
+  plant:   +1,
+  cook:    +1,
+  repair:   0,
+  chat:    +2,
+  forage:  +1,
+  rest:    +2,
+};
+
+const ENERGY_DELTA_MAP = {
+  plant:   -1,
+  cook:    -1,
+  repair:  -1,
+  chat:    -1,
+  forage:  -2,
+  rest:    +5,
+};
+
+const TONE_MAP = {
+  plant:   "warm",
+  cook:    "cozy",
+  repair:  "steady",
+  chat:    "warm",
+  forage:  "fresh",
+  rest:    "calm",
+};
+
+/**
+ * Build a rich task completion feedback view model.
+ * Pure function — does not mutate inputs, does not call APIs.
+ *
+ * @param {object} state - game state (has residents, locations, tasks)
+ * @param {object|null} completionFeedback - uiState.completionFeedback
+ * @returns {object} Feedback: { visible, completions: [{residentId, residentName, taskLabel, locationLabel, resultText, moodDelta, energyDelta, icon, tone}] }
+ */
+export function buildTaskCompletionFeedback(state, completionFeedback) {
+  if (!completionFeedback || !Array.isArray(completionFeedback.residentResults) || completionFeedback.residentResults.length === 0) {
+    return { visible: false, completions: [] };
+  }
+
+  const residentById = new Map((state?.residents ?? []).map((r) => [r.id, r]));
+
+  const completions = completionFeedback.residentResults
+    .slice(0, 5) // cap at 5
+    .map((result) => {
+      const resident = residentById.get(result.residentId);
+      const residentName = resident?.name ?? "居民";
+      const taskId = resident?.assignmentId ?? "";
+      const task = tasks.find((t) => t.id === taskId);
+      const taskLabel = task?.label ?? result.label ?? "完成了任务";
+      const locationId = resident?.locationId ?? "";
+      const locationLabel = getLocation(locationId)?.label ?? "小镇";
+      const resultText = TASK_RESULT_TEXTS[taskId] ?? `${residentName}完成了任务。`;
+      const moodDelta = MOOD_DELTA_MAP[taskId] ?? 0;
+      const energyDelta = ENERGY_DELTA_MAP[taskId] ?? 0;
+      const tone = TONE_MAP[taskId] ?? "steady";
+
+      return {
+        residentId: result.residentId,
+        residentName,
+        taskLabel,
+        locationLabel,
+        resultText,
+        moodDelta,
+        energyDelta,
+        icon: result.icon ?? "✓",
+        tone,
+      };
+    });
+
+  return { visible: true, completions };
 }

@@ -53,7 +53,9 @@
     "resident-conversation-check": "node scripts/resident-conversation-check.mjs",
     "resident-conversation-refresh-check": "node scripts/resident-conversation-refresh-check.mjs",
     "resident-conversation-semantics-check": "node scripts/resident-conversation-semantics-check.mjs",
+    "completion-feedback-check": "node scripts/completion-feedback-check.mjs",
     "layout-stability-check": "node scripts/layout-stability-check.mjs",
+    "task-completion-feedback-check": "node scripts/task-completion-feedback-check.mjs",
     "mimo-tts-param-probe": "node scripts/mimo-tts-param-probe.mjs",
     "tts-official-contract-check": "node scripts/tts-official-contract-check.mjs"
   }

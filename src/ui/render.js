@@ -1,5 +1,5 @@
 import { locations, phases, tasks } from "../data/seed.js";
-import { buildResidentMoodView } from "../domain/residentMood.js";
+import { buildResidentMoodView, buildTaskCompletionFeedback } from "../domain/residentMood.js";
 
 /**
  * Enhance a task label with the current life scenario context.
@@ -993,6 +993,39 @@ function buildStageDigest(state) {
   return base;
 }
 
+/**
+ * Render the task completion feedback panel.
+ * Always rendered as a fixed-height slot; content shown when taskFeedback.visible is true.
+ * @param {object} taskFeedback - result of buildTaskCompletionFeedback()
+ */
+function renderTaskCompletionPanel(taskFeedback) {
+  if (!taskFeedback?.visible || !Array.isArray(taskFeedback.completions) || taskFeedback.completions.length === 0) {
+    return `<aside class="deed-outcome-panel deed-outcome-panel--empty" aria-label="任务完成" aria-live="polite">
+      <span class="deed-outcome-panel__hint">居民们正在各自忙碌</span>
+    </aside>`;
+  }
+
+  const items = taskFeedback.completions.map((c) => {
+    const moodSign = c.moodDelta > 0 ? `+${c.moodDelta}` : `${c.moodDelta}`;
+    const energySign = c.energyDelta > 0 ? `+${c.energyDelta}` : `${c.energyDelta}`;
+    const moodLabel = `心情 ${moodSign}`;
+    const energyLabel = `体力 ${energySign}`;
+    return `
+      <li class="task-completion-item task-completion-item--${escapeHtml(c.tone)}">
+        <span class="task-completion-item__icon">${escapeHtml(c.icon)}</span>
+        <span class="task-completion-item__resident">${escapeHtml(c.residentName)}</span>
+        <span class="task-completion-item__sep">完成了</span>
+        <span class="task-completion-item__task">${escapeHtml(c.taskLabel)}</span>
+        <span class="task-completion-item__result">${escapeHtml(c.resultText)}</span>
+        <span class="task-completion-item__deltas">${escapeHtml(moodLabel)} · ${escapeHtml(energyLabel)}</span>
+      </li>`;
+  }).join("");
+
+  return `<aside class="deed-outcome-panel deed-outcome-panel--active" aria-label="任务完成" aria-live="polite">
+    <ul class="deed-outcome-panel__list">${items}</ul>
+  </aside>`;
+}
+
 function renderTownStage(state, uiState) {
   const digest = buildStageDigest(state);
   const phase = getCurrentPhase(state);
@@ -1003,6 +1036,9 @@ function renderTownStage(state, uiState) {
   const completionByResidentId = new Map(
     (completionFeedback?.residentResults ?? []).map((r) => [r.residentId, r])
   );
+
+  // Build task completion feedback view model
+  const taskFeedback = buildTaskCompletionFeedback(state, completionFeedback);
 
   // Determine which place has residents (for active labels)
   const activePlaceIds = new Set(state.residents.map((r) => r.locationId));
@@ -1079,6 +1115,7 @@ function renderTownStage(state, uiState) {
         <span class="stage-bubble__tag">📌 今日动态</span>
         <p>${escapeHtml(digest)}</p>
       </aside>
+      ${renderTaskCompletionPanel(taskFeedback)}
       <div class="stage-legend" aria-hidden="true">
         <span class="stage-legend__item"><i class="status-dot status-dot--happy"></i>开心</span>
         <span class="stage-legend__item"><i class="status-dot status-dot--steady"></i>平稳</span>
