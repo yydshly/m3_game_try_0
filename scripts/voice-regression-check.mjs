@@ -51,12 +51,14 @@ console.log("\n── Broadcast TTS generate button ──");
   assert(content.includes('data-action="generate-tts"'), "generate-tts data-action exists");
 }
 
-// ── 4. Broadcast TTS has play/pause actions ─────────────────────────────────
-console.log("\n── Broadcast TTS play/pause actions ──");
+// ── 4. Broadcast TTS has generate-tts action (handles play/pause toggle) ─────
+console.log("\n── Broadcast TTS generate-tts action (handles play/pause toggle) ──");
 {
   const fs = await import("fs");
   const content = fs.readFileSync("./src/ui/render.js", "utf8");
-  assert(content.includes('data-action="play-tts"') || content.includes('data-action="pause-tts"'), "play-tts or pause-tts action exists");
+  // generate-tts button now handles play/pause/continue toggle in one button
+  assert(content.includes('data-action="generate-tts"'), "generate-tts action exists");
+  // play-tts and pause-tts are no longer separate buttons (consolidated into generate-tts)
 }
 
 // ── 5. Broadcast TTS clearly identifies MiniMax ───────────────────────────────

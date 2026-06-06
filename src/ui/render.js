@@ -722,16 +722,6 @@ function renderAtmospherePanel(state, uiState) {
           >
             ${ttsButtonIcon} ${escapeHtml(ttsButtonLabel)}
           </button>
-          ${showPlayButton ? `
-            <button class="button button--ghost" type="button" data-action="play-tts">
-              ▶️ ${escapeHtml(playButtonLabel)}
-            </button>
-          ` : ""}
-          ${baStatus === "playing" ? `
-            <button class="button button--live" type="button" data-action="play-tts">
-              ⏸️ 暂停
-            </button>
-          ` : ""}
           ${hasError && friendlyError ? `<span class="tts-error-hint">⚠️ ${escapeHtml(friendlyError)}</span>` : ""}
         </div>
       ` : `
@@ -1695,6 +1685,8 @@ export function renderApp(root, state, handlers, uiState = {}) {
     onVoicePause: handlers.onVoicePause ?? (() => {}),
     onVoiceResume: handlers.onVoiceResume ?? (() => {}),
     onVoiceStop: handlers.onVoiceStop ?? (() => {}),
+    onGenerateTts: handlers.onGenerateTts ?? (() => {}),
+    onPlayTts: handlers.onPlayTts ?? (() => {}),
   };
 
   root.innerHTML = `

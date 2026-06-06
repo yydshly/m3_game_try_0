@@ -213,7 +213,8 @@ console.log("\n── TTS buttons still exist ──");
   const fs = await import("fs");
   const renderContent = fs.readFileSync("./src/ui/render.js", "utf8");
   assert(renderContent.includes('data-action="generate-tts"'), "generate-tts button present");
-  assert(renderContent.includes('data-action="play-tts"'), "play-tts button present");
+  // play-tts was consolidated into generate-tts (toggle play/pause/continue)
+  assert(!renderContent.includes('data-action="play-tts"'), "play-tts button removed (consolidated into generate-tts)");
 }
 
 // ── 20. Pause button during playback ────────────────────────────────────────

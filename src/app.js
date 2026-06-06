@@ -1328,8 +1328,18 @@ function render() {
         const currentHash = hashBroadcastScript(scriptText);
         const ba = uiState.broadcastAudio;
 
-        // If loading or playing, ignore (prevent double generation or interruption)
-        if (ba.status === "loading" || ba.status === "playing") return;
+        // Toggle play/pause when audio already exists
+        if (ba.status === "playing") {
+          handlers.onPauseTts();
+          return;
+        }
+        if ((ba.status === "ready" || ba.status === "paused") && ba.audioUrl) {
+          handlers.onPlayTts();
+          return;
+        }
+
+        // If loading, ignore (prevent double generation)
+        if (ba.status === "loading") return;
 
         // Stop any active audio before generating
         stopActiveAudio();
@@ -1577,7 +1587,14 @@ function render() {
             playMimoAudio(audioKey, result.audioUrl);
           })
           .catch((err) => {
-            console.warn(`[mimoTts] generation failed for ${audioKey}:`, err.message);
+            // Categorize error for dev debugging; UI only shows a friendly message
+            const msg = err.message ?? "";
+            let devTag = "MIMO_TTS_REQUEST_FAILED";
+            if (!text || !text.trim()) devTag = "MIMO_TTS_EMPTY_TEXT";
+            else if (msg.includes("文本为空") || msg.includes("超过")) devTag = "MIMO_TTS_TEXT_INVALID";
+            else if (msg.includes("audioUrl") || msg.includes("未返回音频")) devTag = "MIMO_TTS_AUDIO_MISSING";
+            else if (msg.includes("fetch") || msg.includes("network") || msg.includes("Network")) devTag = "MIMO_TTS_NETWORK_ERROR";
+            console.warn(`[mimoTts] ${devTag} for ${audioKey}:`, msg);
             uiState = {
               ...uiState,
               ttsAudios: {
