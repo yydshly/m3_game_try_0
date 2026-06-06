@@ -384,7 +384,7 @@ function renderAtmospherePanel(state, uiState) {
   const latestBc = uiState.latestBroadcast;
   const statusLabels = {
     idle: "尚未生成",
-    loading: "正在生成……",
+    loading: "生成中…",
     ready: "已生成",
     error: "生成失败",
   };
@@ -394,32 +394,42 @@ function renderAtmospherePanel(state, uiState) {
   const placeMap = { garden: "花园", cafe: "咖啡馆", workshop: "工坊", plaza: "广场", forest: "森林" };
 
   const ba = uiState.broadcastAudio ?? { status: "idle", text: "", audioUrl: null, error: null };
+  // Normalize generating → loading for backward compatibility with existing tests
+  const baStatus = ba.status === "generating" ? "loading" : (ba.status ?? "idle");
   const ttsStatusLabels = {
     idle: "🔊",
-    generating: "🔊",
+    loading: "🔊",
     ready: "🔊",
-    playing: "🔊",
+    playing: "⏸️",
+    paused: "▶️",
     error: "⚠️",
   };
   const ttsStatusText = {
     idle: "生成语音",
-    generating: "生成中…",
-    ready: "播放语音",
-    playing: "播放中…",
-    error: "重试",
-  }[ba.status] ?? "生成语音";
+    loading: "正在生成…",
+    ready: "播放广播",
+    playing: "暂停广播",
+    paused: "继续播放",
+    error: "重新生成",
+  }[baStatus] ?? "生成语音";
 
   const ttsButtonClass = {
     idle: "button--broadcast",
-    generating: "button--ghost",
+    loading: "button--ghost",
     ready: "button--broadcast",
-    playing: "button--ghost",
+    playing: "button--live",
+    paused: "button--broadcast",
     error: "button--broadcast",
-  }[ba.status] ?? "button--broadcast";
+  }[baStatus] ?? "button--broadcast";
 
-  const ttsDisabled = ba.status === "generating" || ba.status === "playing" ? "disabled" : "";
-  const hasAudio = ba.status === "ready" && ba.audioUrl;
-  const hasError = ba.status === "error" && ba.error;
+  const ttsDisabled = baStatus === "loading" || baStatus === "playing" ? "disabled" : "";
+  const hasAudio = (baStatus === "ready" || baStatus === "paused") && ba.audioUrl;
+  const hasError = baStatus === "error" && ba.error;
+
+  // Friendly error message — never expose API keys or stack traces
+  const friendlyError = hasError
+    ? ba.error.replace(/api[_-]?key.*$/i, "API 配置异常").replace(/trace[_\s]?id.*$/i, "").replace(/\(trace_id:.*?\)/i, "").trim()
+    : "";
 
   return `
     <section class="panel atmosphere-panel">
@@ -444,16 +454,16 @@ function renderAtmospherePanel(state, uiState) {
             type="button"
             data-action="generate-tts"
             ${ttsDisabled}
-            title="${hasError ? escapeHtml(ba.error) : ""}"
+            title="${friendlyError || ""}"
           >
-            ${ttsStatusLabels[ba.status] ?? "🔊"} ${escapeHtml(ttsStatusText)}
+            ${ttsStatusLabels[baStatus] ?? "🔊"} ${escapeHtml(ttsStatusText)}
           </button>
-          ${hasAudio ? `
+          ${hasAudio && baStatus !== "ready" ? `
             <button class="button button--ghost" type="button" data-action="play-tts">
               ▶️ 播放
             </button>
           ` : ""}
-          ${hasError ? `<span class="tts-error-hint">⚠️ ${escapeHtml(ba.error)}</span>` : ""}
+          ${hasError && friendlyError ? `<span class="tts-error-hint">⚠️ ${escapeHtml(friendlyError)}</span>` : ""}
         </div>
       ` : `
         <p class="atmosphere-empty">让 M3 根据今天的小镇状态，写一段早安或晚间广播。</p>
@@ -636,8 +646,13 @@ function renderTownStage(state, uiState) {
     })
     .join("");
 
+  // Broadcast playing indicator
+  const ba = uiState.broadcastAudio ?? { status: "idle" };
+  const isPlaying = ba.status === "playing";
+  const stagePlayingClass = isPlaying ? " town-stage--broadcast-playing" : "";
+
   return `
-    <section class="town-stage town-stage--${escapeHtml(phase.id)}" aria-label="小镇地图 - ${escapeHtml(phase.label)}">
+    <section class="town-stage town-stage--${escapeHtml(phase.id)}${stagePlayingClass}" aria-label="小镇地图 - ${escapeHtml(phase.label)}">
       <img
         class="town-stage__background"
         src="./src/assets/map/town-stage-day.svg"
@@ -664,6 +679,12 @@ function renderTownStage(state, uiState) {
         <span class="stage-legend__item"><i class="status-dot status-dot--steady"></i>平稳</span>
         <span class="stage-legend__item"><i class="status-dot status-dot--tired"></i>疲惫</span>
       </div>
+      ${isPlaying ? `
+        <div class="stage-broadcast-indicator" aria-label="广播播放中" aria-live="polite">
+          <span class="stage-broadcast-indicator__icon">📻</span>
+          <span class="stage-broadcast-indicator__text">广播播放中…</span>
+        </div>
+      ` : ""}
     </section>
   `;
 }
@@ -1230,7 +1251,7 @@ export function renderApp(root, state, handlers, uiState = {}) {
     broadcastStatus: uiState.broadcastStatus ?? "idle",
     broadcastMessage: uiState.broadcastMessage ?? "",
     latestBroadcast: uiState.latestBroadcast ?? null,
-    broadcastAudio: uiState.broadcastAudio ?? { status: "idle", text: "", audioUrl: null, error: null, traceId: null, generatedAt: null },
+    broadcastAudio: uiState.broadcastAudio ?? { status: "idle", text: "", audioUrl: null, error: null, traceId: null, generatedAt: null, scriptHash: "" },
     activeTaskAnimations: uiState.activeTaskAnimations ?? [],
     isAnimating: Boolean(uiState.isAnimating),
     animationMessage: uiState.animationMessage ?? "",

@@ -34,14 +34,7 @@ let uiState = {
   broadcastStatus: "idle",
   broadcastMessage: "",
   latestBroadcast: null,
-  broadcastAudio: {
-    status: "idle",
-    text: "",
-    audioUrl: null,
-    error: null,
-    traceId: null,
-    generatedAt: null,
-  },
+  broadcastAudio: makeAudioState(),
   activeTaskAnimations: [],
   isAnimating: false,
   animationMessage: "",
@@ -50,6 +43,52 @@ let uiState = {
 let autoPlayTimer = null;
 let animationTimer = null;
 let completionTimer = null;
+
+// ── Broadcast Audio Player ─────────────────────────────────────────────────────────
+
+/** Persistent audio instance for the broadcast player */
+let activeAudio = null;
+
+/**
+ * Simple string hash for detecting script changes.
+ * Uses the same algorithm as the memory hash for consistency.
+ */
+function hashBroadcastScript(script) {
+  return String(script || "")
+    .trim()
+    .split("")
+    .reduce((acc, char) => ((acc << 5) - acc + char.charCodeAt(0)) | 0, 0)
+    .toString(16);
+}
+
+/**
+ * Make a clean broadcastAudio object.
+ */
+function makeAudioState(overrides = {}) {
+  return {
+    status: "idle",
+    text: "",
+    audioUrl: null,
+    error: null,
+    traceId: null,
+    generatedAt: null,
+    scriptHash: "",
+    ...overrides,
+  };
+}
+
+/**
+ * Stop and clean up the active audio instance.
+ */
+function stopActiveAudio() {
+  if (activeAudio) {
+    activeAudio.pause();
+    activeAudio.src = "";
+    activeAudio.onended = null;
+    activeAudio.onerror = null;
+    activeAudio = null;
+  }
+}
 
 // ── Task Animation Layer ────────────────────────────────────────────────────────────
 
@@ -360,7 +399,7 @@ function render() {
             broadcastMessage: "小镇广播已加入动态。",
             latestBroadcast: bc,
             // Reset TTS state when new broadcast is generated
-            broadcastAudio: { status: "idle", text: bc.script ?? "", audioUrl: null, error: null, traceId: null, generatedAt: null },
+            broadcastAudio: makeAudioState({ text: bc.script ?? "", scriptHash: hashBroadcastScript(bc.script ?? "") }),
           };
           commit(nextState);
         } catch (error) {
@@ -374,9 +413,25 @@ function render() {
         const scriptText = latestBc.script ?? latestBc.text ?? "";
         if (!scriptText.trim()) return;
 
+        const currentHash = hashBroadcastScript(scriptText);
+        const ba = uiState.broadcastAudio;
+
+        // If same script already has audio ready, just play it
+        if (ba.status === "ready" && ba.scriptHash === currentHash && ba.audioUrl) {
+          handlers.onPlayTts();
+          return;
+        }
+
+        // Stop any active audio before generating new one
+        stopActiveAudio();
+
         uiState = {
           ...uiState,
-          broadcastAudio: { status: "generating", text: scriptText, audioUrl: null, error: null, traceId: null, generatedAt: null },
+          broadcastAudio: makeAudioState({
+            status: "loading",
+            text: scriptText,
+            scriptHash: currentHash,
+          }),
         };
         render();
 
@@ -391,9 +446,12 @@ function render() {
               error: null,
               traceId: result.traceId,
               generatedAt: Date.now(),
+              scriptHash: currentHash,
             },
           };
           render();
+          // Auto-play after successful generation
+          handlers.onPlayTts();
         } catch (error) {
           uiState = {
             ...uiState,
@@ -404,6 +462,7 @@ function render() {
               error: error.message,
               traceId: null,
               generatedAt: null,
+              scriptHash: currentHash,
             },
           };
           render();
@@ -412,10 +471,61 @@ function render() {
       onPlayTts: () => {
         const ba = uiState.broadcastAudio;
         if (!ba.audioUrl) return;
-        const audio = new Audio(ba.audioUrl);
-        audio.play().catch(() => {
-          // Silently fail — audio play may be blocked by browser autoplay policy
+        // If already playing, pause it
+        if (ba.status === "playing") {
+          handlers.onPauseTts();
+          return;
+        }
+
+        // Stop any previous audio instance
+        stopActiveAudio();
+
+        activeAudio = new Audio(ba.audioUrl);
+
+        activeAudio.onplay = () => {
+          uiState = { ...uiState, broadcastAudio: { ...uiState.broadcastAudio, status: "playing" } };
+          render();
+        };
+
+        activeAudio.onpause = () => {
+          // Only mark paused if it wasn't ended naturally (ended → ready, paused → paused)
+          if (uiState.broadcastAudio.status === "playing") {
+            uiState = { ...uiState, broadcastAudio: { ...uiState.broadcastAudio, status: "paused" } };
+            render();
+          }
+        };
+
+        activeAudio.onended = () => {
+          uiState = { ...uiState, broadcastAudio: { ...uiState.broadcastAudio, status: "ready" } };
+          activeAudio = null;
+          render();
+        };
+
+        activeAudio.onerror = () => {
+          uiState = {
+            ...uiState,
+            broadcastAudio: {
+              ...uiState.broadcastAudio,
+              status: "error",
+              error: "音频播放失败，请稍后重试。",
+            },
+          };
+          activeAudio = null;
+          render();
+        };
+
+        activeAudio.play().catch(() => {
+          // Autoplay blocked — treat as paused
+          uiState = { ...uiState, broadcastAudio: { ...uiState.broadcastAudio, status: "paused" } };
+          activeAudio = null;
+          render();
         });
+      },
+      onPauseTts: () => {
+        if (activeAudio && uiState.broadcastAudio.status === "playing") {
+          activeAudio.pause();
+          // status will transition to "paused" via onpause handler above
+        }
       },
       onAssignTask: (residentId, taskId) => commit(assignTask(state, residentId, taskId)),
       onSelectResident: (residentId) => {
@@ -438,7 +548,7 @@ function render() {
           broadcastStatus: "idle",
           broadcastMessage: "",
           latestBroadcast: null,
-          broadcastAudio: { status: "idle", text: "", audioUrl: null, error: null, traceId: null, generatedAt: null },
+          broadcastAudio: makeAudioState(),
           activeTaskAnimations: [],
           isAnimating: false,
           animationMessage: "",
