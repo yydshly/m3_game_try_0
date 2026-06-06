@@ -28,6 +28,7 @@
     "sync-check": "node scripts/animation-sync-check.mjs",
     "completion-check": "node scripts/completion-feedback-check.mjs",
     "tts-check": "node scripts/tts-check.mjs",
-    "memory-reference-check": "node scripts/memory-reference-check.mjs"
+    "memory-reference-check": "node scripts/memory-reference-check.mjs",
+    "resident-feedback-check": "node scripts/resident-feedback-check.mjs"
   }
 }

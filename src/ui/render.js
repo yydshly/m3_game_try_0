@@ -1,4 +1,5 @@
 import { locations, phases, tasks } from "../data/seed.js";
+import { buildResidentMoodView } from "../domain/residentMood.js";
 
 const LOCATION_ICONS = {
   garden: "./src/assets/ui/garden.svg",
@@ -481,7 +482,7 @@ function renderPlaceLabel(placeId, isActive, anim) {
   `;
 }
 
-function renderStageCharacter(resident, position, taskLabel, status, isSelected, anim, completionResult) {
+function renderStageCharacter(resident, position, taskLabel, status, isSelected, anim, completionResult, moodView) {
   const toX = position.x;
   const toY = position.y;
   const selectedClass = isSelected ? " stage-character--selected" : "";
@@ -526,6 +527,11 @@ function renderStageCharacter(resident, position, taskLabel, status, isSelected,
     ? `<span class="stage-character__completion-badge" title="${escapeHtml(completionResult.label)}">${escapeHtml(completionResult.icon)}</span>`
     : "";
 
+  // Mood icon (shown when no completion badge is active)
+  const moodIconHtml = (!completionResult && moodView)
+    ? `<span class="stage-character__mood ${escapeHtml(moodView.moodCssClass)}" title="${escapeHtml(moodView.moodLabel)}">${moodView.moodIcon}</span>`
+    : "";
+
   return `
     <button
       class="stage-character${selectedClass}${statusClass}${extraClasses}"
@@ -540,6 +546,7 @@ function renderStageCharacter(resident, position, taskLabel, status, isSelected,
         ${getResidentAvatarImg(resident, 54)}
       </span>
       ${completionBadge}
+      ${moodIconHtml}
       <span class="stage-character__name">${escapeHtml(resident.name)}</span>
       ${task ? `<span class="stage-character__task">${escapeHtml(task)}</span>` : ""}
       ${actionBubble}
@@ -587,6 +594,10 @@ function renderTownStage(state, uiState) {
       const status = residentStatus(resident);
       const anim = activeAnimations.find((a) => a.residentId === resident.id);
       const completionResult = completionByResidentId.get(resident.id) ?? null;
+      const moodView = buildResidentMoodView(resident, {
+        completionById: completionByResidentId,
+        activeAnimations,
+      });
       return renderStageCharacter(
         resident,
         pos,
@@ -595,6 +606,7 @@ function renderTownStage(state, uiState) {
         resident.id === uiState.selectedResidentId,
         anim,
         completionResult,
+        moodView,
       );
     })
     .join("");
@@ -661,6 +673,14 @@ function renderSpotlight(state, uiState) {
   const location = getLocation(selected.locationId);
   const status = residentStatus(selected);
 
+  const completionById = new Map(
+    (uiState.completionFeedback?.residentResults ?? []).map((r) => [r.residentId, r])
+  );
+  const moodView = buildResidentMoodView(selected, {
+    completionById,
+    activeAnimations: uiState.activeTaskAnimations ?? [],
+  });
+
   return `
     <section class="panel spotlight">
       <div class="spotlight__glow" aria-hidden="true"></div>
@@ -690,6 +710,14 @@ function renderSpotlight(state, uiState) {
         </div>
       </div>
 
+      <div class="spotlight__mood-row">
+        <span class="spotlight__mood-badge" title="${escapeHtml(moodView.moodLabel)}">
+          ${moodView.moodIcon} ${escapeHtml(moodView.moodLabel)}
+        </span>
+        <span class="spotlight__status-text">${escapeHtml(moodView.statusText)}</span>
+        <span class="spotlight__energy-hint">${escapeHtml(moodView.energyLabel)}</span>
+      </div>
+
       ${renderAgentSummary(selected.agent)}
       ${meter("心情", selected.mood, "rose")}
       ${meter("体力", selected.energy, "blue")}
@@ -704,10 +732,15 @@ function renderSpotlight(state, uiState) {
 
 // ── Resident Card ──────────────────────────────────────────────────────────────
 
-function renderResidentCard(resident, selectedResidentId) {
+function renderResidentCard(resident, selectedResidentId, moodView) {
   const task = getTask(resident.assignmentId);
   const location = getLocation(resident.locationId);
   const status = residentStatus(resident);
+
+  const moodLabel = moodView ? moodView.moodLabel : "状态稳定";
+  const moodIcon  = moodView ? moodView.moodIcon  : "😐";
+  const statusText = moodView ? moodView.statusText : "在小镇里闲逛";
+  const energyLabel = moodView ? moodView.energyLabel : "精力一般";
 
   return `
     <article class="resident ${resident.id === selectedResidentId ? "resident--selected" : ""}" data-resident-card="${escapeHtml(resident.id)}">
@@ -722,6 +755,11 @@ function renderResidentCard(resident, selectedResidentId) {
       <div class="resident__meta">
         <span>📍 ${escapeHtml(location.name)}</span>
         <span>📋 ${escapeHtml(task.label)}</span>
+      </div>
+      <div class="resident__status-row">
+        <span class="resident__mood-badge" title="${escapeHtml(moodLabel)}">${moodIcon} ${escapeHtml(moodLabel)}</span>
+        <span class="resident__status-text">${escapeHtml(statusText)}</span>
+        <span class="resident__energy-hint">${escapeHtml(energyLabel)}</span>
       </div>
       ${renderAgentSummary(resident.agent)}
       ${meter("心情", resident.mood, "rose")}
@@ -1218,7 +1256,16 @@ export function renderApp(root, state, handlers, uiState = {}) {
             </div>
           </div>
           <div class="resident-list">
-            ${state.residents.map((resident) => renderResidentCard(resident, safeUiState.selectedResidentId)).join("")}
+            ${state.residents.map((resident) => {
+              const completionById = new Map(
+                (safeUiState.completionFeedback?.residentResults ?? []).map((r) => [r.residentId, r])
+              );
+              const moodView = buildResidentMoodView(resident, {
+                completionById,
+                activeAnimations: safeUiState.activeTaskAnimations ?? [],
+              });
+              return renderResidentCard(resident, safeUiState.selectedResidentId, moodView);
+            }).join("")}
           </div>
         </section>
       </section>
