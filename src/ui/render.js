@@ -97,6 +97,17 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+/**
+ * Safe text wrapper — returns fallback for null/undefined, otherwise String(value).
+ * Use this instead of bare template interpolation for values that may be missing.
+ * @param {unknown} value
+ * @param {string} [fallback]
+ * @returns {string}
+ */
+function safeText(value, fallback = "") {
+  return value == null ? fallback : String(value);
+}
+
 function pct(value) {
   return `${Math.round(value)}%`;
 }
@@ -256,17 +267,17 @@ function renderGameActions(state, safeUiState, handlers = {}) {
     <div class="game-guide" aria-label="游戏指引">
       <div class="game-guide__header">
         <span>🧭</span>
-        <span class="game-guide__title">${escapeHtml(guideView.title)}</span>
+        <span class="game-guide__title">${safeText(guideView.title, "游戏指引")}</span>
       </div>
       <ul class="game-guide__steps">
         ${guideView.steps.map((step) => `
-          <li class="game-guide__step ${step.done ? "game-guide__step--done" : ""} ${step.label === guideView.currentStep ? "game-guide__step--current" : ""}">
+          <li class="game-guide__step ${step.done ? "game-guide__step--done" : ""} ${safeText(step.label) === safeText(guideView.currentStep) ? "game-guide__step--current" : ""}">
             <span class="game-guide__step-icon">${step.done ? "✅" : "○"}</span>
-            <span class="game-guide__step-label">${escapeHtml(step.label)}</span>
+            <span class="game-guide__step-label">${safeText(step.label)}</span>
           </li>
         `).join("")}
       </ul>
-      <p class="game-guide__next-action">💡 ${escapeHtml(guideView.nextActionText)}</p>
+      <p class="game-guide__next-action">💡 ${safeText(guideView.nextActionText, "观察小镇的动向吧")}</p>
     </div>
   `;
 
@@ -392,9 +403,9 @@ function renderDayOpeningReflection(openingReflection) {
     <div class="day-opening-reflection" aria-label="昨日回响" aria-live="polite">
       <div class="day-opening-reflection__header">
         <span>${icon}</span>
-        <span class="day-opening-reflection__title">${escapeHtml(title ?? "昨日回响")}</span>
+        <span class="day-opening-reflection__title">${safeText(title, "昨日回响")}</span>
       </div>
-      <p class="day-opening-reflection__summary">${escapeHtml(summary ?? "")}</p>
+      <p class="day-opening-reflection__summary">${safeText(summary)}</p>
       ${memoryRefLine}
     </div>
   `;
@@ -448,7 +459,7 @@ function renderRecommendedVoiceClip(voiceState, clips, ttsAudios, conversationSt
       ${hasClip ? `
       <div class="recommended-voice__header">
         <span>🎧</span>
-        <span class="recommended-voice__label">推荐收听：${escapeHtml(clip.title ?? clip.residentName ?? "")}</span>
+        <span class="recommended-voice__label">推荐收听：${safeText(clip.title ?? clip.residentName ?? "", "推荐收听")}</span>
         <span class="recommended-voice__provider">MiMo</span>
       </div>
       <p class="recommended-voice__text">${escapeHtml(clip.text ?? "")}</p>
@@ -592,9 +603,9 @@ function renderEventDirectorStatus(state, uiState) {
           <span class="llm-status-badge llm-status-badge--ready">已选择</span>
         </div>
         <div class="event-director__chosen-label">
-          你选择了：${escapeHtml(eventView.chosenChoiceLabel)}
+          你选择了：${safeText(eventView.chosenChoiceLabel, "做出了选择")}
         </div>
-        ${eventView.resultText ? `<p class="event-director__chosen-result">${escapeHtml(eventView.resultText)}</p>` : ""}
+        ${eventView.resultText ? `<p class="event-director__chosen-result">${safeText(eventView.resultText)}</p>` : ""}
         <div class="event-director__memory-hint">🌿 这件事已被小镇记住</div>
       </section>
     `;
@@ -652,8 +663,8 @@ function renderEventDirectorStatus(state, uiState) {
         <h2>✨ 小镇事件</h2>
         <span class="llm-status-badge llm-status-badge--ready">待选择</span>
       </div>
-      ${eventView.title ? `<p class="event-director__title">${escapeHtml(eventView.title)}</p>` : ""}
-      ${eventView.summary ? `<p class="event-director__summary">${escapeHtml(eventView.summary)}</p>` : ""}
+      ${eventView.title ? `<p class="event-director__title">${safeText(eventView.title)}</p>` : ""}
+      ${eventView.summary ? `<p class="event-director__summary">${safeText(eventView.summary)}</p>` : ""}
       <div class="event-director__meta">${metaLine}</div>
       <div class="event-director__choices">
         <p class="event-director__choices-prompt">你要怎么做？</p>
@@ -847,8 +858,8 @@ function renderAtmospherePanel(state, uiState) {
       ${renderRecommendedVoiceClip(uiState.residentVoiceInteraction, uiState.residentVoiceClips, uiState.ttsAudios, uiState.residentConversation?.status)}
       ${latestBc ? `
         <div class="atmosphere-broadcast-preview">
-          <p class="atmosphere-broadcast-preview__title">${escapeHtml(latestBc.title)}</p>
-          <p class="atmosphere-broadcast-preview__script">${escapeHtml(latestBc.script?.slice(0, 120))}${latestBc.script?.length > 120 ? "…" : ""}</p>
+          <p class="atmosphere-broadcast-preview__title">${safeText(latestBc.title, "未命名广播")}</p>
+          <p class="atmosphere-broadcast-preview__script">${safeText(latestBc.script?.slice(0, 120))}${latestBc.script?.length > 120 ? "…" : ""}</p>
           <div class="atmosphere-broadcast-preview__tags">
             <span class="atmosphere-tag">${escapeHtml(moodMap[latestBc.mood] ?? latestBc.mood ?? "温暖")}</span>
             <span class="atmosphere-tag">${escapeHtml(latestBc.musicMood ?? "")}</span>
@@ -1081,7 +1092,7 @@ function renderChoiceAftermath(aftermath, residentVoiceInteraction = null) {
         <span>居民反应</span>
       </div>
       <div class="choice-aftermath__choice-label">
-        你选择了：${escapeHtml(choiceLabel ?? "")}
+        你选择了：${safeText(choiceLabel, "做出了选择")}
       </div>
       ${summary ? `<p class="choice-aftermath__summary">${escapeHtml(summary)}</p>` : ""}
       ${reactionsHtml ? `
@@ -1115,8 +1126,8 @@ function renderChoiceAftermathStageIndicator(aftermath) {
 
   return `
     <div class="stage-choice-aftermath" aria-label="选择影响" aria-live="polite">
-      <span class="stage-choice-aftermath__icon">${icon}</span>
-      <span class="stage-choice-aftermath__label">${escapeHtml(label)}</span>
+      <span class="stage-choice-aftermath__icon">${safeText(icon, "✨")}</span>
+      <span class="stage-choice-aftermath__label">${safeText(label, "留下了痕迹")}</span>
     </div>
   `;
 }
@@ -1144,8 +1155,8 @@ function renderChoiceWorldMarker(choiceWorldEffect) {
       aria-label="选择影响"
       aria-live="polite"
     >
-      <span class="stage-choice-marker__icon">${escapeHtml(markerIcon)}</span>
-      <span class="stage-choice-marker__label">${escapeHtml(markerLabel)}</span>
+      <span class="stage-choice-marker__icon">${safeText(markerIcon, "✨")}</span>
+      <span class="stage-choice-marker__label">${safeText(markerLabel, "留下了痕迹")}</span>
     </div>
   `;
 }
@@ -1392,23 +1403,23 @@ function renderSpotlight(state, uiState) {
       <div class="spotlight__glow" aria-hidden="true"></div>
       <div class="panel__head panel__head--spotlight">
         <h2>👤 居民详情</h2>
-        <span class="panel-badge">${escapeHtml(location.name)}</span>
+        <span class="panel-badge">${safeText(location?.name, "小镇")}</span>
       </div>
       <div class="spotlight__header">
         <div class="spotlight__portrait" aria-hidden="true">
           ${getResidentAvatarImg(selected, 96)}
         </div>
         <div class="spotlight__info">
-          <h3>${escapeHtml(selected.name)}</h3>
-          <p>${escapeHtml(selected.role)} · ${escapeHtml(selected.skill)}</p>
-          <span class="spotlight__role-badge">${escapeHtml(selected.personality)}</span>
+          <h3>${safeText(selected.name, "居民")}</h3>
+          <p>${safeText(selected.role, "居民")} · ${safeText(selected.skill, "普通")}</p>
+          <span class="spotlight__role-badge">${safeText(selected.personality, "随和")}</span>
         </div>
       </div>
 
       <div class="spotlight__role-card">
         <div class="spotlight__plan">
           <span>📋 当前安排</span>
-          <strong>${escapeHtml(task.label)}</strong>
+          <strong>${safeText(task?.label, "休息")}</strong>
         </div>
         <div class="spotlight__status">
           <span class="status-tag status-tag--${status.id}">${escapeHtml(status.label)}</span>
@@ -1461,14 +1472,14 @@ function renderResidentCard(resident, selectedResidentId, moodView) {
       <div class="resident__head">
         <div class="resident__avatar" aria-hidden="true">${getResidentAvatarImg(resident, 40)}</div>
         <div class="resident__info">
-          <h3>${escapeHtml(resident.name)}</h3>
-          <p>${escapeHtml(resident.role)} · ${escapeHtml(resident.skill)}</p>
+          <h3>${safeText(resident.name, "居民")}</h3>
+          <p>${safeText(resident.role, "居民")} · ${safeText(resident.skill, "普通")}</p>
         </div>
       </div>
-      <p class="resident__personality">${escapeHtml(resident.personality)}</p>
+      <p class="resident__personality">${safeText(resident.personality, "随和")}</p>
       <div class="resident__meta">
-        <span>📍 ${escapeHtml(location.name)}</span>
-        <span>📋 ${escapeHtml(task.label)}</span>
+        <span>📍 ${safeText(location?.name, "小镇")}</span>
+        <span>📋 ${safeText(task?.label, "休息")}</span>
       </div>
       <div class="resident__status-row">
         <span class="resident__mood-badge" title="${escapeHtml(moodLabel)}">${moodIcon} ${escapeHtml(moodLabel)}</span>
@@ -1577,7 +1588,7 @@ function renderM3EventItem(event, residents, latestClass = "", ttsAudios = {}, h
         <span class="m3-event__tone">${escapeHtml(toneLabel)}</span>
       </div>
       ${event.title ? `<p class="m3-event__title">${escapeHtml(event.title)}</p>` : ""}
-      <p class="m3-event__text">${escapeHtml(event.text)}</p>
+      <p class="m3-event__text">${safeText(event.text)}</p>
       ${eventTtsBtn ? `<div class="m3-event__tts-row">${eventTtsBtn}</div>` : ""}
       <div class="m3-event__footer">
         <span class="m3-event__place">📍 ${escapeHtml(placeName)}</span>

@@ -4486,13 +4486,18 @@ details summary {
 }
 
 .stage-choice-marker--recent {
-  animation: choiceMarkerFadeIn 0.35s ease-out, choiceMarkerPulse 0.5s ease-in-out 0.35s;
+  animation: choiceMarkerFadeIn 0.35s ease-out, choiceMarkerPulse 0.5s ease-in-out 0.35s, choiceMarkerFadeOut 1s ease-in-out 30s forwards;
 }
 
 @keyframes choiceMarkerPulse {
   0%   { transform: scale(1); }
   50%  { transform: scale(1.08); }
   100% { transform: scale(1); }
+}
+
+@keyframes choiceMarkerFadeOut {
+  from { opacity: 1; visibility: visible; }
+  to   { opacity: 0; visibility: hidden; }
 }
 
 /* ── Place Label Choice Affected ─────────────────────────────────────────── */

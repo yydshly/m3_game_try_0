@@ -229,6 +229,7 @@ console.log("\n── click: player-choice event appended ──");
   assert(playerChoiceEvents.length > 0, "player-choice event appended");
   const last = playerChoiceEvents[playerChoiceEvents.length - 1];
   assert(last.choiceLabel === "让小七先照顾小猫", "player-choice has correct choiceLabel");
+  assert(typeof last.createdAt === "number" && last.createdAt > 0, "player-choice event has createdAt");
 }
 
 // ── Test 4: click → townMemory appended ────────────────────────────────────────

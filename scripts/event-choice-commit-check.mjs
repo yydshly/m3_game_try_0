@@ -105,6 +105,7 @@ console.log("\n── applyChoiceMemory writes chosenChoiceId ──");
 
   assert(updatedEvent?.chosenChoiceId === "hang_it", "chosenChoiceId is written to the event");
   assert(updatedEvent?.choiceResultText === "阿远把照片挂在工坊入口。", "choiceResultText is written");
+  assert(typeof updatedEvent?.choiceChosenAt === "number" && updatedEvent.choiceChosenAt > 0, "choiceChosenAt is written to m3-event");
 }
 
 // ── Test 2: applyChoiceMemory appends player-choice event ───────────────────
@@ -123,6 +124,7 @@ console.log("\n── applyChoiceMemory appends player-choice event ──");
   const pc = playerChoiceEvents[playerChoiceEvents.length - 1];
   assert(pc.choiceLabel === "挂到工坊墙上", "player-choice has correct choiceLabel");
   assert(pc.text === "阿远把照片挂在工坊入口。", "player-choice has result text");
+  assert(typeof pc.createdAt === "number" && pc.createdAt > 0, "player-choice event has createdAt");
 }
 
 // ── Test 3: applyChoiceMemory writes townMemory ──────────────────────────────

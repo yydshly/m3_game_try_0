@@ -63,6 +63,7 @@ export function applyChoiceMemory(state, sourceEvent, choice, currentPhase) {
       ...e,
       chosenChoiceId: choice.id,
       choiceResultText: choice.resultText,
+      choiceChosenAt: Date.now(),
     };
   });
 
@@ -79,6 +80,7 @@ export function applyChoiceMemory(state, sourceEvent, choice, currentPhase) {
     choiceLabel: choice.label,
     residentIds: sourceEvent.residentIds ?? [],
     placeId: sourceEvent.placeId ?? "plaza",
+    createdAt: Date.now(),
   };
 
   // 3. Build townMemory entry

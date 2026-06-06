@@ -326,6 +326,126 @@ console.log("\n── marker age timeout ──");
   const fs = await import("fs");
   const content = fs.readFileSync(resolve(SRC, "ui/render.js"), "utf8");
   assert(content.includes("age > 30_000") || content.includes("age > 30000"), "30-second age check present");
+  // CSS animation for 30s fade-out
+  const css = fs.readFileSync(resolve(PROJECT_ROOT, "src/styles.css"), "utf8");
+  assert(css.includes("choiceMarkerFadeOut") || css.includes("30s"), "CSS fade-out animation exists for 30s timeout");
+}
+
+// ── 28. applyChoiceMemory writes choiceChosenAt to m3-event ──────────────────
+console.log("\n── applyChoiceMemory writes choiceChosenAt ──");
+{
+  const fs = await import("fs");
+  const content = fs.readFileSync(resolve(SRC, "domain/memory.js"), "utf8");
+  assert(content.includes("choiceChosenAt: Date.now()"), "choiceChosenAt written to m3-event");
+}
+
+// ── 29. player-choice event has createdAt ────────────────────────────────────
+console.log("\n── player-choice event has createdAt ──");
+{
+  const fs = await import("fs");
+  const content = fs.readFileSync(resolve(SRC, "domain/memory.js"), "utf8");
+  assert(content.includes("createdAt: Date.now()") && content.includes("playerChoiceEvent"), "player-choice event has createdAt");
+}
+
+// ── 30. buildChoiceWorldEffectView uses choiceChosenAt / createdAt in fallback ─
+console.log("\n── buildChoiceWorldEffectView: no Date.now() in fallback createdAt ──");
+{
+  const fs = await import("fs");
+  const content = fs.readFileSync(resolve(SRC, "domain/choiceWorldEffect.js"), "utf8");
+  // The fallback blocks should NOT use Date.now() for createdAt
+  const fallbackM3Block = content.match(/source = "m3-event";[\s\S]*?choiceAftermath = \{[\s\S]*?\};/);
+  const fallbackPcBlock = content.match(/source = "player-choice";[\s\S]*?choiceAftermath = \{[\s\S]*?\};/);
+  assert(!fallbackM3Block?.[0].includes("Date.now()"), "m3-event fallback does not use Date.now()");
+  assert(!fallbackPcBlock?.[0].includes("Date.now()"), "player-choice fallback does not use Date.now()");
+}
+
+// ── 31. old events without timestamp not marked recent (createdAt = old timestamp) ─
+console.log("\n── old event without timestamp: createdAt is old (not Date.now()) ──");
+{
+  const mod = await import(src("domain/choiceWorldEffect.js"));
+  // Simulate an old m3-event fallback (no choiceChosenAt, no createdAt)
+  const state = {
+    residents: [{ id: "seven", name: "小七" }],
+    events: [{
+      id: "old-event",
+      type: "m3-event",
+      placeId: "cafe",
+      chosenChoiceId: "c1",
+      choices: [{ id: "c1", label: "测试", resultText: "结果。" }],
+      // No choiceChosenAt — old event
+    }],
+  };
+  const view = mod.buildChoiceWorldEffectView(state, {});
+  // createdAt should NOT be Date.now() (it should be null or old timestamp that makes age > 30s)
+  const age = Date.now() - (view.createdAt ?? 0);
+  assert(age > 30_000 || view.createdAt === null, `old event createdAt is not Date.now() (age=${age})`);
+}
+
+// ── 32. markerLabel ≠ choiceLabel (world trace, not full choice text) ─────────
+console.log("\n── markerLabel is world trace, not full choiceLabel ──");
+{
+  const mod = await import(src("domain/choiceWorldEffect.js"));
+  const view = mod.buildChoiceWorldEffectView(
+    { residents: [], events: [] },
+    {
+      choiceAftermath: {
+        id: "a1", eventId: "e1", choiceId: "c1", placeId: "cafe",
+        choiceLabel: "帮忙把画册送去餐厅",
+        summary: "阿远把画册轻放在餐厅入口旁边的架子上。",
+        residentReactions: [],
+        createdAt: Date.now(),
+      },
+    }
+  );
+  // markerLabel should NOT equal the full choiceLabel
+  assert(view.markerLabel !== "帮忙把画册送去餐厅", "markerLabel is not the full choiceLabel");
+  // It should be a trace-like phrase derived from resultText
+  assert(view.markerLabel.length <= 16, `markerLabel ≤ 16 chars (got ${view.markerLabel.length}: "${view.markerLabel}")`);
+}
+
+// ── 33. markerLabel max 16 Chinese chars ─────────────────────────────────────
+console.log("\n── markerLabel max length ──");
+{
+  const mod = await import(src("domain/choiceWorldEffect.js"));
+  const view = mod.buildChoiceWorldEffectView(
+    { residents: [], events: [] },
+    {
+      choiceAftermath: {
+        id: "a2", eventId: "e2", choiceId: "c2", placeId: "garden",
+        choiceLabel: "整理花园",
+        summary: "小七和米米把花园里的杂草清除干净，又补种了几株新的花苗。",
+        residentReactions: [],
+        createdAt: Date.now(),
+      },
+    }
+  );
+  assert(view.markerLabel.length <= 16, `markerLabel ≤ 16 chars (got ${view.markerLabel.length}: "${view.markerLabel}")`);
+}
+
+// ── 34. safeText helper exists in render.js ──────────────────────────────────
+console.log("\n── safeText helper exists ──");
+{
+  const fs = await import("fs");
+  const content = fs.readFileSync(resolve(SRC, "ui/render.js"), "utf8");
+  assert(content.includes("function safeText(value, fallback"), "safeText function defined");
+  assert(content.includes("return value == null ? fallback : String(value)"), "safeText null-check logic correct");
+}
+
+// ── 35. latestBroadcast.script uses safeText (no undefined in HTML) ───────────
+console.log("\n── latestBroadcast.script: no undefined output ──");
+{
+  const fs = await import("fs");
+  const content = fs.readFileSync(resolve(SRC, "ui/render.js"), "utf8");
+  // Should use safeText for latestBc.title and latestBc.script, not bare escapeHtml
+  assert(content.includes("safeText(latestBc.title") || content.includes("safeText(latestBc.script"), "safeText used for latestBc fields");
+}
+
+// ── 36. CSS: choiceMarkerFadeOut animation exists ─────────────────────────────
+console.log("\n── CSS: choiceMarkerFadeOut animation ──");
+{
+  const fs = await import("fs");
+  const css = fs.readFileSync(resolve(PROJECT_ROOT, "src/styles.css"), "utf8");
+  assert(css.includes("@keyframes choiceMarkerFadeOut") || css.includes("choiceMarkerFadeOut"), "choiceMarkerFadeOut animation defined");
 }
 
 // ── Results ────────────────────────────────────────────────────────────────────
