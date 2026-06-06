@@ -43,6 +43,7 @@
     "voice-playback-check": "node scripts/voice-playback-check.mjs",
     "choice-aftermath-check": "node scripts/choice-aftermath-check.mjs",
     "v1-acceptance-check": "node scripts/v1-acceptance-check.mjs",
-    "resident-voice-interaction-check": "node scripts/resident-voice-interaction-check.mjs"
+    "resident-voice-interaction-check": "node scripts/resident-voice-interaction-check.mjs",
+    "voice-regression-check": "node scripts/voice-regression-check.mjs"
   }
 }

@@ -197,7 +197,7 @@ function renderDayCycleStatus(safeUiState, handlers = {}) {
   const cfTextKey = "completion_feedback:current";
   const cfTa = ttsAudios[cfTextKey] ?? {};
   const cfText = "本阶段行动完成";
-  const completionTtsBtn = (handlers.onPlayMimoTts)
+  const completionTtsBtn = (handlers?.onPlayMimoTts)
     ? (() => {
       if (cfTa.status === "loading") return `<button class="mimo-tts-btn mimo-tts-btn--loading" disabled>🔊…</button>`;
       if (cfTa.status === "playing") return `<button class="mimo-tts-btn mimo-tts-btn--playing" data-action="pause-mimo-tts" data-audio-key="${escapeHtml(cfTextKey)}">⏸️</button>`;
@@ -211,7 +211,7 @@ function renderDayCycleStatus(safeUiState, handlers = {}) {
   const dayOpenTextKey = "day_opening:current";
   const doTa = ttsAudios[dayOpenTextKey] ?? {};
   const dayOpenText = dc.scenarioId ? `今天的小镇围绕「${dc.scenarioId}」展开。` : "";
-  const dayOpenTtsBtn = (isRunning && dayOpenText && handlers.onPlayMimoTts)
+  const dayOpenTtsBtn = (isRunning && dayOpenText && handlers?.onPlayMimoTts)
     ? (() => {
       if (doTa.status === "loading") return `<button class="mimo-tts-btn mimo-tts-btn--loading" disabled>🔊…</button>`;
       if (doTa.status === "playing") return `<button class="mimo-tts-btn mimo-tts-btn--playing" data-action="pause-mimo-tts" data-audio-key="${escapeHtml(dayOpenTextKey)}">⏸️</button>`;
@@ -1234,7 +1234,7 @@ function renderM3EventItem(event, residents, latestClass = "", ttsAudios = {}, h
   const eventTextKey = `event_prompt:${event.id}`;
   const ta = ttsAudios[eventTextKey] ?? {};
   const eventPromptText = `${event.title ?? ""}。${event.text ?? ""}`.slice(0, 80);
-  const eventTtsBtn = (handlers.onPlayMimoTts)
+  const eventTtsBtn = (handlers?.onPlayMimoTts)
     ? (() => {
       if (ta.status === "loading") return `<button class="mimo-tts-btn mimo-tts-btn--loading" disabled>🔊…</button>`;
       if (ta.status === "playing") return `<button class="mimo-tts-btn mimo-tts-btn--playing" data-action="pause-mimo-tts" data-audio-key="${escapeHtml(eventTextKey)}">⏸️</button>`;

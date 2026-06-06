@@ -787,6 +787,35 @@ function buildResidentVoiceClips(state, uiState) {
     }
   }
 
+  // 4. Fallback: generate voice clips from resident current tasks (always produces at least one clip per resident)
+  const TASK_FALLBACK_LINES = {
+    repair: ["我去工坊看看有什么要修的。", "工具都准备好了吗？", "这地方得好好检修一下。"],
+    plant: ["花园里的植物该浇水了。", "我去看看花园的情况。", "今天想在花园多待一会儿。"],
+    cook: ["我去厨房看看有什么能准备的。", "该想想今天做什么菜了。", "食材还够吗？"],
+    chat: ["和大家聊聊天也不错。", "广场上好像挺热闹的。", "好久没和人好好说话了。"],
+    forage: ["森林里应该能找到些好东西。", "我去森林那边转转。", "采集一些材料回来。"],
+    rest: ["今天有点累了，休息一下吧。", "找个安静的地方待一会儿。", "先歇一歇再说。"],
+  };
+  for (const resident of residents) {
+    const already = clips.find((c) => c.residentId === resident.id);
+    if (!already) {
+      const taskId = resident.assignmentId ?? "rest";
+      const lines = TASK_FALLBACK_LINES[taskId] ?? TASK_FALLBACK_LINES.rest;
+      const text = lines[resident.name.length % lines.length];
+      clips.push({
+        key: `task_fallback:${resident.id}`,
+        residentId: resident.id,
+        residentName: resident.name,
+        scene: "resident_dialogue",
+        sourceType: "task_fallback",
+        title: `${resident.name}的日常`,
+        text,
+        reason: `当前任务：${taskId}`,
+        priority: 20,
+      });
+    }
+  }
+
   return clips;
 }
 
