@@ -121,6 +121,47 @@ export function applyChoiceMemory(state, sourceEvent, choice, currentPhase) {
 }
 
 /**
+ * Build a human-readable summary of recent town memories for injection into LLM prompts.
+ * Pure function — does not mutate state, does not call any API.
+ *
+ * @param {Array} townMemory - Array of townMemory entries (from state.townMemory)
+ * @param {object} options
+ * @param {number} options.maxEntries - Maximum number of entries to include (default 3)
+ * @param {number} options.maxLength - Maximum total summary length in chars (default 300)
+ * @param {number} options.maxEntryLength - Maximum single entry length (default 80)
+ * @returns {string} Natural-language summary, or empty string if no valid memories
+ */
+export function buildTownMemorySummary(townMemory, options = {}) {
+  const { maxEntries = 3, maxLength = 300, maxEntryLength = 80 } = options;
+
+  if (!Array.isArray(townMemory) || townMemory.length === 0) {
+    return "";
+  }
+
+  // Take the most recent entries (last maxEntries items)
+  const recent = townMemory.slice(-maxEntries);
+
+  const lines = recent
+    .filter((entry) => entry && typeof entry.text === "string" && entry.text.trim().length > 0)
+    .map((entry) => {
+      const text = entry.text.trim();
+      // Truncate long entries
+      const truncated = text.length > maxEntryLength ? text.slice(0, maxEntryLength - 1) + "…" : text;
+      return `· ${truncated}`;
+    });
+
+  if (lines.length === 0) {
+    return "";
+  }
+
+  const summary = `小镇近期记忆：\n${lines.join("\n")}`;
+  if (summary.length > maxLength) {
+    return summary.slice(0, maxLength - 1) + "…";
+  }
+  return summary;
+}
+
+/**
  * Trim memories to max limits (defensive, called after any state merge).
  */
 export function trimMemories(state) {

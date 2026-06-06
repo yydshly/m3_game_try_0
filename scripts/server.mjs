@@ -3,6 +3,7 @@ import { createServer } from "node:http";
 import { networkInterfaces } from "node:os";
 import { dirname, extname, isAbsolute, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildTownMemorySummary } from "../src/domain/memory.js";
 
 const root = normalize(join(dirname(fileURLToPath(import.meta.url)), ".."));
 const config = loadConfig();
@@ -222,10 +223,15 @@ function fallbackTaskForResident(resident, state) {
 
 // ── Event Director ──────────────────────────────────────────────────────────────
 
-function buildEventPrompt(state) {
+function buildEventPrompt(state, memorySummary = "") {
+  const memoryBlock = memorySummary
+    ? `\n\n${memorySummary}\n\nYou may create an event that continues from a real memory above if it feels natural. Do NOT invent player choices or events that are not listed. If no relevant memory exists, generate a normal event for today.`
+    : "";
+
   return {
     system:
-      "You are the event director for a cozy AI town life simulation game. Generate one small town event that feels warm, observable, and connected to the current town state. Return strict JSON only. No markdown, no explanation. Return one event with exactly two gentle player choices. The choices should not require combat, danger, adult content, or destructive actions. The resultText should describe what happens after the player chooses it. Do not promise or imply numeric stat changes in resultText.",
+      "You are the event director for a cozy AI town life simulation game. Generate one small town event that feels warm, observable, and connected to the current town state. Return strict JSON only. No markdown, no explanation. Return one event with exactly two gentle player choices. The choices should not require combat, danger, adult content, or destructive actions. The resultText should describe what happens after the player chooses it. Do not promise or imply numeric stat changes in resultText." +
+      (memorySummary ? " Events may naturally continue from real town memories listed in the user content. Never fabricate player choices or events that are not provided in the memories." : ""),
     userContent: JSON.stringify({
       validResidentIds: ["hua", "yuan", "mimi", "zhou", "seven"],
       validPlaceIds: ["garden", "cafe", "workshop", "plaza", "forest"],
@@ -255,6 +261,7 @@ function buildEventPrompt(state) {
         },
       },
       state,
+      memorySummary: memorySummary,
     }),
   };
 }
@@ -335,8 +342,8 @@ function normalizeMiniMaxEvent(rawEvent, state) {
   };
 }
 
-async function requestMiniMaxAnthropicEvent({ apiKey, baseUrl, model, state, signal }) {
-  const { system, userContent } = buildEventPrompt(state);
+async function requestMiniMaxAnthropicEvent({ apiKey, baseUrl, model, state, memorySummary, signal }) {
+  const { system, userContent } = buildEventPrompt(state, memorySummary);
   const response = await fetch(`${baseUrl}/v1/messages`, {
     method: "POST",
     headers: {
@@ -356,8 +363,8 @@ async function requestMiniMaxAnthropicEvent({ apiKey, baseUrl, model, state, sig
   return response;
 }
 
-async function requestMiniMaxOpenAiEvent({ apiKey, baseUrl, model, state, signal }) {
-  const { system, userContent } = buildEventPrompt(state);
+async function requestMiniMaxOpenAiEvent({ apiKey, baseUrl, model, state, memorySummary, signal }) {
+  const { system, userContent } = buildEventPrompt(state, memorySummary);
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
     headers: {
@@ -391,6 +398,8 @@ async function handleMiniMaxEvent(request, response) {
   try {
     const { state } = await readJson(request);
 
+    const memorySummary = buildTownMemorySummary(state?.townMemory);
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), minimaxTimeoutMs);
     let minimaxResponse;
@@ -402,6 +411,7 @@ async function handleMiniMaxEvent(request, response) {
           baseUrl: minimaxBaseUrl,
           model: minimaxModel,
           state,
+          memorySummary,
           signal: controller.signal,
         });
       } else {
@@ -410,6 +420,7 @@ async function handleMiniMaxEvent(request, response) {
           baseUrl: minimaxAnthropicBaseUrl,
           model: minimaxModel,
           state,
+          memorySummary,
           signal: controller.signal,
         });
       }
@@ -481,11 +492,16 @@ const PHASE_MUSIC_MOOD = {
   evening: "安静夜晚",
 };
 
-function buildBroadcastPrompt(state) {
+function buildBroadcastPrompt(state, memorySummary = "") {
   const phaseMap = { morning: "早上", afternoon: "下午", evening: "晚上" };
+  const memoryBlock = memorySummary
+    ? `\n\n${memorySummary}\n\nYou may naturally reference the memories above if relevant. Do NOT invent memories that are not listed above. If no relevant memory exists, simply ignore the memory section and write a normal broadcast for today.`
+    : "";
+
   return {
     system:
-      "You are the town radio host and atmosphere designer for a cozy AI town life simulation game. Generate one short Chinese town broadcast based on the current town state. The broadcast should feel warm, observable, and connected to residents, places, mood, resources, and recent events. Return strict JSON only. No markdown, no explanation.",
+      "You are the town radio host and atmosphere designer for a cozy AI town life simulation game. Generate one short Chinese town broadcast based on the current town state. The broadcast should feel warm, observable, and connected to residents, places, mood, resources, and recent events. Return strict JSON only. No markdown, no explanation." +
+      (memorySummary ? " The broadcast may naturally reference real town memories listed in the user content. Never fabricate a memory that is not provided." : ""),
     userContent: JSON.stringify({
       validResidentIds: ["hua", "yuan", "mimi", "zhou", "seven"],
       validPlaceIds: ["garden", "cafe", "workshop", "plaza", "forest"],
@@ -503,6 +519,7 @@ function buildBroadcastPrompt(state) {
         },
       },
       state,
+      memorySummary: memorySummary,
     }),
   };
 }
@@ -546,8 +563,8 @@ function normalizeMiniMaxBroadcast(rawBroadcast, state) {
   };
 }
 
-async function requestMiniMaxAnthropicBroadcast({ apiKey, baseUrl, model, state, signal }) {
-  const { system, userContent } = buildBroadcastPrompt(state);
+async function requestMiniMaxAnthropicBroadcast({ apiKey, baseUrl, model, state, memorySummary, signal }) {
+  const { system, userContent } = buildBroadcastPrompt(state, memorySummary);
   const response = await fetch(`${baseUrl}/v1/messages`, {
     method: "POST",
     headers: {
@@ -567,8 +584,8 @@ async function requestMiniMaxAnthropicBroadcast({ apiKey, baseUrl, model, state,
   return response;
 }
 
-async function requestMiniMaxOpenAiBroadcast({ apiKey, baseUrl, model, state, signal }) {
-  const { system, userContent } = buildBroadcastPrompt(state);
+async function requestMiniMaxOpenAiBroadcast({ apiKey, baseUrl, model, state, memorySummary, signal }) {
+  const { system, userContent } = buildBroadcastPrompt(state, memorySummary);
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
     headers: {
@@ -602,6 +619,8 @@ async function handleMiniMaxBroadcast(request, response) {
   try {
     const { state } = await readJson(request);
 
+    const memorySummary = buildTownMemorySummary(state?.townMemory);
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), minimaxTimeoutMs);
     let minimaxResponse;
@@ -613,6 +632,7 @@ async function handleMiniMaxBroadcast(request, response) {
           baseUrl: minimaxBaseUrl,
           model: minimaxModel,
           state,
+          memorySummary,
           signal: controller.signal,
         });
       } else {
@@ -621,6 +641,7 @@ async function handleMiniMaxBroadcast(request, response) {
           baseUrl: minimaxAnthropicBaseUrl,
           model: minimaxModel,
           state,
+          memorySummary,
           signal: controller.signal,
         });
       }
