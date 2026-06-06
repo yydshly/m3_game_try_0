@@ -230,3 +230,98 @@ export function buildTaskCompletionFeedback(state, completionFeedback) {
 
   return { visible: true, completions };
 }
+
+// ── Resident Stage Acting View ─────────────────────────────────────────────────
+
+const ACTION_TYPE_MAP = {
+  // Maps taskId/keyword → actionType
+  // keyword order matters (specific → general)
+};
+
+function classifyActionType(taskId, assignmentLabel) {
+  // keyword match on both taskId and label
+  const text = `${taskId ?? ""} ${assignmentLabel ?? ""}`.toLowerCase();
+  if (/书|阅读|学习|安静|读/.test(text)) return "reading";
+  if (/花|种|农|圃|锄|栽培|园艺/.test(text)) return "farming";
+  if (/聊|问候|访|对话|会话|talk/.test(text)) return "chatting";
+  if (/休息|睡|坐|放松|午休/.test(text)) return "resting";
+  if (/修|理|清|扫|整理|维护|工作|工坊/.test(text)) return "working";
+  if (/走|跑|行|动|移动|travel/.test(text)) return "walking";
+  return "working"; // default
+}
+
+const ACTION_BADGE_LABELS = {
+  reading:  "阅读中",
+  farming:  "耕作中",
+  chatting: "交流中",
+  resting:  "休息中",
+  working:  "工作中",
+  walking:  "移动中",
+};
+
+/**
+ * Build a resident stage acting view for the town stage.
+ * Pure function — does not mutate inputs, does not call APIs.
+ *
+ * @param {object} resident
+ * @param {object} options
+ * @param {object} options.activeAnim - active animation for this resident (from uiState.activeTaskAnimations)
+ * @param {object} options.completionResult - completion result for this resident (from completionFeedback)
+ * @param {object} options.conversationActive - boolean, is conversation active
+ * @param {object} options.conversationLine - current conversation line (if speaking)
+ * @returns {object} Acting view: { actionType, actionLabel, cssClass, badgeText, prop, propClass }
+ */
+export function buildResidentStageActingView(resident, options = {}) {
+  const {
+    activeAnim = null,
+    completionResult = null,
+    conversationActive = false,
+    conversationLine = null,
+  } = options;
+
+  if (!resident || typeof resident.id !== "string") {
+    return { actionType: "idle", actionLabel: "闲逛", cssClass: "stage-resident--idle", badgeText: "闲逛", prop: null, propClass: null };
+  }
+
+  const taskId = resident.assignmentId ?? "";
+  const assignmentLabel = "";
+  const isMoving = activeAnim?.traveling ?? false;
+  const isSpeaking = conversationActive && conversationLine?.speakerId === resident.id;
+
+  let actionType;
+  let badgeText;
+
+  if (isSpeaking) {
+    actionType = "chatting";
+    badgeText = "说话中";
+  } else if (isMoving) {
+    actionType = "walking";
+    badgeText = ACTION_BADGE_LABELS.walking;
+  } else if (completionResult) {
+    actionType = "working";
+    badgeText = completionResult.label ?? "已完成";
+  } else if (activeAnim?.action) {
+    actionType = classifyActionType(taskId, assignmentLabel);
+    badgeText = ACTION_BADGE_LABELS[actionType] ?? "工作中";
+  } else {
+    actionType = "working";
+    badgeText = ACTION_BADGE_LABELS.working;
+  }
+
+  const cssClass = `stage-resident--${actionType}`;
+
+  // Prop icons per action type
+  const propMap = {
+    reading: "📖",
+    farming: "🌿",
+    chatting: "💬",
+    resting: "😌",
+    working: "🔧",
+    walking: "🚶",
+    idle: "🏠",
+  };
+  const prop = propMap[actionType] ?? null;
+  const propClass = prop ? `stage-resident__prop--${actionType}` : null;
+
+  return { actionType, actionLabel: badgeText, cssClass, badgeText, prop, propClass };
+}

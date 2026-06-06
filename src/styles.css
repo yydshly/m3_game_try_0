@@ -277,7 +277,7 @@ button, select {
 
 .layout {
   display: grid;
-  grid-template-columns: minmax(200px, 230px) minmax(640px, 1fr) minmax(300px, 360px);
+  grid-template-columns: minmax(180px, 200px) minmax(720px, 1fr) minmax(280px, 320px);
   gap: 14px;
   align-items: start;
 }
@@ -801,7 +801,7 @@ button, select {
   border-radius: 20px;
   border: 1px solid var(--line);
   box-shadow: 0 6px 24px rgba(61, 48, 39, 0.14);
-  padding: 20px;
+  padding: 16px 16px 12px;
   overflow: hidden;
 }
 
@@ -809,7 +809,7 @@ button, select {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
   gap: 12px;
 }
 
@@ -827,7 +827,7 @@ button, select {
 /* ── Town Stage — Illustrated Scene ── */
 .town-stage {
   position: relative;
-  min-height: 560px;
+  min-height: 680px;
   margin-bottom: 16px;
   border-radius: 16px;
   overflow: hidden;
@@ -937,8 +937,8 @@ button, select {
 .stage-character__sprite {
   display: grid;
   place-items: center;
-  width: 54px;
-  height: 54px;
+  width: 68px;
+  height: 68px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.95);
   border: 3px solid rgba(255, 255, 255, 0.9);
@@ -1200,6 +1200,29 @@ button, select {
   animation: characterRestSprite 2s ease-in-out infinite;
 }
 
+/* Map is-* presentation classes (from TASK_STAGE_PRESENTATIONS) to animations */
+.stage-character--is-farming .stage-character__sprite,
+.stage-character--is-building .stage-character__sprite,
+.stage-character--is-foraging .stage-character__sprite {
+  animation: characterWorkSprite 0.9s ease-in-out infinite;
+}
+
+.stage-character--is-cooking .stage-character__sprite {
+  animation: characterWorkSprite 0.7s ease-in-out infinite;
+}
+
+.stage-character--is-reading .stage-character__sprite {
+  animation: characterReadSprite 1.4s ease-in-out infinite;
+}
+
+.stage-character--is-chatting .stage-character__sprite {
+  animation: characterChatSprite 1.2s ease-in-out infinite;
+}
+
+.stage-character--is-resting .stage-character__sprite {
+  animation: characterRestSprite 2s ease-in-out infinite;
+}
+
 /* Action bubble — short feedback above character */
 .stage-character__action-bubble {
   position: absolute;
@@ -1282,6 +1305,11 @@ button, select {
   0%, 100% { transform: scale(1) rotate(0deg); }
   25%       { transform: scale(1.05) rotate(-2deg); }
   75%       { transform: scale(1.05) rotate(2deg); }
+}
+
+@keyframes characterReadSprite {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50%       { transform: translateY(-2px) rotate(1deg); }
 }
 
 @keyframes characterChatSprite {
