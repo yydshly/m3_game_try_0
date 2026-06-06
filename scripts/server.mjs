@@ -1201,6 +1201,16 @@ async function handleMimoTts(request, response) {
 
   if (isDryRun) {
     const cfg = getMimoRuntimeConfig();
+    // Token Plan mode: validate baseUrl contains "token-plan" — hard error, not warning
+    if (mimoApiMode === "token_plan" && !mimoBaseUrl.includes("token-plan")) {
+      sendJson(response, 400, {
+        ok: false,
+        error: "MiMo Token Plan Base URL 配置错误",
+        mode: "token_plan",
+        baseUrl: mimoBaseUrl,
+      });
+      return;
+    }
     const body = await readJson(request).catch(() => ({}));
     const text = String(body?.text ?? "").trim();
     sendJson(response, 200, {
