@@ -1,7 +1,7 @@
 import { createInitialState, upgradeState } from "./domain/state.js";
 import { advancePhase, applyAgentPlan, assignTask, resetAssignments } from "./domain/simulation.js";
 import { applyChoiceMemory } from "./domain/memory.js";
-import { requestMiniMaxPlan, requestMiniMaxEvent, requestMiniMaxBroadcast } from "./services/minimaxClient.js";
+import { requestMiniMaxPlan, requestMiniMaxEvent, requestMiniMaxBroadcast, buildPromptMemoryNarrative } from "./services/minimaxClient.js";
 import { generateBroadcastSpeech } from "./services/minimaxTts.js";
 import { loadState, saveState, clearState } from "./services/persistence.js";
 import { renderApp } from "./ui/render.js";
@@ -339,6 +339,8 @@ function render() {
             choices: evt.choices ?? [],
             chosenChoiceId: null,
             choiceResultText: null,
+            // Tag event with memory references for UI display
+            memoryReferences: buildPromptMemoryNarrative(state).uiLabels,
           };
           const nextState = {
             ...state,
@@ -397,7 +399,11 @@ function render() {
             ...uiState,
             broadcastStatus: "ready",
             broadcastMessage: "小镇广播已加入动态。",
-            latestBroadcast: bc,
+            latestBroadcast: {
+              ...bc,
+              // Tag UI labels for "引用记忆" display
+              memoryReferences: buildPromptMemoryNarrative(state).uiLabels,
+            },
             // Reset TTS state when new broadcast is generated
             broadcastAudio: makeAudioState({ text: bc.script ?? "", scriptHash: hashBroadcastScript(bc.script ?? "") }),
           };
@@ -416,28 +422,10 @@ function render() {
         const currentHash = hashBroadcastScript(scriptText);
         const ba = uiState.broadcastAudio;
 
-        // If playing → pause
-        if (ba.status === "playing") {
-          handlers.onPauseTts();
-          return;
-        }
+        // If loading or playing, ignore (prevent double generation or interruption)
+        if (ba.status === "loading" || ba.status === "playing") return;
 
-        // If paused → resume
-        if (ba.status === "paused" && ba.audioUrl) {
-          handlers.onPlayTts();
-          return;
-        }
-
-        // If same script already has audio ready, just play it
-        if (ba.status === "ready" && ba.scriptHash === currentHash && ba.audioUrl) {
-          handlers.onPlayTts();
-          return;
-        }
-
-        // If loading, ignore (already generating)
-        if (ba.status === "loading") return;
-
-        // Stop any active audio before generating new one
+        // Stop any active audio before generating
         stopActiveAudio();
 
         uiState = {

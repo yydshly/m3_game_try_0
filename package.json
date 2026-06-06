@@ -28,10 +28,12 @@
     "sync-check": "node scripts/animation-sync-check.mjs",
     "completion-check": "node scripts/completion-feedback-check.mjs",
     "tts-check": "node scripts/tts-check.mjs",
+    "tts-playback-check": "node scripts/tts-playback-check.mjs",
     "memory-reference-check": "node scripts/memory-reference-check.mjs",
     "resident-feedback-check": "node scripts/resident-feedback-check.mjs",
     "desktop-ui-polish-check": "node scripts/desktop-ui-polish-check.mjs",
     "stage-acting-check": "node scripts/stage-acting-check.mjs",
-    "broadcast-tts-check": "node scripts/broadcast-tts-check.mjs"
+    "broadcast-tts-check": "node scripts/broadcast-tts-check.mjs",
+    "memory-continuity-check": "node scripts/memory-continuity-check.mjs"
   }
 }

@@ -1,3 +1,55 @@
+// ── Memory narrative for prompts ────────────────────────────────────────────────────────
+
+/**
+ * @typedef {Object} MemoryNarrative
+ * @property {boolean} hasMemory
+ * @property {string} narrative  - flowing prose for LLM prompts
+ * @property {string[]} uiLabels  - short labels for UI display
+ */
+
+/**
+ * Build a natural-language memory narrative from state.
+ * Used to give M3 a prose context of past events.
+ * @param {object} state
+ * @returns {MemoryNarrative}
+ */
+export function buildPromptMemoryNarrative(state) {
+  const tm = state.townMemory ?? [];
+  const residents = state.residents ?? [];
+  // Last 3 memories
+  const recent = tm.slice(-3);
+  const labels = [];
+  const lines = [];
+
+  recent.forEach((entry) => {
+    if (entry && entry.text && typeof entry.text === "string") {
+      const line = `第${entry.day}天${entry.phase ?? ""}：${entry.text.trim()}`;
+      lines.push(line);
+      if (entry.type === "player-choice" || entry.type === "choice-memory") {
+        labels.push(entry.text.trim().slice(0, 28));
+      }
+    }
+  });
+
+  // Resident memory highlights
+  residents.forEach((r) => {
+    if (r.memory && r.memory.length > 0) {
+      const first = r.memory[0];
+      if (first) {
+        labels.push(`${r.name}：${first.slice(0, 24)}`);
+      }
+    }
+  });
+
+  if (lines.length === 0) {
+    return { hasMemory: false, narrative: "", uiLabels: [] };
+  }
+
+  const narrative = "小镇近期记忆：" + lines.join("；") + "。";
+  const uiLabelsDeduped = [...new Set(labels)].slice(0, 4);
+  return { hasMemory: true, narrative, uiLabels: uiLabelsDeduped };
+}
+
 export async function requestMiniMaxPlan(state) {
   const response = await fetch("./api/minimax/plan", {
     method: "POST",
@@ -163,6 +215,7 @@ function compactEventState(state) {
       residentIds: m.residentIds,
       placeId: m.placeId,
     })),
+    memoryNarrative: buildPromptMemoryNarrative(state),
   };
 }
 
@@ -204,5 +257,6 @@ function compactBroadcastState(state) {
       residentIds: m.residentIds,
       placeId: m.placeId,
     })),
+    memoryNarrative: buildPromptMemoryNarrative(state),
   };
 }

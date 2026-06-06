@@ -121,6 +121,54 @@ export function applyChoiceMemory(state, sourceEvent, choice, currentPhase) {
 }
 
 /**
+ * Build a natural-language narrative of recent town memories for injection into LLM prompts.
+ * Unlike buildTownMemorySummary (list form), this produces flowing prose suitable for broadcast/event.
+ * Pure function — does not mutate state, does not call any API.
+ *
+ * @param {Array} townMemory - Array of townMemory entries
+ * @param {Array} residents - Array of residents with .memory fields
+ * @param {object} options
+ * @returns {{ hasMemory: boolean, narrative: string, uiLabels: string[] }}
+ */
+export function buildMemoryNarrative(townMemory, residents = [], options = {}) {
+  const { maxEntries = 3, maxLength = 200 } = options;
+  const entries = Array.isArray(townMemory) ? townMemory.slice(-maxEntries) : [];
+  const labels = [];
+
+  // Collect choice memories (player choices)
+  const choiceMemories = entries.filter((e) => e.type === "player-choice" && e.text);
+  choiceMemories.forEach((e) => labels.push(e.text));
+
+  // Collect resident memory highlights
+  const residentHighlights = (residents ?? [])
+    .filter((r) => r.memory && r.memory.length > 0)
+    .slice(0, 2)
+    .map((r) => `${r.name}的最近经历：${r.memory[0]?.slice(0, 40) ?? ""}`);
+
+  const allItems = [
+    ...choiceMemories.map((e) => e.text),
+    ...residentHighlights,
+  ];
+
+  if (allItems.length === 0) {
+    return { hasMemory: false, narrative: "", uiLabels: [] };
+  }
+
+  // Build flowing prose
+  const joined = allItems.slice(0, maxEntries).join("；");
+  const narrative = joined.length > maxLength ? joined.slice(0, maxLength - 1) + "……" : joined;
+
+  // Build short UI labels (first 30 chars of each)
+  const uiLabels = allItems.map((t) => t.slice(0, 28) + (t.length > 28 ? "……" : ""));
+
+  return {
+    hasMemory: true,
+    narrative,
+    uiLabels,
+  };
+}
+
+/**
  * Build a human-readable summary of recent town memories for injection into LLM prompts.
  * Pure function — does not mutate state, does not call any API.
  *

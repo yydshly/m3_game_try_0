@@ -77,11 +77,11 @@ console.log("\n── broadcastAudio.status: idle / loading / ready / playing / 
   const state = createInitialState();
   const statuses = ["idle", "loading", "ready", "playing", "paused", "error"];
   const expectedTexts = {
-    idle: "生成语音",
+    idle: "生成语音广播",
     loading: "正在生成…",
     ready: "播放广播",
     playing: "暂停广播",
-    paused: "继续播放",
+    paused: "播放广播",
     error: "重新生成",
   };
   for (const status of statuses) {
@@ -103,15 +103,16 @@ console.log("\n── broadcastAudio.status: idle / loading / ready / playing / 
 // ── Test: loading state disables button (no double-click) ───────────────────
 
 console.log("\n── TTS button disabled rules ──");
-// Only loading should be disabled; all other states are clickable
+// idle/error: enabled (can generate/retry)
+// loading/ready/playing/paused: disabled (audio already exists or generation in progress)
 {
   const state = createInitialState();
   const testCases = [
     { status: "idle",     shouldBeDisabled: false, label: "idle" },
     { status: "loading",   shouldBeDisabled: true,  label: "loading" },
-    { status: "ready",    shouldBeDisabled: false, label: "ready" },
-    { status: "playing",  shouldBeDisabled: false, label: "playing" },
-    { status: "paused",   shouldBeDisabled: false, label: "paused" },
+    { status: "ready",    shouldBeDisabled: true, label: "ready" },
+    { status: "playing",  shouldBeDisabled: true, label: "playing" },
+    { status: "paused",   shouldBeDisabled: true, label: "paused" },
     { status: "error",    shouldBeDisabled: false, label: "error" },
   ];
   for (const tc of testCases) {
@@ -135,9 +136,9 @@ console.log("\n── TTS button disabled rules ──");
   }
 }
 
-// ── Test: playing state shows 暂停广播 and is clickable ─────────────────────
+// ── Test: playing state shows 暂停广播 and is disabled ─────────────────────
 
-console.log("\n── playing state: shows 暂停广播 and is NOT disabled ──");
+console.log("\n── playing state: shows 暂停广播 and is disabled ──");
 {
   const state = createInitialState();
   root.innerHTML = "";
@@ -153,12 +154,13 @@ console.log("\n── playing state: shows 暂停广播 and is NOT disabled ─�
   }));
   assert(root.innerHTML.includes("暂停广播"), "playing shows 暂停广播");
   const btnMatch = root.innerHTML.match(/<button[^>]*data-action="generate-tts"[^>]*>/);
-  assert(btnMatch !== null && !btnMatch[0].includes("disabled"), "playing button is NOT disabled");
+  // TTS button is disabled during playback to prevent interruption
+  assert(btnMatch !== null && btnMatch[0].includes("disabled"), "playing button is disabled");
 }
 
-// ── Test: paused state shows 继续播放 and is clickable ────────────────────
+// ── Test: paused state shows 播放广播 and is disabled ────────────────────
 
-console.log("\n── paused state: shows 继续播放 and is NOT disabled ──");
+console.log("\n── paused state: shows 播放广播 and is disabled ──");
 {
   const state = createInitialState();
   root.innerHTML = "";
@@ -172,9 +174,10 @@ console.log("\n── paused state: shows 继续播放 and is NOT disabled ─�
       scriptHash: "abc",
     },
   }));
-  assert(root.innerHTML.includes("继续播放"), "paused shows 继续播放");
+  // Paused shows "播放广播" as status label (TTS button disabled; resume via play button)
+  assert(root.innerHTML.includes("播放广播"), "paused shows 播放广播");
   const btnMatch = root.innerHTML.match(/<button[^>]*data-action="generate-tts"[^>]*>/);
-  assert(btnMatch !== null && !btnMatch[0].includes("disabled"), "paused button is NOT disabled");
+  assert(btnMatch !== null && btnMatch[0].includes("disabled"), "paused button is disabled");
 }
 
 // ── Test: no script → button disabled ────────────────────────────────────

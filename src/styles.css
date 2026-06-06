@@ -1454,6 +1454,12 @@ button, select {
   font-weight: 800;
 }
 
+.panel-badge--tts {
+  background: var(--blue-soft);
+  color: var(--blue);
+  margin-left: 4px;
+}
+
 /* ============================================================
    Action Buttons — Game Control Style
    ============================================================ */
@@ -1997,6 +2003,17 @@ button, select {
   line-height: 1.4;
 }
 
+.m3-event__memory-refs {
+  margin: 6px 0 0;
+  padding: 3px 10px;
+  border-radius: 8px;
+  background: var(--purple-soft);
+  border-left: 2px solid var(--purple);
+  font-size: 0.72rem;
+  color: var(--purple);
+  font-weight: 600;
+}
+
 /* ── Event Choices ── */
 .m3-event__choices {
   margin-top: 10px;
@@ -2317,6 +2334,16 @@ button, select {
   font-size: 0.72rem;
   color: var(--muted);
   line-height: 1.4;
+}
+
+.atmosphere-broadcast-preview__memory-refs {
+  margin: 4px 0 0;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  color: var(--purple);
+  font-weight: 600;
+  background: var(--purple-soft);
 }
 
 /* ============================================================

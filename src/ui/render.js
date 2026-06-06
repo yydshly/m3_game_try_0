@@ -396,23 +396,10 @@ function renderAtmospherePanel(state, uiState) {
   const ba = uiState.broadcastAudio ?? { status: "idle", text: "", audioUrl: null, error: null };
   // Normalize generating → loading for backward compatibility with existing tests
   const baStatus = ba.status === "generating" ? "loading" : (ba.status ?? "idle");
-  const ttsStatusLabels = {
-    idle: "🔊",
-    loading: "🔊",
-    ready: "🔊",
-    playing: "⏸️",
-    paused: "▶️",
-    error: "⚠️",
-  };
-  const ttsStatusText = {
-    idle: "生成语音",
-    loading: "正在生成…",
-    ready: "播放广播",
-    playing: "暂停广播",
-    paused: "继续播放",
-    error: "重新生成",
-  }[baStatus] ?? "生成语音";
 
+  // TTS button: only handles generation (idle) and re-generation (error)
+  // Disabled when audio already exists (ready/paused/playing) to prevent double-generation
+  const ttsButtonDisabled = (baStatus === "loading" || baStatus === "ready" || baStatus === "playing" || baStatus === "paused") ? "disabled" : "";
   const ttsButtonClass = {
     idle: "button--broadcast",
     loading: "button--ghost",
@@ -421,15 +408,51 @@ function renderAtmospherePanel(state, uiState) {
     paused: "button--broadcast",
     error: "button--broadcast",
   }[baStatus] ?? "button--broadcast";
+  const ttsButtonLabel = {
+    idle: "生成语音广播",
+    loading: "正在生成…",
+    ready: "播放广播",
+    playing: "暂停广播",
+    paused: "播放广播",
+    error: "重新生成",
+  }[baStatus] ?? "生成语音广播";
+  const ttsButtonIcon = {
+    idle: "🔊",
+    loading: "🔊",
+    ready: "▶️",
+    playing: "⏸️",
+    paused: "▶️",
+    error: "⚠️",
+  }[baStatus] ?? "🔊";
 
-  // Only loading is disabled; playing/paused/ready/error are all clickable (pause/resume/replay)
-  const ttsDisabled = baStatus === "loading" ? "disabled" : "";
-  const hasAudio = (baStatus === "ready" || baStatus === "paused") && ba.audioUrl;
+  // Play button: visible when audio exists, not loading, and not currently playing
+  // (allows replay after audio ended or resume after pause — not shown during playback)
+  const hasAudio = ba.audioUrl && baStatus !== "loading";
+  const showPlayButton = hasAudio && baStatus !== "playing";
+  const playButtonLabel = baStatus === "paused" ? "继续" : "播放";
   const hasError = baStatus === "error" && ba.error;
 
-  // Friendly error message — never expose API keys or stack traces
+  // Friendly error message — never expose API keys or trace IDs
   const friendlyError = hasError
-    ? ba.error.replace(/api[_-]?key.*$/i, "API 配置异常").replace(/trace[_\s]?id.*$/i, "").replace(/\(trace_id:.*?\)/i, "").trim()
+    ? ba.error
+        // Strip trace_id / trace-id labels and their values
+        .replace(/trace[_-]?id[:\s][^,;\)]*/gi, "[已隐藏]")
+        // Replace API key patterns: sk-..., api_key, tp-..., and generic key-like tokens
+        .replace(/\b(sk|tp|api[_-]?key)[\w-]*/gi, "[已隐藏]")
+        // Collapse any resulting brackets or artifacts
+        .replace(/\s+/g, " ")
+        .trim()
+    : "";
+
+  // TTS status indicator for the panel badge
+  const ttsStatusLine = baStatus !== "idle"
+    ? {
+        loading: "语音生成中…",
+        ready: "可播放",
+        playing: "播放中…",
+        paused: "已暂停",
+        error: "语音生成失败",
+      }[baStatus] ?? ""
     : "";
 
   return `
@@ -437,6 +460,7 @@ function renderAtmospherePanel(state, uiState) {
       <div class="panel__head">
         <h2>🎧 小镇氛围</h2>
         <span class="panel-badge">${escapeHtml(statusText)}</span>
+        ${latestBc && ttsStatusLine ? `<span class="panel-badge panel-badge--tts">🎙️ ${escapeHtml(ttsStatusLine)}</span>` : ""}
       </div>
       ${latestBc ? `
         <div class="atmosphere-broadcast-preview">
@@ -448,20 +472,22 @@ function renderAtmospherePanel(state, uiState) {
             <span class="atmosphere-tag">📍 ${escapeHtml(placeMap[latestBc.placeId] ?? "广场")}</span>
           </div>
           ${latestBc.musicPrompt ? `<p class="atmosphere-broadcast-preview__music">🎵 ${escapeHtml(latestBc.musicPrompt.slice(0, 80))}</p>` : ""}
+          ${(latestBc.memoryReferences && latestBc.memoryReferences.length > 0) ?
+            `<p class="atmosphere-broadcast-preview__memory-refs">📖 ${escapeHtml(latestBc.memoryReferences.slice(0, 2).join(" · "))}</p>` : ""}
         </div>
         <div class="atmosphere-tts-row">
           <button
             class="button ${ttsButtonClass}"
             type="button"
             data-action="generate-tts"
-            ${ttsDisabled}
+            ${ttsButtonDisabled}
             title="${friendlyError || ""}"
           >
-            ${ttsStatusLabels[baStatus] ?? "🔊"} ${escapeHtml(ttsStatusText)}
+            ${ttsButtonIcon} ${escapeHtml(ttsButtonLabel)}
           </button>
-          ${hasAudio && baStatus !== "ready" ? `
+          ${showPlayButton ? `
             <button class="button button--ghost" type="button" data-action="play-tts">
-              ▶️ 播放
+              ▶️ ${escapeHtml(playButtonLabel)}
             </button>
           ` : ""}
           ${hasError && friendlyError ? `<span class="tts-error-hint">⚠️ ${escapeHtml(friendlyError)}</span>` : ""}
@@ -901,6 +927,8 @@ function renderM3EventItem(event, residents, latestClass = "") {
         <span class="m3-event__place">📍 ${escapeHtml(placeName)}</span>
         ${participantHtml ? `<span class="m3-event__residents">👥 ${participantHtml}</span>` : ""}
       </div>
+      ${event.memoryReferences && event.memoryReferences.length > 0 ?
+        `<p class="m3-event__memory-refs">📖 ${escapeHtml(event.memoryReferences.slice(0, 2).join(" · "))}</p>` : ""}
       ${event.suggestedFollowUp ? `<p class="m3-event__followup">💡 ${escapeHtml(event.suggestedFollowUp)}</p>` : ""}
       ${choicesHtml}
     </article>
