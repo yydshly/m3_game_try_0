@@ -951,7 +951,7 @@ function renderCharacterVoiceIndicator(resident, beat, voiceState, ttsAudios) {
   return `<button class="stage-character__voice-btn stage-character__voice-btn--idle" type="button" data-action="play-mimo-tts" data-audio-key="${escapeHtml(audioKey)}" data-text="${escapeHtml(beat.dialogue ?? '')}" data-scene="resident_dialogue" data-resident-id="${escapeHtml(resident.id)}" data-beat-id="${escapeHtml(beat.id ?? '')}" title="播放 ${escapeHtml(resident.name)} 的对白">🔈</button>`;
 }
 
-function renderStageCharacter(resident, position, taskLabel, status, isSelected, anim, completionResult, moodView, activeScenario, beat, residentVoiceInteraction = null, ttsAudios = {}, residentConversation = null, conversationRole = null, choiceReaction = null) {
+function renderStageCharacter(resident, position, taskLabel, status, isSelected, anim, completionResult, moodView, activeScenario, beat, residentVoiceInteraction = null, ttsAudios = {}, residentConversation = null, conversationRole = null, isChoiceAffected = false, choiceReaction = null) {
   const toX = position.x;
   const toY = position.y;
   const selectedClass = isSelected ? " stage-character--selected" : "";
@@ -1025,7 +1025,7 @@ function renderStageCharacter(resident, position, taskLabel, status, isSelected,
   const participantClass = isParticipant ? " stage-character--conversation-participant" : "";
 
   // Choice reaction: shown on residents affected by a player choice (context label shows place+reaction)
-  const choiceAffectedClass = choiceReaction ? " stage-character--choice-affected" : "";
+  const choiceAffectedClass = isChoiceAffected ? " stage-character--choice-affected" : "";
   const choiceReactionBubble = choiceReaction
     ? `<span class="stage-character__choice-reaction">${escapeHtml(choiceReaction.contextLabel ?? choiceReaction.reactionText)}</span>`
     : "";
@@ -1293,7 +1293,9 @@ function renderTownStage(state, uiState, handlers = {}) {
         : null;
       // Choice reaction: only primary resident (hasBubble) gets the bubble; others are highlighted via affectedResidentIds
       const allAffected = choiceWorldEffect.affectedResidents ?? [];
-      const choiceReaction = (!isParticipant && !anim) ? allAffected.find((r) => r.hasBubble && r.residentId === resident.id) ?? null : null;
+      const affectedResidentIds = new Set(allAffected.map((r) => r.residentId));
+      const isChoiceAffected = !isParticipant && !anim && affectedResidentIds.has(resident.id);
+      const choiceReaction = isChoiceAffected ? allAffected.find((r) => r.hasBubble && r.residentId === resident.id) ?? null : null;
       return renderStageCharacter(
         resident,
         pos,
@@ -1309,6 +1311,7 @@ function renderTownStage(state, uiState, handlers = {}) {
         uiState.ttsAudios,
         conversationForChar,
         { isConversationActive: conversationActive, isSpeaker, isListener, isParticipant },
+        isChoiceAffected,
         choiceReaction,
       );
     })

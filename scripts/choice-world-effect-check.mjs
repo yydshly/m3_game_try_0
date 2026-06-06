@@ -147,8 +147,8 @@ console.log("\n── stage-character--choice-affected ──");
 {
   const fs = await import("fs");
   const content = fs.readFileSync(resolve(SRC, "ui/render.js"), "utf8");
-  assert(content.includes("choiceReaction = null)"), "choiceReaction param added to renderStageCharacter");
-  assert(content.includes("choiceAffectedClass = choiceReaction ?"), "choiceAffectedClass derived");
+  assert(content.includes("isChoiceAffected = false, choiceReaction = null)"), "isChoiceAffected and choiceReaction params in renderStageCharacter");
+  assert(content.includes("choiceAffectedClass = isChoiceAffected ?"), "choiceAffectedClass derived from isChoiceAffected");
   assert(content.includes("stage-character--choice-affected"), "choice-affected class applied");
   assert(content.includes("stage-character__choice-reaction"), "choice-reaction bubble class exists");
 }
@@ -563,13 +563,24 @@ console.log("\n── renderApp: no undefined after choice ──");
       createdAt: Date.now(),
     },
   };
-  renderMod.renderApp(mockRoot, state, uiState);
+  renderMod.renderApp(mockRoot, state, {}, uiState);
   const html = mockRoot.innerHTML;
+
+  // Basic safety nets
   assert(!html.includes(">undefined<"), "no >undefined< in HTML after choice");
   assert(!html.includes(" undefined "), "no ' undefined ' in text nodes after choice");
   assert(!html.includes(">null<"), "no >null< in HTML after choice");
   assert(!html.includes(" null "), "no ' null ' in text nodes after choice");
   assert(!html.includes("✅ undefined"), "no ✅ undefined completion banner");
+
+  // Bubble count: at most 1 reaction bubble (primary resident only)
+  const bubbleMatches = html.match(/stage-character__choice-reaction/g) ?? [];
+  assert(bubbleMatches.length <= 1, `at most 1 choice reaction bubble in HTML (got ${bubbleMatches.length})`);
+
+  // Highlight count: >= affectedResidents.length (all affected get highlighted)
+  const highlightMatches = html.match(/stage-character--choice-affected/g) ?? [];
+  // We have 2 residentReactions in uiState
+  assert(highlightMatches.length >= 2, `≥2 choice-affected highlights in HTML (got ${highlightMatches.length})`);
 }
 
 // ── Results ────────────────────────────────────────────────────────────────────
