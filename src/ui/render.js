@@ -564,34 +564,55 @@ function renderEventDirectorStatus(uiState) {
 
 // ── Resident Dialogue Panel ──────────────────────────────────────────────────────
 
-function renderResidentDialoguePanel(beats, ttsAudios = {}, residentVoiceInteraction = null) {
+/**
+ * Render the right-panel resident dialogue/conversation record.
+ * No TTS buttons here — voice playback is handled by the compact chip in town-stage.
+ * Shows either a conversation queue (from residentConversation) or scene beats.
+ * @param {object} params
+ * @param {Array} [params.beats] - scene beats (fallback when no conversation active)
+ * @param {object} [params.conversationQueue] - conversation queue from residentConversation
+ * @param {number} [params.currentLineIndex] - current conversation line index
+ * @param {string} [params.visibleText] - current typewriter text
+ */
+function renderResidentDialoguePanel({ beats = [], conversationQueue = [], currentLineIndex = 0, visibleText = "" } = {}) {
+  // Prefer active conversation queue if available
+  if (conversationQueue && conversationQueue.length > 0) {
+    const itemsHtml = conversationQueue
+      .map((line, idx) => {
+        const isCurrent = idx === currentLineIndex;
+        const isPast = idx < currentLineIndex;
+        // Show the typewriter visibleText for current line, full text for past lines
+        const displayText = isCurrent ? (visibleText || line.text) : (isPast ? line.text : "");
+        if (!displayText) return ""; // Don't show future lines
+        return `<div class="dialogue-beat ${isCurrent ? "dialogue-beat--current" : ""}">
+          <span class="dialogue-beat__name">${escapeHtml(line.speakerName ?? "居民")}：</span>
+          <span class="dialogue-beat__text">${escapeHtml(displayText)}</span>
+        </div>`;
+      })
+      .join("");
+
+    if (!itemsHtml) return "";
+    return `
+      <div class="panel dialogue-beats-panel">
+        <div class="panel__head">
+          <h2>💬 居民对话</h2>
+        </div>
+        <div class="dialogue-beats-list">
+          ${itemsHtml}
+        </div>
+      </div>
+    `;
+  }
+
+  // Fallback: show scene beats as a compact record (no TTS buttons)
   if (!Array.isArray(beats) || beats.length === 0) return "";
+
   const itemsHtml = beats
     .filter((b) => b?.dialogue)
     .map((beat) => {
-      const audioKey = `resident_dialogue:${beat.residentId}:${beat.id}`;
-      const ta = ttsAudios[audioKey] ?? {};
-      const isPlaying = ta.status === "playing";
-      const isPaused = ta.status === "paused";
-      const isReady = ta.status === "ready";
-      const isLoading = ta.status === "loading";
-      const isError = ta.status === "error";
-      const hasAudio = ta.audioUrl && !isLoading;
-
-      const ttsBtn = isLoading
-        ? `<button class="mimo-tts-btn mimo-tts-btn--loading" disabled>🔊…</button>`
-        : isPlaying
-        ? `<button class="mimo-tts-btn mimo-tts-btn--playing" data-action="pause-mimo-tts" data-audio-key="${escapeHtml(audioKey)}">⏸️</button>`
-        : isPaused || isReady
-        ? `<button class="mimo-tts-btn mimo-tts-btn--ready" data-action="resume-mimo-tts" data-audio-key="${escapeHtml(audioKey)}">▶️</button>`
-        : isError
-        ? `<button class="mimo-tts-btn mimo-tts-btn--error" data-action="play-mimo-tts" data-audio-key="${escapeHtml(audioKey)}" data-text="${escapeHtml(beat.dialogue)}" data-scene="resident_dialogue" data-resident-id="${escapeHtml(beat.residentId)}" data-beat-id="${escapeHtml(beat.id)}">⚠️</button>`
-        : `<button class="mimo-tts-btn" data-action="play-mimo-tts" data-audio-key="${escapeHtml(audioKey)}" data-text="${escapeHtml(beat.dialogue)}" data-scene="resident_dialogue" data-resident-id="${escapeHtml(beat.residentId)}" data-beat-id="${escapeHtml(beat.id)}">🔈</button>`;
-
       return `<div class="dialogue-beat">
-        <span class="dialogue-beat__name">${escapeHtml(beat.residentName)}：</span>
+        <span class="dialogue-beat__name">${escapeHtml(beat.residentName ?? "居民")}：</span>
         <span class="dialogue-beat__text">${escapeHtml(beat.dialogue)}</span>
-        ${ttsBtn}
       </div>`;
     })
     .join("");
@@ -1026,11 +1047,14 @@ function renderTaskCompletionPanel(taskFeedback) {
   </aside>`;
 }
 
-function renderTownStage(state, uiState) {
+function renderTownStage(state, uiState, handlers = {}) {
   const digest = buildStageDigest(state);
   const phase = getCurrentPhase(state);
   const activeAnimations = uiState.activeTaskAnimations ?? [];
   const completionFeedback = uiState.completionFeedback;
+
+  // Build voice playback view model
+  const voiceViewModel = buildVoicePlaybackView(uiState.currentVoicePlayback ?? null);
 
   // Build a map of completion results by residentId
   const completionByResidentId = new Map(
@@ -1074,6 +1098,12 @@ function renderTownStage(state, uiState) {
         activeAnimations,
       });
       const beat = (uiState.residentSceneBeats ?? []).find((b) => b.residentId === resident.id) ?? null;
+      // Only pass conversation info if this resident is the current speaker (for bubble noise reduction)
+      const conversationActive = uiState.residentConversation?.status === "playing" || uiState.residentConversation?.status === "paused";
+      const currentSpeakerId = uiState.residentConversation?.queue?.[uiState.residentConversation?.currentIndex]?.speakerId ?? null;
+      const conversationForChar = conversationActive && resident.id === currentSpeakerId
+        ? uiState.residentConversation
+        : null;
       return renderStageCharacter(
         resident,
         pos,
@@ -1087,7 +1117,7 @@ function renderTownStage(state, uiState) {
         beat,
         uiState.residentVoiceInteraction,
         uiState.ttsAudios,
-        uiState.residentConversation,
+        conversationForChar,
       );
     })
     .join("");
@@ -1116,6 +1146,7 @@ function renderTownStage(state, uiState) {
         <p>${escapeHtml(digest)}</p>
       </aside>
       ${renderTaskCompletionPanel(taskFeedback)}
+      ${renderVoicePlaybackChip(voiceViewModel, handlers)}
       <div class="stage-legend" aria-hidden="true">
         <span class="stage-legend__item"><i class="status-dot status-dot--happy"></i>开心</span>
         <span class="stage-legend__item"><i class="status-dot status-dot--steady"></i>平稳</span>
@@ -1801,7 +1832,6 @@ export function renderApp(root, state, handlers, uiState = {}) {
   root.innerHTML = `
     <div class="shell">
       ${renderGameHud(state)}
-      ${renderVoicePlaybackBar(safeUiState.currentVoicePlayback, safeHandlers)}
 
       <main class="layout">
         <div class="left-col">
@@ -1815,7 +1845,7 @@ export function renderApp(root, state, handlers, uiState = {}) {
               <h2>五大地点</h2>
             </div>
           </div>
-          ${renderTownStage(state, safeUiState)}
+          ${renderTownStage(state, safeUiState, safeHandlers)}
           <div class="location-codex">
             ${locations.map((location) => renderLocationCard(state, location)).join("")}
           </div>
@@ -1824,7 +1854,12 @@ export function renderApp(root, state, handlers, uiState = {}) {
           ${renderLlmStatus(safeUiState)}
           ${renderEventDirectorStatus(safeUiState)}
           ${renderAtmospherePanel(state, safeUiState)}
-          ${renderResidentDialoguePanel(safeUiState.residentSceneBeats, safeUiState.ttsAudios, safeUiState.residentVoiceInteraction)}
+          ${renderResidentDialoguePanel({
+            beats: safeUiState.residentSceneBeats,
+            conversationQueue: safeUiState.residentConversation?.queue ?? [],
+            currentLineIndex: safeUiState.residentConversation?.currentIndex ?? 0,
+            visibleText: safeUiState.residentConversation?.visibleText ?? "",
+          })}
           ${renderChoiceAftermath(safeUiState.choiceAftermath, safeUiState.residentVoiceInteraction)}
           ${renderSpotlight(state, safeUiState)}
         </aside>
@@ -1914,74 +1949,115 @@ function renderVoiceDebugPanel() {
   </div>`;
 }
 
-// ── Voice Playback Bar ─────────────────────────────────────────────────────────────────
+// ── Voice Playback View Model ───────────────────────────────────────────────────────
 
-const VOICE_PLAYBACK_LABELS = {
-  town_broadcast:       { title: "小镇广播",    icon: "📻" },
-  resident_dialogue:    { title: "居民对白",    icon: "💬" },
-  conversation:        { title: "居民对话",    icon: "💬" },
-  event_prompt:        { title: "事件提示",    icon: "🎭" },
-  completion_feedback: { title: "任务完成",    icon: "✅" },
-  day_opening:        { title: "今日场景",    icon: "🏠" },
+/**
+ * Build a view model for the voice playback chip.
+ * Normalizes currentVoicePlayback into the shape needed by the compact chip.
+ * @param {object|null} cvp - currentVoicePlayback state
+ * @returns {object} view model for the compact chip
+ */
+export function buildVoicePlaybackView(cvp) {
+  if (!cvp || cvp.status === "idle") {
+    return { visible: false, type: "", status: "idle", speakerName: "", targetName: "", text: "", canPause: false, canResume: false, canStop: false };
+  }
+
+  const status = cvp.status ?? "loading";
+  const sourceType = cvp.sourceType ?? cvp.scene ?? "";
+  const isConversation = sourceType === "conversation" || sourceType === "resident-dialogue";
+  const isBroadcast = sourceType === "town_broadcast";
+
+  // Determine chip title and subtitle based on source type
+  let speakerName = "";
+  let targetName = "";
+  let text = cvp.textPreview ?? "";
+
+  if (isConversation) {
+    speakerName = cvp.title ?? "";
+    targetName = cvp.subtitle?.replace(/^对\s*/, "") ?? "";
+  } else if (isBroadcast) {
+    speakerName = "小镇广播";
+    targetName = "";
+    text = cvp.textPreview ?? "";
+  } else {
+    speakerName = cvp.title ?? cvp.sourceType ?? "语音";
+    targetName = "";
+    text = cvp.textPreview ?? "";
+  }
+
+  return {
+    visible: true,
+    type: sourceType,
+    status,
+    speakerName,
+    targetName,
+    text,
+    canPause: status === "playing",
+    canResume: status === "paused",
+    canStop: status === "playing" || status === "paused",
+    error: status === "error" ? (cvp.error || "播放失败") : "",
+  };
+}
+
+// ── Voice Compact Playback Chip ─────────────────────────────────────────────────────
+
+const VOICE_PLAYBACK_ICONS = {
+  town_broadcast: "📻",
+  conversation: "💬",
+  "resident-dialogue": "💬",
+  event_prompt: "🎭",
+  completion_feedback: "✅",
+  day_opening: "🏠",
+  default: "🔊",
 };
 
 /**
- * Render the global voice playback bar shown at the top of the page.
- * Always renders a fixed-height slot; bar visibility is controlled via CSS class.
- * @param {object|null} cvp
+ * Render the compact voice playback chip inside town-stage.
+ * This is an absolute-positioned overlay — does NOT push layout.
+ * @param {object} viewModel - output of buildVoicePlaybackView()
  * @param {object} handlers
  */
-function renderVoicePlaybackBar(cvp, handlers) {
-  const isIdle = !cvp || cvp.status === "idle";
-  const status = cvp?.status ?? "idle";
+function renderVoicePlaybackChip(viewModel, handlers) {
+  if (!viewModel.visible) {
+    return `<div class="voice-playback-chip voice-playback-chip--idle" aria-live="polite" role="status"></div>`;
+  }
 
-  const label = VOICE_PLAYBACK_LABELS[cvp?.sourceType] || { title: cvp?.title || cvp?.scene || "语音", icon: "🔊" };
-  const icon = label.icon;
-  // Prefer cvp.title (speakerName for conversation) over label.title
-  const titleText = (cvp?.title && cvp.title !== cvp?.scene) ? cvp.title : label.title;
+  const { status, speakerName, targetName, text, canPause, canResume, canStop, error, type } = viewModel;
 
-  const statusClass = isIdle ? "voice-playback-bar--idle" : ({
-    loading: "voice-playback-bar--loading",
-    playing: "voice-playback-bar--playing",
-    paused:  "voice-playback-bar--paused",
-    error:   "voice-playback-bar--error",
-  }[status] || "voice-playback-bar--loading");
+  const statusClass = ({
+    loading: "voice-playback-chip--loading",
+    playing: "voice-playback-chip--playing",
+    paused:  "voice-playback-chip--paused",
+    error:   "voice-playback-chip--error",
+  }[status] || "voice-playback-chip--loading");
 
-  const loadingLabel = status === "loading" ? "正在生成语音…" : "";
-  const errorLabel = status === "error" ? (cvp?.error || "播放失败") : "";
-  const subtitle = cvp?.subtitle ?? "";
-  const textPreview = cvp?.textPreview ?? "";
+  const icon = VOICE_PLAYBACK_ICONS[type] ?? VOICE_PLAYBACK_ICONS.default;
 
-  const showPause = status === "playing";
-  const showResume = status === "paused";
-  const showStop = status === "playing" || status === "paused";
+  const subtitleHtml = targetName
+    ? `<span class="voice-playback-chip__subtitle">对 ${escapeHtml(targetName)} 说：</span>`
+    : `<span class="voice-playback-chip__subtitle">${speakerName ? "" : "语音播放中"}</span>`;
 
-  const statusTitle = {
-    loading: loadingLabel,
-    playing: "正在播放",
-    paused:  "已暂停",
-    error:   errorLabel,
-  }[status] ?? titleText;
+  const textHtml = text
+    ? `<span class="voice-playback-chip__text">${escapeHtml(text)}</span>`
+    : "";
+
+  const titleHtml = speakerName && type !== "town_broadcast"
+    ? `<span class="voice-playback-chip__title">${escapeHtml(speakerName)}</span>`
+    : "";
 
   return `
-    <div class="voice-playback-slot" aria-live="polite">
-      <div class="voice-playback-bar ${statusClass}" role="status">
-        <div class="voice-playback-bar__main">
-          <span class="voice-playback-bar__icon">${icon}</span>
-          <div class="voice-playback-bar__info">
-            <div class="voice-playback-bar__title">
-              ${statusTitle}
-              ${subtitle ? `<span class="voice-playback-bar__subtitle">${subtitle}</span>` : ""}
-            </div>
-            ${!isIdle && status !== "loading" && textPreview ? `<div class="voice-playback-bar__text">${textPreview}</div>` : ""}
-            ${status === "error" ? `<div class="voice-playback-bar__error">${errorLabel}</div>` : ""}
-          </div>
-        </div>
-        <div class="voice-playback-bar__actions">
-          ${showPause  ? `<button class="button--ghost button--sm" data-action="voice-pause">⏸️ 暂停</button>` : ""}
-          ${showResume ? `<button class="button--ghost button--sm" data-action="voice-resume">▶️ 继续</button>` : ""}
-          ${showStop   ? `<button class="button--ghost button--sm" data-action="voice-stop">⏹️ 停止</button>` : ""}
-        </div>
+    <div class="voice-playback-chip ${statusClass}" aria-live="polite" role="status">
+      <span class="voice-playback-chip__icon">${icon}</span>
+      <div class="voice-playback-chip__main">
+        ${titleHtml}
+        ${subtitleHtml}
+        ${textHtml}
+        ${status === "error" ? `<span class="voice-playback-chip__error">${escapeHtml(error)}</span>` : ""}
+      </div>
+      <div class="voice-playback-chip__actions">
+        ${canPause  ? `<button class="btn-chip" data-action="voice-pause">⏸️</button>` : ""}
+        ${canResume ? `<button class="btn-chip" data-action="voice-resume">▶️</button>` : ""}
+        ${canStop   ? `<button class="btn-chip" data-action="voice-stop">⏹️</button>` : ""}
       </div>
     </div>
   `;

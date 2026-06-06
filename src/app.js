@@ -10,6 +10,7 @@ import { loadState, saveState, clearState } from "./services/persistence.js";
 import { renderApp } from "./ui/render.js";
 import { phases } from "./data/seed.js";
 import { buildResidentDialogueContext, buildFallbackResidentSceneBeats, requestMiniMaxResidentDialogues, buildBeatsSummary } from "./services/residentDialogue.js";
+import { buildResidentDialogueTurns } from "./services/dialogueGenerator.js";
 
 const root = document.querySelector("#app");
 let state = loadState();
@@ -159,8 +160,8 @@ function makeVoicePlaybackState(overrides = {}) {
 // ── Resident Conversation ─────────────────────────────────────────────────────
 
 /**
- * Build a resident conversation queue using local templates (no M3 call).
- * Returns 3-5 short dialogue lines based on scenario, location, or fallback.
+ * Build a resident conversation queue using scene-aware dialogue turns (no M3 call).
+ * Returns 3-6 short dialogue lines based on scenario, task, location, and phase.
  * @param {object} state - game state
  * @param {object} conversationState - residentConversation uiState slice
  * @returns {Array} queue of conversation lines
@@ -169,149 +170,32 @@ function buildResidentConversationQueue(state, conversationState) {
   const residents = state.residents ?? [];
   if (residents.length < 2) return [];
 
-  const activeScenario = state.activeScenario ?? null;
-  const beats = state.residentSceneBeats ?? [];
-
-  // Collect pairs: prefer same-location pairs, then scenario-relevant residents
-  const byLocation = {};
-  for (const r of residents) {
-    const loc = r.locationId ?? "";
-    if (!byLocation[loc]) byLocation[loc] = [];
-    byLocation[loc].push(r);
-  }
-  const sameLocPairs = Object.values(byLocation).filter(arr => arr.length >= 2);
-
-  /** @type {Array<{speaker: object, target: object}>} */
-  let pairs = [];
-
-  if (sameLocPairs.length > 0) {
-    for (const group of sameLocPairs) {
-      for (let i = 0; i < group.length; i++) {
-        for (let j = i + 1; j < group.length; j++) {
-          pairs.push({ speaker: group[i], target: group[j] });
-          if (pairs.length >= 3) break;
-        }
-        if (pairs.length >= 3) break;
-      }
-      if (pairs.length >= 3) break;
-    }
-  }
-
-  // Fallback: use first two residents
-  if (pairs.length < 2) {
-    pairs = [
-      { speaker: residents[0], target: residents[1] },
-      { speaker: residents[1], target: residents[0] },
-    ];
-  }
-
-  // Scene-based templates (structured turns: each turn knows who says it)
-  // from/target are relative to the template pair — "speaker" = first person of the pair, "target" = second
-  const TEMPLATES = {
-    garden_day: [
-      { from: "speaker", to: "target", text: "花园这边的架子有点松了。" },
-      { from: "target", to: "speaker", text: "浇水的时候小心点。" },
-      { from: "target", to: "speaker", text: "你看这棵发芽了！" },
-      { from: "speaker", to: "target", text: "真的呢，要好好照顾。" },
-    ],
-    repair_moment: [
-      { from: "speaker", to: "target", text: "这个工具放哪里？" },
-      { from: "target", to: "speaker", text: "在那边的架子上。" },
-      { from: "speaker", to: "target", text: "谢谢！" },
-      { from: "target", to: "speaker", text: "不客气，一起加油。" },
-    ],
-    market_errand: [
-      { from: "speaker", to: "target", text: "食材准备好了吗？" },
-      { from: "target", to: "speaker", text: "还差一点点。" },
-      { from: "speaker", to: "target", text: "那我去采购吧。" },
-      { from: "target", to: "speaker", text: "好的，辛苦了。" },
-    ],
-    quiet_reading: [
-      { from: "speaker", to: "target", text: "这本书真不错。" },
-      { from: "target", to: "speaker", text: "是啊，很安静的感觉。" },
-      { from: "speaker", to: "target", text: "借你看一下。" },
-      { from: "target", to: "speaker", text: "好的，谢谢。" },
-    ],
-    neighbor_help: [
-      { from: "speaker", to: "target", text: "需要帮忙吗？" },
-      { from: "target", to: "speaker", text: "太好了，一起吧。" },
-      { from: "target", to: "speaker", text: "分工合作更快。" },
-      { from: "speaker", to: "target", text: "嗯，有伴真好。" },
-    ],
-    festival_prepare: [
-      { from: "speaker", to: "target", text: "节日布置好了吗？" },
-      { from: "target", to: "speaker", text: "快了，一起看看。" },
-      { from: "target", to: "speaker", text: "这个位置不错。" },
-      { from: "speaker", to: "target", text: "嗯，很温馨。" },
-    ],
-    weather_shift: [
-      { from: "speaker", to: "target", text: "好像要下雨了。" },
-      { from: "target", to: "speaker", text: "那我们赶紧回去吧。" },
-      { from: "speaker", to: "target", text: "好的，去收东西。" },
-      { from: "target", to: "speaker", text: "带把伞吧。" },
-    ],
-    resident_mood: [
-      { from: "speaker", to: "target", text: "今天感觉怎么样？" },
-      { from: "target", to: "speaker", text: "还不错，你呢？" },
-      { from: "speaker", to: "target", text: "我也挺好的。" },
-      { from: "target", to: "speaker", text: "那就好，一起加油。" },
-    ],
-  };
-
-  // Direct mapping: activeScenario.id === template key (English ids)
-  let templateKey = "resident_mood";
-  if (activeScenario?.id && TEMPLATES[activeScenario.id]) {
-    templateKey = activeScenario.id;
-  }
-
-  const turns = TEMPLATES[templateKey] ?? TEMPLATES.resident_mood;
-
-  // Use beats for dynamic names if available
-  const beatMap = {};
-  for (const beat of beats) {
-    if (beat?.residentId && beat?.dialogue) {
-      beatMap[beat.residentId] = beat;
-    }
-  }
-
-  // Rotation seed: vary template start based on day + phaseIndex + startedCount
   const startedCount = conversationState?.startedCount ?? 0;
-  const seed = (state.day * 17 + state.phaseIndex * 7 + startedCount) % turns.length;
+  const seed = (state.day * 17 + state.phaseIndex * 7 + startedCount);
 
-  // Rotate turns so we don't always start from the same line
-  const rotateArray = (arr, n) => {
-    n = ((n % arr.length) + arr.length) % arr.length;
-    return [...arr.slice(n), ...arr.slice(0, n)];
-  };
-  const rotatedTurns = rotateArray(turns, seed);
+  // Use buildResidentDialogueTurns for scene-aware generation
+  const turns = buildResidentDialogueTurns(state, {
+    activeScenario: state.activeScenario ?? null,
+    completionFeedback: null,
+    rotationSeed: seed,
+  });
 
-  const queue = [];
-  const maxLines = Math.min(rotatedTurns.length, 5);
-  for (let i = 0; i < maxLines; i++) {
-    const turn = rotatedTurns[i];
-    // Determine actual speaker/target from the pair
-    const pairIdx = i % pairs.length;
-    const pair = pairs[pairIdx];
-    const fromResident = turn.from === "target" ? pair.target : pair.speaker;
-    const toResident = turn.to === "target" ? pair.target : pair.speaker;
-    const beat = beatMap[fromResident.id];
-    const speakerName = beat?.residentName ?? fromResident.name ?? "居民";
-    const targetName = beat?.targetName ?? toResident.name ?? "邻居";
+  // Convert structured turns to conversation queue format
+  const queue = turns.slice(0, 6).map((turn, i) => {
     const lineId = `conv-line-${i + 1}`;
-    const audioKey = `conversation:${fromResident.id}:${lineId}`;
-
-    queue.push({
+    const audioKey = `conversation:${turn.speakerId}:${lineId}`;
+    return {
       id: lineId,
-      speakerId: fromResident.id,
-      targetId: toResident.id,
-      speakerName,
-      targetName,
-      text: turn.text.slice(0, 50),
-      scene: "resident_dialogue",
+      speakerId: turn.speakerId,
+      targetId: turn.targetId,
+      speakerName: turn.speakerName ?? "居民",
+      targetName: turn.targetName ?? "邻居",
+      text: (turn.text ?? "").slice(0, 50),
+      scene: "conversation",
       audioKey,
       status: "idle",
-    });
-  }
+    };
+  });
 
   return queue;
 }

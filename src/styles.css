@@ -1603,6 +1603,11 @@ button, select {
   line-height: 1.4;
 }
 
+.dialogue-beat--current {
+  background: rgba(230, 245, 255, 0.6);
+  border-color: rgba(91, 164, 212, 0.4);
+}
+
 .dialogue-beat__name {
   font-weight: 800;
   color: var(--ink);
@@ -1612,6 +1617,14 @@ button, select {
 .dialogue-beat__text {
   color: var(--ink-light);
   font-size: 0.78rem;
+}
+
+/* Empty state for right panel when no dialogue */
+.dialogue-beats-panel--empty {
+  text-align: center;
+  padding: 12px;
+  color: var(--muted);
+  font-size: 0.8rem;
 }
 
 /* ── Character Body Shadow ─────────────────────────────────────────────────── */
@@ -3780,15 +3793,122 @@ details summary {
   }
 }
 
-/* ── Voice Playback Bar ── */
-/* Fixed-height slot — always rendered to prevent layout shift */
+/* ── Voice Compact Playback Chip (inside town-stage) ── */
+/* Floats above the town stage — does NOT push layout */
 .voice-playback-slot {
-  min-height: 72px;
+  /* No longer a standalone block — now embedded in town-stage */
+  display: contents;
+}
+
+/* Compact chip — floats inside town-stage as absolute overlay */
+.voice-playback-chip {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
   display: flex;
   align-items: center;
-  justify-content: center;
-  margin: 0 auto 8px;
-  max-width: 680px;
+  gap: 8px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  box-shadow: var(--shadow-md);
+  white-space: nowrap;
+  max-width: min(480px, calc(100% - 32px));
+  transition: opacity .18s ease, transform .18s ease;
+}
+
+.voice-playback-chip--idle {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateX(-50%) translateY(4px);
+}
+
+.voice-playback-chip--playing {
+  background: linear-gradient(135deg, #e3f0e8 0%, #f0ede6 100%);
+  border: 1.5px solid var(--green);
+  animation: chipSlideUp 0.2s ease-out;
+}
+
+.voice-playback-chip--paused {
+  background: linear-gradient(135deg, #f5f0e8 0%, #ede6d9 100%);
+  border: 1.5px solid var(--gold);
+  animation: chipSlideUp 0.2s ease-out;
+}
+
+.voice-playback-chip--loading {
+  background: linear-gradient(135deg, #f5f0e8 0%, #ede6d9 100%);
+  border: 1.5px solid var(--muted);
+  animation: chipSlideUp 0.2s ease-out;
+}
+
+.voice-playback-chip--error {
+  background: linear-gradient(135deg, #fce8e8 0%, #f5e0e0 100%);
+  border: 1.5px solid var(--rose);
+  animation: chipSlideUp 0.2s ease-out;
+}
+
+@keyframes chipSlideUp {
+  from { opacity: 0; transform: translateX(-50%) translateY(6px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+.voice-playback-chip__icon {
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.voice-playback-chip__main {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.voice-playback-chip__title {
+  font-weight: 700;
+  color: var(--ink);
+  font-size: 0.78rem;
+  flex-shrink: 0;
+}
+
+.voice-playback-chip__subtitle {
+  font-weight: 400;
+  color: var(--ink-light);
+  font-size: 0.72rem;
+  flex-shrink: 0;
+}
+
+.voice-playback-chip__text {
+  color: var(--ink-light);
+  font-size: 0.72rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.voice-playback-chip__actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: 2px;
+}
+
+.voice-playback-chip__actions .btn-chip {
+  font-size: 0.7rem;
+  padding: 2px 7px;
+  border-radius: 6px;
+  border: 1px solid var(--line-strong);
+  background: rgba(255,255,255,0.7);
+  cursor: pointer;
+  color: var(--ink);
+  transition: background 120ms;
+}
+
+.voice-playback-chip__actions .btn-chip:hover {
+  background: rgba(255,255,255,0.95);
 }
 
 .voice-playback-bar {

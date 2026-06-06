@@ -181,13 +181,13 @@ console.log("\n── choiceAftermath reaction MiMo button ──");
   assert(fn.includes("mimo-tts-btn") || fn.includes("play-mimo-tts"), "choice aftermath has MiMo button");
 }
 
-// ── 17. Global voice playback bar still exists ───────────────────────────────
-console.log("\n── Global voice playback bar ──");
+// ── 17. Global voice playback chip exists (compact, inside town-stage) ───────
+console.log("\n── Global voice playback chip ──");
 {
   const fs = await import("fs");
   const content = fs.readFileSync("./src/ui/render.js", "utf8");
-  assert(content.includes("renderVoicePlaybackBar") || content.includes("voice-playback-bar"), "voice playback bar exists");
-  assert(content.includes("VOICE_PLAYBACK_LABELS"), "voice playback labels constant exists");
+  assert(content.includes("renderVoicePlaybackChip") || content.includes("voice-playback-chip"), "voice playback chip exists");
+  assert(content.includes("VOICE_PLAYBACK_ICONS") || content.includes("buildVoicePlaybackView"), "voice playback icons/view function exists");
 }
 
 // ── 18. MiniMax broadcast TTS still exists ────────────────────────────────────

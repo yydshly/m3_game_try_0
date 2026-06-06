@@ -455,7 +455,8 @@ console.log("\n── Resident dialogue TTS button ──");
 {
   const fs = await import("fs");
   const content = fs.readFileSync("./src/ui/render.js", "utf8");
-  assert(content.includes("renderResidentDialoguePanel(safeUiState.residentSceneBeats, safeUiState.ttsAudios, safeUiState.residentVoiceInteraction)"), "dialogue panel gets ttsAudios");
+  assert(content.includes("renderResidentDialoguePanel({"), "dialogue panel uses new signature with options object");
+  assert(content.includes("residentSceneBeats") && content.includes("conversationQueue"), "dialogue panel receives beats and conversation queue");
 }
 
 // ── 39. event TTS button in render ───────────────────────────────────────

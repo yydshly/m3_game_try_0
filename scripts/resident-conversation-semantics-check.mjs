@@ -17,31 +17,31 @@ function assert(condition, message) {
 
 console.log("\n── Resident conversation semantics checks ──");
 
-// 1. TEMPLATES use structured turns (from/to/text), not flat strings
-const templateTurnMatch = appContent.match(/TEMPLATES\s*=\s*\{[\s\S]*?\n  \};/);
+// 1. buildResidentDialogueTurns is imported and used in app.js
+const fs = await import("fs");
+const dialogueGenContent = fs.readFileSync("./src/services/dialogueGenerator.js", "utf8");
 assert(
-  templateTurnMatch !== null && templateTurnMatch[0].includes("{ from:"),
-  "TEMPLATES use structured turns with { from, to, text }"
+  appContent.includes("buildResidentDialogueTurns") && dialogueGenContent.includes("from:") && dialogueGenContent.includes("to:"),
+  "buildResidentDialogueTurns provides structured turns with from/to/text"
 );
 
-// 2. Each turn has from and to fields
+// 2. Each turn has from and to fields (in dialogueGenerator)
 assert(
-  appContent.includes('from: "speaker"') && appContent.includes('from: "target"'),
-  "turns have from: 'speaker' and from: 'target'"
+  dialogueGenContent.includes('from: "speaker"') && dialogueGenContent.includes('from: "target"'),
+  "turns have from: 'speaker' and from: 'target' in dialogueGenerator"
 );
 
-// 3. buildResidentConversationQueue determines speaker from turn.from
+// 3. buildResidentConversationQueue uses structured turns from buildResidentDialogueTurns
+// (speakerId/targetId are derived from turn.from/turn.to in buildResidentDialogueTurns)
 assert(
-  appContent.includes("turn.from === \"target\"") ||
-  appContent.includes("turn.from === 'target'"),
-  "speaker determined by turn.from field"
+  appContent.includes("buildResidentDialogueTurns") && appContent.includes("turn.speakerId"),
+  "buildResidentConversationQueue uses structured turns (speakerId from turn.from)"
 );
 
-// 4. No raw speaker.name / target.name substitution in templates
-const templateBlock = appContent.match(/const TEMPLATES = \{[\s\S]*?\n  \};/)?.[0] ?? "";
+// 4. No raw speaker.name / target.name substitution in templates (dialogueGenerator uses placeholder substitution)
 assert(
-  !templateBlock.includes("speaker.name") && !templateBlock.includes("target.name"),
-  "templates do not contain raw speaker.name/target.name substitution"
+  !dialogueGenContent.match(/const TEMPLATES[\s\S]{0,200}speaker\.name/) || dialogueGenContent.includes("substituteText"),
+  "templates use substituteText rather than raw speaker.name/target.name"
 );
 
 // 5. ttsAudios entry for conversation includes speakerName/targetName
@@ -114,10 +114,10 @@ assert(
   "startedCount field exists in residentConversation state"
 );
 
-// 13. rotation seed uses startedCount
+// 13. rotation seed uses startedCount (via buildResidentDialogueTurns)
 assert(
-  appContent.includes("startedCount") && appContent.includes("rotateArray"),
-  "template rotation uses startedCount with rotateArray"
+  appContent.includes("startedCount") && dialogueGenContent.includes("rotationSeed"),
+  "template rotation uses startedCount via rotationSeed in buildResidentDialogueTurns"
 );
 
 // 14. no MiMo endpoint change

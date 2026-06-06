@@ -339,9 +339,9 @@ console.log("\n── MiniMax error state: UI shows friendly message only ──
   assert(html.includes("重新生成") || html.includes("tts-error-hint"), "error UI shows 重新生成 or hint");
 }
 
-// ── 11. Global voice playback bar exists in DOM ───────────────────────────
+// ── 11. Global voice playback chip exists in DOM (inside town-stage) ────────────
 
-console.log("\n── Global voice playback bar rendered ──");
+console.log("\n── Global voice playback chip rendered ──");
 {
   const state = createInitialState();
   const root = makeRoot();
@@ -362,8 +362,8 @@ console.log("\n── Global voice playback bar rendered ──");
     },
   }));
   const html = root.innerHTML;
-  assert(html.includes("voice-playback-bar"), "voice-playback-bar element rendered");
-  assert(html.includes("居民对白") || html.includes("💬"), "playback bar shows source label");
+  assert(html.includes("voice-playback-chip"), "voice-playback-chip element rendered");
+  assert(html.includes("居民对白") || html.includes("💬"), "playback chip shows source label");
 }
 
 // ── 12. MiniMax/MiMo provider labels clear ───────────────────────────────

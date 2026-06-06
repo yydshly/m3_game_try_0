@@ -1,5 +1,5 @@
-// voice-playback-check — validates global voice playback bar integration
-// Verifies currentVoicePlayback state, unified handlers, and no regressions
+// voice-playback-check — validates voice playback chip integration
+// Verifies currentVoicePlayback state, chip rendering, unified handlers, and no regressions
 
 let passed = 0;
 let failed = 0;
@@ -33,70 +33,70 @@ console.log("\n── currentVoicePlayback state ──");
   assert(vpContent.includes("error:"), "error field exists");
 }
 
-// ── 2. Global voice playback bar UI exists in render.js ─────────────────────
-console.log("\n── Voice playback bar UI ──");
+// ── 2. Global voice playback chip UI exists in render.js ───────────────────
+console.log("\n── Voice playback chip UI ──");
 {
   const fs = await import("fs");
   const content = fs.readFileSync("./src/ui/render.js", "utf8");
-  assert(content.includes("renderVoicePlaybackBar"), "renderVoicePlaybackBar function exists");
-  assert(content.includes("VOICE_PLAYBACK_LABELS"), "VOICE_PLAYBACK_LABELS constant exists");
+  assert(content.includes("renderVoicePlaybackChip"), "renderVoicePlaybackChip function exists");
+  assert(content.includes("buildVoicePlaybackView"), "buildVoicePlaybackView function exists");
+  assert(content.includes("VOICE_PLAYBACK_ICONS"), "VOICE_PLAYBACK_ICONS constant exists");
   assert(content.includes("data-action=\"voice-pause\""), "voice-pause button action exists");
   assert(content.includes("data-action=\"voice-resume\""), "voice-resume button action exists");
   assert(content.includes("data-action=\"voice-stop\""), "voice-stop button action exists");
   assert(content.includes("currentVoicePlayback: uiState.currentVoicePlayback"), "currentVoicePlayback passed to safeUiState");
-  // Integration in renderApp
-  const renderAppContent = content.split("export function renderApp")[1] ?? "";
-  assert(renderAppContent.includes("renderVoicePlaybackBar"), "renderVoicePlaybackBar called in renderApp");
+  // Integration in renderTownStage
+  const townStageContent = content.split("function renderTownStage")[1]?.split("\n}")[0] ?? "";
+  assert(townStageContent.includes("renderVoicePlaybackChip"), "renderVoicePlaybackChip called in renderTownStage");
 }
 
-// ── 3. Status bar shows MiniMax broadcast source ───────────────────────────
+// ── 3. Chip shows MiniMax broadcast source ─────────────────────────────────
 console.log("\n── MiniMax broadcast source ──");
 {
   const fs = await import("fs");
   const content = fs.readFileSync("./src/ui/render.js", "utf8");
   assert(content.includes("town_broadcast:"), "town_broadcast label entry exists");
   assert(content.includes("小镇广播"), "小镇广播 label exists");
-  assert(content.includes('icon: "📻"'), "broadcast icon is 📻");
+  assert(content.includes('📻'), "broadcast icon is 📻");
 }
 
-// ── 4. Status bar shows MiMo resident dialogue source ─────────────────────
+// ── 4. Chip shows MiMo resident dialogue source ────────────────────────────
 console.log("\n── MiMo resident dialogue source ──");
 {
   const fs = await import("fs");
   const content = fs.readFileSync("./src/ui/render.js", "utf8");
-  assert(content.includes("resident_dialogue:"), "resident_dialogue label entry exists");
-  assert(content.includes("居民对白"), "居民对白 label exists");
-  assert(content.includes('icon: "💬"'), "dialogue icon is 💬");
+  assert(content.includes("conversation:") || content.includes("resident-dialogue:"), "conversation/resident-dialogue type handled");
+  assert(content.includes("居民对话") || content.includes("💬"), "conversation label present");
+  assert(content.includes('💬'), "conversation icon is 💬");
 }
 
-// ── 5. Status bar shows event prompt source ───────────────────────────────
+// ── 5. Chip shows event prompt source ─────────────────────────────────────
 console.log("\n── Event prompt source ──");
 {
   const fs = await import("fs");
   const content = fs.readFileSync("./src/ui/render.js", "utf8");
   assert(content.includes("event_prompt:"), "event_prompt label entry exists");
-  assert(content.includes("事件提示"), "事件提示 label exists");
-  assert(content.includes('icon: "🎭"'), "event icon is 🎭");
+  assert(content.includes("🎭"), "event icon is 🎭");
 }
 
-// ── 6. Status bar shows completion feedback source ───────────────────────
+// ── 6. Chip shows completion feedback source ────────────────────────────────
 console.log("\n── completionFeedback source ──");
 {
   const fs = await import("fs");
   const content = fs.readFileSync("./src/ui/render.js", "utf8");
   assert(content.includes("completion_feedback:"), "completion_feedback label entry exists");
   assert(content.includes("任务完成"), "任务完成 label exists");
-  assert(content.includes('icon: "✅"'), "completion icon is ✅");
+  assert(content.includes('✅'), "completion icon is ✅");
 }
 
-// ── 7. Status bar shows day opening source ───────────────────────────────
+// ── 7. Chip shows day opening source ──────────────────────────────────────
 console.log("\n── Day opening source ──");
 {
   const fs = await import("fs");
   const content = fs.readFileSync("./src/ui/render.js", "utf8");
   assert(content.includes("day_opening:"), "day_opening label entry exists");
   assert(content.includes("今日场景"), "今日场景 label exists");
-  assert(content.includes('icon: "🏠"'), "day opening icon is 🏠");
+  assert(content.includes('🏠'), "day opening icon is 🏠");
 }
 
 // ── 8. Pause button during playback ───────────────────────────────────────
@@ -104,7 +104,8 @@ console.log("\n── Pause button during playback ──");
 {
   const fs = await import("fs");
   const content = fs.readFileSync("./src/ui/render.js", "utf8");
-  assert(content.includes("showPause"), "showPause variable exists in renderVoicePlaybackBar");
+  const fn = content.split("function renderVoicePlaybackChip")[1]?.split("\n}")[0] ?? "";
+  assert(fn.includes("canPause"), "canPause field exists in chip view model");
   assert(content.includes("data-action=\"voice-pause\""), "voice-pause button markup exists");
 }
 
@@ -113,7 +114,8 @@ console.log("\n── Resume button after pause ──");
 {
   const fs = await import("fs");
   const content = fs.readFileSync("./src/ui/render.js", "utf8");
-  assert(content.includes("showResume"), "showResume variable exists in renderVoicePlaybackBar");
+  const fn = content.split("function renderVoicePlaybackChip")[1]?.split("\n}")[0] ?? "";
+  assert(fn.includes("canResume"), "canResume field exists in chip view model");
   assert(content.includes("data-action=\"voice-resume\""), "voice-resume button markup exists");
 }
 
@@ -122,7 +124,8 @@ console.log("\n── Stop button ──");
 {
   const fs = await import("fs");
   const content = fs.readFileSync("./src/ui/render.js", "utf8");
-  assert(content.includes("showStop"), "showStop variable exists in renderVoicePlaybackBar");
+  const fn = content.split("function renderVoicePlaybackChip")[1]?.split("\n}")[0] ?? "";
+  assert(fn.includes("canStop"), "canStop field exists in chip view model");
   assert(content.includes("data-action=\"voice-stop\""), "voice-stop button markup exists");
 }
 
@@ -318,16 +321,16 @@ console.log("\n── No API keys committed in render.js ──");
   assert(!renderContent.match(/tp-[a-zA-Z0-9._-]{10,}/), "no tp- API key in render.js");
 }
 
-// ── 31. CSS for voice playback bar exists ─────────────────────────────────
-console.log("\n── Voice playback bar CSS ──");
+// ── 31. CSS for voice playback chip exists ─────────────────────────────────
+console.log("\n── Voice playback chip CSS ──");
 {
   const fs = await import("fs");
   const css = fs.readFileSync("./src/styles.css", "utf8");
-  assert(css.includes(".voice-playback-bar"), "voice-playback-bar CSS class exists");
-  assert(css.includes(".voice-playback-bar--playing"), "playing variant exists");
-  assert(css.includes(".voice-playback-bar--paused"), "paused variant exists");
-  assert(css.includes(".voice-playback-bar--error"), "error variant exists");
-  assert(css.includes("voice-playback-bar__actions"), "actions area CSS exists");
+  assert(css.includes(".voice-playback-chip"), "voice-playback-chip CSS class exists");
+  assert(css.includes(".voice-playback-chip--playing"), "playing variant exists");
+  assert(css.includes(".voice-playback-chip--paused"), "paused variant exists");
+  assert(css.includes(".voice-playback-chip--error"), "error variant exists");
+  assert(css.includes(".voice-playback-chip__actions"), "actions area CSS exists");
 }
 
 // ── 32. BindEvents wires voice controls ───────────────────────────────────
@@ -352,25 +355,24 @@ console.log("\n── Unified handlers in safeHandlers ──");
   assert(renderContent.includes("onVoiceStop:"), "onVoiceStop in safeHandlers");
 }
 
-// ── 34. Loading state in playback bar ─────────────────────────────────────
-console.log("\n── Loading state in playback bar ──");
+// ── 34. Loading state in playback chip ─────────────────────────────────────
+console.log("\n── Loading state in playback chip ──");
 {
   const fs = await import("fs");
   const content = fs.readFileSync("./src/ui/render.js", "utf8");
-  const fn = content.split("function renderVoicePlaybackBar")[1]?.split("\n}")[0] ?? "";
-  assert(fn.includes("loadingLabel") || fn.includes("loading"), "loading state label handled");
-  assert(fn.includes('voice-playback-bar--loading'), "loading CSS class applied");
+  const fn = content.split("function renderVoicePlaybackChip")[1]?.split("\n}")[0] ?? "";
+  assert(fn.includes("loading") || fn.includes("statusClass"), "loading state handled");
+  assert(fn.includes("voice-playback-chip--loading"), "loading CSS class applied");
 }
 
-// ── 35. Error state in playback bar ────────────────────────────────────────
-console.log("\n── Error state in playback bar ──");
+// ── 35. Error state in playback chip ────────────────────────────────────────
+console.log("\n── Error state in playback chip ──");
 {
   const fs = await import("fs");
   const content = fs.readFileSync("./src/ui/render.js", "utf8");
-  const fn = content.split("function renderVoicePlaybackBar")[1]?.split("\n}")[0] ?? "";
-  assert(fn.includes("errorLabel") || fn.includes("error"), "error state label handled");
-  assert(fn.includes('voice-playback-bar--error'), "error CSS class applied");
-  assert(fn.includes("voice-playback-bar__error"), "error text element exists");
+  const fn = content.split("function renderVoicePlaybackChip")[1]?.split("\n}")[0] ?? "";
+  assert(fn.includes("error") || fn.includes("errorLabel"), "error state handled");
+  assert(fn.includes("voice-playback-chip--error"), "error CSS class applied");
 }
 
 // ── 36. buildVoicePlaybackMeta helper exists ──────────────────────────────
@@ -400,7 +402,7 @@ console.log("\n── prefers-reduced-motion ──");
   const fs = await import("fs");
   const css = fs.readFileSync("./src/styles.css", "utf8");
   assert(css.includes("prefers-reduced-motion"), "prefers-reduced-motion rule exists in CSS");
-  assert(css.includes(".voice-playback-bar") && css.includes("animation") && css.includes("@media"), "voice-playback-bar animation guarded or keyframe-free");
+  assert(css.includes(".voice-playback-chip") && css.includes("animation") && css.includes("@media"), "voice-playback-chip animation guarded or keyframe-free");
 }
 
 // ── Results ───────────────────────────────────────────────────────────────

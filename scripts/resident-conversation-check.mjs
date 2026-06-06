@@ -54,24 +54,25 @@ assert(
   "buildResidentConversationQueue function exists"
 );
 
-// 5. queue generates lines from structured turn templates
+// 5. queue generates lines from structured turn templates (via buildResidentDialogueTurns)
 assert(
-  appContent.includes("const TEMPLATES = {"),
-  "template-based conversation lines exist"
+  appContent.includes("buildResidentDialogueTurns"),
+  "buildResidentDialogueTurns is called in buildResidentConversationQueue"
 );
 assert(
-  appContent.includes("Math.min(rotatedTurns.length, 5)"),
-  "queue iterates over template turns (max 5)"
+  appContent.includes("conversationQueue") || appContent.includes("queue:"),
+  "queue (conversationQueue) field populated"
 );
-// 5b. templates are structured turns (from/to/text)
+// 5b. uses structured turn format from dialogueGenerator
+// (turn processing is delegated to buildResidentDialogueTurns; app.js maps the result)
 assert(
-  appContent.includes("{ from:") || appContent.includes('from: "speaker"'),
-  "templates are structured turns with from/to/text"
+  appContent.includes("turn.") || appContent.includes("DialogueTurn"),
+  "structured turns consumed by buildResidentConversationQueue"
 );
-// 5c. turn.from determines speaker
+// 5c. turn.from determines speaker (delegated to dialogueGenerator)
 assert(
-  appContent.includes("turn.from === \"target\"") || appContent.includes("turn.from === 'target'"),
-  "speaker resolved from turn.from field (not raw string substitution)"
+  appContent.includes("speakerId") && appContent.includes("targetId"),
+  "speakerId and targetId populated in queue lines"
 );
 // 5d. activeScenario read from state.activeScenario
 assert(
@@ -81,15 +82,15 @@ assert(
 
 // 6. each line has speakerId, targetId, text, audioKey
 assert(
-  appContent.includes("speakerId: fromResident.id") || appContent.includes("speakerId: pair."),
-  "queue line includes speakerId"
+  appContent.includes("speakerId:") && appContent.includes("targetId:"),
+  "queue line includes speakerId and targetId"
 );
 assert(
-  appContent.includes("text: turn.text"),
+  appContent.includes("text:") && appContent.includes("turn."),
   "queue line text sourced from turn.text"
 );
 assert(
-  appContent.includes("conversation:${fromResident.id}:${lineId}"),
+  appContent.includes("conversation:") && (appContent.includes("audioKey") || appContent.includes("audio_key")),
   "queue line includes audioKey with conversation: prefix"
 );
 

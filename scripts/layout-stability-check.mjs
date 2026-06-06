@@ -27,15 +27,15 @@ assert(
 // 2. Playback bar uses opacity/visibility to hide instead of removing from DOM
 assert(
   cssContent.includes("opacity: 0") &&
-  (cssContent.includes("visibility: hidden") || cssContent.includes(".voice-playback-bar--idle")),
-  "Playback bar uses opacity/visibility hidden (not DOM removal)"
+  (cssContent.includes("visibility: hidden") || cssContent.includes(".voice-playback-chip--idle")),
+  "Playback chip uses opacity/visibility hidden (not DOM removal)"
 );
 
-// 3. voice-playback-slot has fixed min-height
-const slotStyle = cssContent.match(/\.voice-playback-slot\s*\{[^}]+\}/)?.[0] ?? "";
+// 3. voice-playback-chip is absolute positioned (does not push layout)
+const chipStyle = cssContent.match(/\.voice-playback-chip\s*\{[^}]+\}/)?.[0] ?? "";
 assert(
-  slotStyle.includes("min-height"),
-  "voice-playback-slot has min-height"
+  chipStyle.includes("position: absolute"),
+  "voice-playback-chip is absolute positioned (no layout push)"
 );
 
 // 4. conversation bubble text uses data-conversation-visible-text targeting
@@ -117,17 +117,16 @@ for (const pattern of sensitivePatterns) {
   );
 }
 
-// 13. voice playback bar always renders a slot — check it doesn't return "" inside the function
-// (function is at EOF so we search for end of file marker)
-const barFnStart = renderContent.indexOf("function renderVoicePlaybackBar(");
+// 13. voice playback chip renders inside town-stage (always rendered via --idle class)
+const chipFnStart = renderContent.indexOf("function renderVoicePlaybackChip(");
 assert(
-  barFnStart !== -1,
-  "renderVoicePlaybackBar function exists"
+  chipFnStart !== -1,
+  "renderVoicePlaybackChip function exists"
 );
-// The bar slot is always returned; only the --idle class controls visibility
+// The chip is always returned; only the --idle class controls visibility
 assert(
-  renderContent.includes("voice-playback-slot"),
-  "renderVoicePlaybackBar returns a fixed slot container"
+  renderContent.includes("voice-playback-chip"),
+  "renderVoicePlaybackChip rendered (--idle class controls visibility)"
 );
 
 // 14. recommended-voice container uses class toggle (--empty) not DOM removal
