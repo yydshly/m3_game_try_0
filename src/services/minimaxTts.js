@@ -2,12 +2,12 @@
 export const ttsConfigDefaults = {
   enabled: true,
   model: "speech-2.8-hd",
-  voiceId: "female-tianmei",
+  voiceId: "male-qn-qingse",
   speed: 1,
   vol: 1,
   pitch: 0,
   sampleRate: 32000,
-  bitrate: "128000",
+  bitrate: 128000,
   format: "mp3",
   channel: 1,
   timeoutMs: 30000,
@@ -55,18 +55,19 @@ export async function generateBroadcastSpeech(text) {
 
   const payload = await response.json().catch(() => ({}));
 
-  if (!response.ok) {
-    throw new Error(
-      payload.error ??
-        payload.technicalError ??
-        `TTS request failed with ${response.status}`,
-    );
+  if (!response.ok || !payload?.ok) {
+    const serverMsg = payload?.statusMsg
+      ? `statusCode=${payload.statusCode}: ${payload.statusMsg}`
+      : payload?.error ?? `HTTP ${response.status}`;
+    const traceInfo = payload?.traceId ? ` (trace_id: ${payload.traceId})` : "";
+    throw new Error(`${serverMsg}${traceInfo}`);
   }
 
   const { audioUrl, traceId, extraInfo } = payload;
 
   if (!audioUrl) {
-    throw new Error("TTS returned no audio data");
+    const traceInfo = payload?.traceId ? ` (trace_id: ${payload.traceId})` : "";
+    throw new Error(`TTS returned no audio data${traceInfo}`);
   }
 
   return { audioUrl, traceId: traceId ?? null, extraInfo: extraInfo ?? null };

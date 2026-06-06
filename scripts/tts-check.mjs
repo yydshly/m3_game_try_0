@@ -1,8 +1,22 @@
-// TTS check — tests config defaults, text validation, and render integration
-import { ttsConfigDefaults, validateBroadcastText } from "../src/services/minimaxTts.js";
+// TTS check — tests config defaults, text validation, error response handling, and render integration
+import { ttsConfigDefaults, validateBroadcastText, generateBroadcastSpeech } from "../src/services/minimaxTts.js";
 import { createInitialState } from "../src/domain/state.js";
 import { advancePhase } from "../src/domain/simulation.js";
 import { renderApp } from "../src/ui/render.js";
+
+// ── Mock fetch helper ──────────────────────────────────────────────────────────
+const originalFetch = globalThis.fetch;
+
+function mockFetch(response) {
+  globalThis.fetch = async () => new Response(JSON.stringify(response), {
+    status: response?.ok === false ? 502 : 200,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+function restoreFetch() {
+  globalThis.fetch = originalFetch;
+}
 
 const root = {
   innerHTML: "",
@@ -43,12 +57,12 @@ console.log("\n── TTS config defaults ──");
 
 assert(ttsConfigDefaults.enabled === true, "enabled defaults to true");
 assert(ttsConfigDefaults.model === "speech-2.8-hd", "model is speech-2.8-hd");
-assert(typeof ttsConfigDefaults.voiceId === "string" && ttsConfigDefaults.voiceId.length > 0, "voiceId is non-empty string");
+assert(ttsConfigDefaults.voiceId === "male-qn-qingse", "voiceId is male-qn-qingse (connectivity test voice)");
 assert(ttsConfigDefaults.speed === 1, "speed defaults to 1");
 assert(ttsConfigDefaults.vol === 1, "vol defaults to 1");
 assert(ttsConfigDefaults.pitch === 0, "pitch defaults to 0");
 assert(ttsConfigDefaults.sampleRate === 32000, "sampleRate is 32000");
-assert(ttsConfigDefaults.bitrate === "128000", "bitrate is 128000 string");
+assert(ttsConfigDefaults.bitrate === 128000, "bitrate is number 128000 (not string)");
 assert(ttsConfigDefaults.format === "mp3", "format is mp3");
 assert(ttsConfigDefaults.channel === 1, "channel is 1");
 assert(ttsConfigDefaults.timeoutMs === 30000, "timeoutMs is 30000");
@@ -88,6 +102,90 @@ console.log("\n── validateBroadcastText ──");
   const result = validateBroadcastText(longText);
   assert(result.valid === false, "text over 3000 chars rejected");
   assert(result.reason?.includes("3000"), "error mentions 3000 limit");
+}
+
+// ── Error response handling ────────────────────────────────────────────────────
+console.log("\n── generateBroadcastSpeech error responses ──");
+
+{
+  mockFetch({ ok: false, statusCode: 1004, statusMsg: "invalid voice_id", traceId: "trace-abc123" });
+  try {
+    await generateBroadcastSpeech("测试文本");
+    assert(false, "should throw on ok:false with statusMsg");
+  } catch (err) {
+    const msg = err.message;
+    assert(msg.includes("1004"), "error includes statusCode");
+    assert(msg.includes("invalid voice_id"), "error includes statusMsg");
+    assert(msg.includes("trace-abc123"), "error includes traceId");
+  } finally {
+    restoreFetch();
+  }
+}
+
+{
+  mockFetch({ ok: false, statusCode: 1002, statusMsg: "text too long", traceId: null });
+  try {
+    await generateBroadcastSpeech("测试文本");
+    assert(false, "should throw on ok:false");
+  } catch (err) {
+    const msg = err.message;
+    assert(msg.includes("1002"), "error includes statusCode");
+    assert(msg.includes("text too long"), "error includes statusMsg");
+  } finally {
+    restoreFetch();
+  }
+}
+
+{
+  mockFetch({ ok: false, error: "HTTP 403", statusCode: 403, statusMsg: null, traceId: null });
+  try {
+    await generateBroadcastSpeech("测试文本");
+    assert(false, "should throw on HTTP 403");
+  } catch (err) {
+    assert(err.message.includes("403"), "error includes HTTP status");
+  } finally {
+    restoreFetch();
+  }
+}
+
+{
+  mockFetch({ ok: false, statusCode: 0, statusMsg: "success", data: null, traceId: "trace-no-data" });
+  try {
+    await generateBroadcastSpeech("测试文本");
+    assert(false, "should throw when data is null");
+  } catch (err) {
+    const msg = err.message;
+    assert(msg.includes("no audio") || msg.includes("trace-no-data"), "error includes traceId for null data");
+  } finally {
+    restoreFetch();
+  }
+}
+
+{
+  // Successful response — hex audio
+  const fakeHex = "49545370640000001c00000100000000".slice(0, 30); // small fake hex
+  mockFetch({ ok: true, audioUrl: null, traceId: "trace-ok", extraInfo: {} });
+  try {
+    await generateBroadcastSpeech("测试");
+    assert(false, "should throw when ok:true but no audioUrl");
+  } catch (err) {
+    assert(err.message.includes("no audio data"), "throws when no audioUrl despite ok:true");
+  } finally {
+    restoreFetch();
+  }
+}
+
+{
+  // Successful response with valid data URL
+  mockFetch({ ok: true, audioUrl: "data:audio/mp3;base64,abc123", traceId: "trace-success", extraInfo: { audioFormat: "mp3" } });
+  try {
+    const result = await generateBroadcastSpeech("测试");
+    assert(result.audioUrl === "data:audio/mp3;base64,abc123", "audioUrl returned on success");
+    assert(result.traceId === "trace-success", "traceId returned on success");
+    assert(result.extraInfo?.audioFormat === "mp3", "extraInfo returned on success");
+  } finally {
+    restoreFetch();
+  }
 }
 
 // ── Render integration ──────────────────────────────────────────────────────

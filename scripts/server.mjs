@@ -46,7 +46,7 @@ const ttsSpeed = Number(config.tts?.speed ?? 1);
 const ttsVol = Number(config.tts?.vol ?? 1);
 const ttsPitch = Number(config.tts?.pitch ?? 0);
 const ttsSampleRate = Number(config.tts?.sampleRate ?? 32000);
-const ttsBitrate = String(config.tts?.bitrate ?? "128000");
+const ttsBitrate = Number(config.tts?.bitrate ?? 128000);
 const ttsFormat = config.tts?.format ?? "mp3";
 const ttsChannel = Number(config.tts?.channel ?? 1);
 const ttsTimeoutMs = Number(config.tts?.timeoutMs ?? 30_000);
@@ -881,6 +881,60 @@ async function handleMiniMaxTts(request, response) {
   }
 
   try {
+    // Build payload with strict type coercion per MiniMax API spec
+    const ttsPayload = {
+      model: String(ttsModel || "speech-2.8-hd"),
+      text,
+      stream: false,
+      voice_setting: {
+        voice_id: String(ttsVoiceId || "male-qn-qingse"),
+        speed: Number(ttsSpeed ?? 1),
+        vol: Number(ttsVol ?? 1),
+        pitch: Number(ttsPitch ?? 0),
+      },
+      audio_setting: {
+        sample_rate: Number(ttsSampleRate ?? 32000),
+        bitrate: Number(ttsBitrate ?? 128000),
+        format: String(ttsFormat || "mp3"),
+        channel: Number(ttsChannel ?? 1),
+      },
+      subtitle_enable: false,
+      output_format: "hex",
+    };
+
+    // Validate no NaN slipped through (would indicate bad config)
+    if (
+      Number.isNaN(ttsPayload.voice_setting.speed) ||
+      Number.isNaN(ttsPayload.voice_setting.vol) ||
+      Number.isNaN(ttsPayload.voice_setting.pitch) ||
+      Number.isNaN(ttsPayload.audio_setting.sample_rate) ||
+      Number.isNaN(ttsPayload.audio_setting.bitrate) ||
+      Number.isNaN(ttsPayload.audio_setting.channel)
+    ) {
+      sendJson(response, 500, {
+        error: "TTS 配置参数无效。",
+        technicalError: "NaN detected in TTS numeric config.",
+      });
+      return;
+    }
+
+    // Request diagnostic log (no secrets)
+    console.info("[tts] request summary", {
+      model: ttsPayload.model,
+      textLength: text.length,
+      voiceId: ttsPayload.voice_setting.voice_id,
+      speed: ttsPayload.voice_setting.speed,
+      vol: ttsPayload.voice_setting.vol,
+      pitch: ttsPayload.voice_setting.pitch,
+      sampleRate: ttsPayload.audio_setting.sample_rate,
+      bitrate: ttsPayload.audio_setting.bitrate,
+      bitrateType: typeof ttsPayload.audio_setting.bitrate,
+      format: ttsPayload.audio_setting.format,
+      channel: ttsPayload.audio_setting.channel,
+      outputFormat: ttsPayload.output_format,
+      hasApiKey: Boolean(ttsApiKey && ttsApiKey !== "your_minimax_api_key_here"),
+    });
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), ttsTimeoutMs);
 
@@ -890,25 +944,7 @@ async function handleMiniMaxTts(request, response) {
         Authorization: `Bearer ${ttsApiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        model: ttsModel,
-        text,
-        stream: false,
-        voice_setting: {
-          voice_id: ttsVoiceId,
-          speed: ttsSpeed,
-          vol: ttsVol,
-          pitch: ttsPitch,
-          emotion: "happy",
-        },
-        audio_setting: {
-          sample_rate: ttsSampleRate,
-          bitrate: ttsBitrate,
-          format: ttsFormat,
-          channel: ttsChannel,
-        },
-        subtitle_enable: false,
-      }),
+      body: JSON.stringify(ttsPayload),
       signal: controller.signal,
     });
 
@@ -916,38 +952,86 @@ async function handleMiniMaxTts(request, response) {
 
     const payload = await ttsResponse.json().catch(() => ({}));
 
+    // Response diagnostic log (no secrets)
+    console.error("[tts] MiniMax response summary", {
+      httpStatus: ttsResponse.status,
+      statusCode: payload?.base_resp?.status_code,
+      statusMsg: payload?.base_resp?.status_msg,
+      traceId: payload?.trace_id ?? payload?.extra_info?.trace_id,
+      hasData: Boolean(payload?.data),
+      dataStatus: payload?.data?.status,
+      hasAudio: Boolean(payload?.data?.audio),
+      audioLength: payload?.data?.audio?.length || 0,
+      audioFormat: payload?.extra_info?.audio_format,
+      audioSize: payload?.extra_info?.audio_size,
+    });
+
     if (!ttsResponse.ok) {
-      const statusCode = payload?.base_resp?.status_code ?? ttsResponse.status;
-      const statusMsg = payload?.base_resp?.status_msg ?? "";
       sendJson(response, ttsResponse.status, {
-        error: "语音合成请求失败，请稍后重试。",
-        technicalError: `MiniMax TTS returned ${statusCode}: ${statusMsg}`,
+        ok: false,
+        error: `语音合成 HTTP 失败（${ttsResponse.status}）`,
+        statusCode: payload?.base_resp?.status_code ?? ttsResponse.status,
+        statusMsg: payload?.base_resp?.status_msg ?? "",
+        traceId: payload?.trace_id ?? payload?.extra_info?.trace_id ?? null,
+      });
+      return;
+    }
+
+    if (payload?.base_resp?.status_code !== 0) {
+      sendJson(response, 502, {
+        ok: false,
+        error: `语音合成失败：${payload?.base_resp?.status_msg || "未知错误"}`,
+        statusCode: payload?.base_resp?.status_code,
+        statusMsg: payload?.base_resp?.status_msg || "",
+        traceId: payload?.trace_id ?? payload?.extra_info?.trace_id ?? null,
       });
       return;
     }
 
     const audioHex = payload?.data?.audio;
-    if (!audioHex || typeof audioHex !== "string" || audioHex.length === 0) {
+    if (!payload?.data) {
       sendJson(response, 502, {
-        error: "语音合成未返回音频数据。",
-        technicalError: "Response data.audio is empty.",
+        ok: false,
+        error: `语音合成返回空数据：${payload?.base_resp?.status_msg || "未知错误"}`,
+        statusCode: payload?.base_resp?.status_code ?? 0,
+        statusMsg: payload?.base_resp?.status_msg || "",
+        traceId: payload?.trace_id ?? payload?.extra_info?.trace_id ?? null,
       });
       return;
     }
 
-    // Convert hex audio to a Blob URL served by this proxy
+    if (!audioHex || typeof audioHex !== "string" || audioHex.length === 0) {
+      sendJson(response, 502, {
+        ok: false,
+        error: `语音合成未返回音频：${payload?.base_resp?.status_msg || "未知错误"}`,
+        statusCode: payload?.base_resp?.status_code ?? 0,
+        statusMsg: payload?.base_resp?.status_msg || "",
+        traceId: payload?.trace_id ?? payload?.extra_info?.trace_id ?? null,
+      });
+      return;
+    }
+
+    // Convert hex audio to base64 data URL
     const audioBuffer = Buffer.from(audioHex, "hex");
     const audioBase64 = audioBuffer.toString("base64");
-    const dataUrl = `data:audio/${ttsFormat};base64,${audioBase64}`;
+    const audioUrl = `data:audio/${ttsPayload.audio_setting.format};base64,${audioBase64}`;
 
     sendJson(response, 200, {
-      audioUrl: dataUrl,
-      traceId: payload?.extra_info?.trace_id ?? null,
-      extraInfo: payload?.extra_info ?? null,
+      ok: true,
+      audioUrl,
+      traceId: payload?.trace_id ?? payload?.extra_info?.trace_id ?? null,
+      extraInfo: {
+        audioLength: payload?.data?.audio?.length ?? audioHex.length,
+        audioSize: payload?.extra_info?.audio_size ?? audioBuffer.length,
+        audioFormat: payload?.extra_info?.audio_format ?? ttsPayload.audio_setting.format,
+        statusCode: payload?.base_resp?.status_code,
+        statusMsg: payload?.base_resp?.status_msg,
+      },
     });
   } catch (error) {
     const isTimeout = error.name === "AbortError";
     sendJson(response, isTimeout ? 504 : 500, {
+      ok: false,
       error: isTimeout
         ? `语音合成超时了（${ttsTimeoutMs / 1000}s），请稍后重试。`
         : "语音合成遇到未知错误，请稍后重试。",

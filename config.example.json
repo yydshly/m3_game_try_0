@@ -19,7 +19,7 @@
     "vol": 1,
     "pitch": 0,
     "sampleRate": 32000,
-    "bitrate": "128000",
+    "bitrate": 128000,
     "format": "mp3",
     "channel": 1,
     "timeoutMs": 30000
