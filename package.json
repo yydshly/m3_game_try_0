@@ -63,6 +63,8 @@
     "choice-aftermath-visual-check": "node scripts/choice-aftermath-visual-check.mjs",
     "town-memory-reference-check": "node scripts/town-memory-reference-check.mjs",
     "mimo-tts-param-probe": "node scripts/mimo-tts-param-probe.mjs",
-    "tts-official-contract-check": "node scripts/tts-official-contract-check.mjs"
+    "tts-official-contract-check": "node scripts/tts-official-contract-check.mjs",
+    "event-choice-entry-check": "node scripts/event-choice-entry-check.mjs",
+    "player-guidance-check": "node scripts/player-guidance-check.mjs"
   }
 }

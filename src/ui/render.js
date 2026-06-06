@@ -249,6 +249,26 @@ function renderGameActions(state, safeUiState, handlers = {}) {
   const isAnimating = safeUiState.isAnimating;
   const animMsg = safeUiState.animationMessage || "";
 
+  // Game guide card
+  const guideView = buildGameGuideView(state, safeUiState);
+  const guideCardHtml = `
+    <div class="game-guide" aria-label="游戏指引">
+      <div class="game-guide__header">
+        <span>🧭</span>
+        <span class="game-guide__title">${escapeHtml(guideView.title)}</span>
+      </div>
+      <ul class="game-guide__steps">
+        ${guideView.steps.map((step) => `
+          <li class="game-guide__step ${step.done ? "game-guide__step--done" : ""} ${step.label === guideView.currentStep ? "game-guide__step--current" : ""}">
+            <span class="game-guide__step-icon">${step.done ? "✅" : "○"}</span>
+            <span class="game-guide__step-label">${escapeHtml(step.label)}</span>
+          </li>
+        `).join("")}
+      </ul>
+      <p class="game-guide__next-action">💡 ${escapeHtml(guideView.nextActionText)}</p>
+    </div>
+  `;
+
   // Animation banner shown while residents are traveling/acting
   const animBanner = isAnimating
     ? `<div class="game-actions__anim-banner" aria-live="polite">🚶 ${escapeHtml(animMsg)}</div>`
@@ -279,6 +299,7 @@ function renderGameActions(state, safeUiState, handlers = {}) {
   return `
     <div class="game-actions">
       <p class="game-actions__title">🎮 游戏操作</p>
+      ${guideCardHtml}
       <div class="game-actions__stats">
         <span class="game-actions__stat">
           <span class="game-actions__stat-label">📅</span>
@@ -539,36 +560,106 @@ function renderLlmStatus(uiState) {
 
 // ── Event Director Status ─────────────────────────────────────────────────────
 
-function renderEventDirectorStatus(uiState) {
-  const statusLabels = {
-    idle: { icon: "🎭", label: "待机", text: "让 M3 观察小镇，生成一个今天的小事件。" },
-    loading: { icon: "🎭", label: "思考中", text: "M3 正在观察居民和小镇动态……" },
-    ready: { icon: "✨", label: "已就绪", text: uiState.eventDirectorMessage || "小镇事件已加入动态。" },
-    error: { icon: "⚠️", label: "异常", text: uiState.eventDirectorMessage || "事件导演暂时没有灵感，请稍后再试。" },
-  };
-  const info = statusLabels[uiState.eventDirectorStatus] ?? statusLabels.idle;
-  const isError = uiState.eventDirectorStatus === "error";
-  const isIdle = uiState.eventDirectorStatus === "idle";
+/**
+ * Render the Event Director card — shows event choice entry when available.
+ * Uses buildEventChoiceEntryView for clean state separation.
+ *
+ * @param {object} state
+ * @param {object} uiState
+ * @returns {string} HTML
+ */
+function renderEventDirectorStatus(state, uiState) {
+  const eventView = buildEventChoiceEntryView(state, uiState);
 
-  // Idle state: compact single-line style
-  if (isIdle) {
+  // idle / empty state: compact single-line prompt
+  if (!eventView.eventId) {
     return `
       <div class="event-director event-director--idle">
-        <span class="event-director__idle-icon">${info.icon}</span>
+        <span class="event-director__idle-icon">🎭</span>
         <span class="event-director__idle-label">小镇事件导演：</span>
-        <span class="event-director__idle-text">${escapeHtml(info.text)}</span>
+        <span class="event-director__idle-text">让 M3 观察小镇，生成一个今天的小事件。</span>
       </div>
     `;
   }
 
+  // chosen state
+  if (eventView.status === "chosen") {
+    return `
+      <section class="panel event-director event-director--chosen">
+        <div class="panel__head">
+          <h2>✨ 刚刚的选择</h2>
+          <span class="llm-status-badge llm-status-badge--ready">已选择</span>
+        </div>
+        <div class="event-director__chosen-label">
+          你选择了：${escapeHtml(eventView.chosenChoiceLabel)}
+        </div>
+        ${eventView.resultText ? `<p class="event-director__chosen-result">${escapeHtml(eventView.resultText)}</p>` : ""}
+        <div class="event-director__memory-hint">🌿 这件事已被小镇记住</div>
+      </section>
+    `;
+  }
+
+  // loading state
+  if (uiState.eventDirectorStatus === "loading") {
+    return `
+      <section class="panel event-director event-director--loading">
+        <div class="panel__head">
+          <h2>🎭 小镇事件导演</h2>
+          <span class="llm-status-badge llm-status-badge--loading">思考中</span>
+        </div>
+        <p class="event-director__loading-text">M3 正在观察居民和小镇动态……</p>
+      </section>
+    `;
+  }
+
+  // error state
+  if (uiState.eventDirectorStatus === "error") {
+    return `
+      <section class="panel event-director event-director--error">
+        <div class="panel__head">
+          <h2>⚠️ 小镇事件导演</h2>
+          <span class="llm-status-badge llm-status-badge--error">异常</span>
+        </div>
+        <p>${escapeHtml(uiState.eventDirectorMessage || "事件导演暂时没有灵感，请稍后再试。")}</p>
+        <p class="llm-status__hint">💡 检查 MiniMax 配置或稍后重试。</p>
+      </section>
+    `;
+  }
+
+  // ready state — show event title, summary, place, residents, and choices
+  const residentNames = eventView.residentNames;
+  const metaLine = residentNames.length > 0
+    ? `📍 ${escapeHtml(eventView.placeLabel)} · 👥 ${residentNames.map(escapeHtml).join("、")}`
+    : `📍 ${escapeHtml(eventView.placeLabel)}`;
+
+  const choicesHtml = eventView.choices.map((choice) => `
+    <button
+      class="event-choice"
+      type="button"
+      data-action="choose-event"
+      data-event-id="${escapeHtml(eventView.eventId ?? "")}"
+      data-choice-id="${escapeHtml(choice.id)}"
+    >
+      <span class="event-choice__label">${escapeHtml(choice.label)}</span>
+      ${choice.preview ? `<span class="event-choice__preview">${escapeHtml(choice.preview)}</span>` : ""}
+    </button>
+  `).join("");
+
   return `
-    <section class="panel event-director event-director--${escapeHtml(uiState.eventDirectorStatus ?? "ready")}">
+    <section class="panel event-director event-director--ready">
       <div class="panel__head">
-        <h2>${info.icon} 小镇事件导演</h2>
-        <span class="llm-status-badge llm-status-badge--${escapeHtml(uiState.eventDirectorStatus ?? "ready")}">${escapeHtml(info.label)}</span>
+        <h2>✨ 小镇事件</h2>
+        <span class="llm-status-badge llm-status-badge--ready">待选择</span>
       </div>
-      <p>${escapeHtml(info.text)}</p>
-      ${isError && uiState.eventDirectorMessage ? `<p class="llm-status__hint">💡 检查 MiniMax 配置或稍后重试。</p>` : ""}
+      ${eventView.title ? `<p class="event-director__title">${escapeHtml(eventView.title)}</p>` : ""}
+      ${eventView.summary ? `<p class="event-director__summary">${escapeHtml(eventView.summary)}</p>` : ""}
+      <div class="event-director__meta">${metaLine}</div>
+      <div class="event-director__choices">
+        <p class="event-director__choices-prompt">你要怎么做？</p>
+        <div class="event-director__choice-buttons">
+          ${choicesHtml}
+        </div>
+      </div>
     </section>
   `;
 }
@@ -1875,7 +1966,7 @@ export function renderApp(root, state, handlers, uiState = {}) {
         </section>
         <aside class="side-panel">
           ${renderLlmStatus(safeUiState)}
-          ${renderEventDirectorStatus(safeUiState)}
+          ${renderEventDirectorStatus(state, safeUiState)}
           ${renderAtmospherePanel(state, safeUiState)}
           ${renderResidentDialoguePanel({
             beats: safeUiState.residentSceneBeats,
@@ -1971,6 +2062,164 @@ function renderVoiceDebugPanel() {
     <p class="voice-debug-panel__title">🔍 Voice Debug (last ${logs.length}) <button class="voice-debug-panel__clear" data-action="clear-voice-debug">✕</button></p>
     ${rows}
   </div>`;
+}
+
+// ── Event Choice Entry View Model ─────────────────────────────────────────────────
+
+const PLACE_NAMES = { garden: "花园", cafe: "餐厅", workshop: "工坊", plaza: "广场", forest: "森林" };
+
+/**
+ * Build a view model for the event choice entry shown in the Event Director card.
+ * Finds the most recent unchosen m3-event from state.events.
+ *
+ * Pure function — does NOT modify state or call APIs.
+ *
+ * @param {object} state
+ * @param {object} uiState
+ * @returns {object} view model
+ */
+export function buildEventChoiceEntryView(state, uiState) {
+  const events = state?.events ?? [];
+  // Find most recent m3-event that has choices and hasn't been chosen yet
+  const latestM3Event = [...events].reverse().find(
+    (e) => e.type === "m3-event" && Array.isArray(e.choices) && e.choices.length > 0
+  );
+
+  // If no event found, return empty status
+  if (!latestM3Event) {
+    return {
+      visible: true,
+      status: "empty",
+      eventId: null,
+      title: "",
+      summary: "",
+      placeLabel: "",
+      residentNames: [],
+      choices: [],
+      chosenChoiceLabel: "",
+      resultText: "",
+      memoryHint: "",
+    };
+  }
+
+  const hasChoices = Array.isArray(latestM3Event.choices) && latestM3Event.choices.length > 0;
+  const isChosen = Boolean(latestM3Event.chosenChoiceId);
+  const chosenChoice = hasChoices ? latestM3Event.choices.find((c) => c.id === latestM3Event.chosenChoiceId) : null;
+
+  // Resident names
+  const residents = state?.residents ?? [];
+  const residentNames = (latestM3Event.residentIds ?? [])
+    .map((id) => residents.find((r) => r.id === id)?.name ?? "")
+    .filter(Boolean);
+
+  const placeLabel = PLACE_NAMES[latestM3Event.placeId] ?? "小镇";
+
+  // If already chosen, return chosen status
+  if (isChosen && chosenChoice) {
+    return {
+      visible: true,
+      status: "chosen",
+      eventId: latestM3Event.id,
+      title: latestM3Event.title ?? "",
+      summary: latestM3Event.text ?? "",
+      placeLabel,
+      residentNames,
+      choices: [],
+      chosenChoiceLabel: chosenChoice.label ?? "",
+      resultText: chosenChoice.resultText ?? "",
+      memoryHint: "🌿 这件事已被小镇记住",
+    };
+  }
+
+  // Return ready status with up to 3 choices
+  const visibleChoices = (latestM3Event.choices ?? []).slice(0, 3).map((c) => ({
+    id: c.id ?? "",
+    label: c.label ?? "",
+    preview: c.preview ?? "",
+  }));
+
+  return {
+    visible: true,
+    status: "ready",
+    eventId: latestM3Event.id,
+    title: latestM3Event.title ?? "",
+    summary: latestM3Event.text ?? "",
+    placeLabel,
+    residentNames,
+    choices: visibleChoices,
+    chosenChoiceLabel: "",
+    resultText: "",
+    memoryHint: "",
+  };
+}
+
+// ── Game Guide View Model ─────────────────────────────────────────────────────────
+
+/**
+ * Build a view model for the game guide card shown in the left panel.
+ * Determines the current step and next action recommendation based on state.
+ *
+ * Pure function — does NOT modify state or call APIs.
+ *
+ * @param {object} state
+ * @param {object} uiState
+ * @returns {object} view model
+ */
+export function buildGameGuideView(state, uiState) {
+  const llmStatus = uiState?.llmStatus ?? "idle";
+  const hasPlan = llmStatus === "ready" || llmStatus === "idle"; // has been planned at least once
+  const phaseIndex = state?.phaseIndex ?? 0;
+  const hasAdvanced = phaseIndex > 0 || (state?.events?.length ?? 0) > 1;
+
+  // Build steps with done state
+  const steps = [
+    { id: "plan", label: "AI 管家安排", done: hasPlan },
+    { id: "advance", label: "推进时间", done: hasAdvanced },
+    { id: "event", label: "生成事件", done: false },
+    { id: "choice", label: "做出选择", done: false },
+    { id: "broadcast", label: "生成广播", done: false },
+    { id: "dialogue", label: "居民对话", done: false },
+    { id: "end-day", label: "结束今天", done: false },
+  ];
+
+  // Find first undone step
+  const currentStepObj = steps.find((s) => !s.done) ?? steps[steps.length - 1];
+
+  // Determine next action text based on current state
+  let nextActionText = "先生成一个小镇事件，让玩家参与一次选择。";
+
+  if (llmStatus === "loading") {
+    nextActionText = "AI 管家正在观察居民状态……";
+  } else if (!hasPlan) {
+    nextActionText = "让 AI 管家安排居民，看看今天小镇要怎么过。";
+  } else if (!hasAdvanced) {
+    nextActionText = "推进小镇时间，观察居民们在做什么。";
+  } else {
+    // Check if there's an m3-event with choices
+    const events = state?.events ?? [];
+    const latestM3Event = [...events].reverse().find(
+      (e) => e.type === "m3-event" && Array.isArray(e.choices) && e.choices.length > 0
+    );
+    if (!latestM3Event) {
+      nextActionText = "生成一个小镇事件，参与今天的小插曲。";
+    } else if (!latestM3Event.chosenChoiceId) {
+      nextActionText = "选择一个事件选项，影响小镇的发展。";
+    } else if (!uiState?.latestBroadcast) {
+      nextActionText = "生成小镇广播，听听今天的小镇氛围。";
+    } else if (!uiState?.residentConversation?.enabled) {
+      nextActionText = "开启居民对话，看看居民们怎么互动。";
+    } else {
+      nextActionText = "今天的主要流程已走完，可以结束今天让小镇进入下一天。";
+    }
+  }
+
+  return {
+    visible: true,
+    title: "今日指引",
+    currentStep: currentStepObj.label,
+    nextActionText,
+    steps,
+  };
 }
 
 // ── Choice Aftermath View Model ─────────────────────────────────────────────────────

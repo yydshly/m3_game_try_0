@@ -2572,6 +2572,143 @@ button, select {
   line-height: 1.5;
 }
 
+.event-director--loading {
+  background: linear-gradient(145deg, var(--purple-soft), var(--panel));
+  border-color: var(--purple);
+}
+
+.event-director--chosen {
+  background: linear-gradient(145deg, var(--green-soft), var(--panel));
+  border-color: var(--green);
+}
+
+.event-director__loading-text {
+  color: var(--ink-light);
+  font-size: 0.82rem;
+  margin: 0;
+}
+
+.event-director__title {
+  margin: 0 0 6px !important;
+  font-size: 0.95rem !important;
+  font-weight: 700;
+  color: var(--ink) !important;
+}
+
+.event-director__summary {
+  margin: 0 0 8px !important;
+  font-size: 0.82rem !important;
+  color: var(--ink-light) !important;
+}
+
+.event-director__meta {
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.event-director__choices {
+  margin-top: 10px;
+}
+
+.event-director__choices-prompt {
+  font-size: 0.75rem !important;
+  color: var(--muted) !important;
+  margin: 0 0 6px !important;
+}
+
+.event-director__choice-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.event-director__chosen-label {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+
+.event-director__chosen-result {
+  font-size: 0.82rem !important;
+  color: var(--ink-light) !important;
+  margin: 0 0 8px !important;
+}
+
+.event-director__memory-hint {
+  font-size: 0.75rem;
+  color: var(--green);
+  margin: 0;
+}
+
+/* ============================================================
+   Game Guide Card
+   ============================================================ */
+
+.game-guide {
+  background: linear-gradient(135deg, #e8f5e9, #f1f8e9);
+  border: 1px solid var(--green);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.game-guide__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--green-deep);
+}
+
+.game-guide__title {
+  color: var(--green-deep);
+}
+
+.game-guide__steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+.game-guide__step {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.7rem;
+  color: var(--ink-light);
+}
+
+.game-guide__step--done {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.game-guide__step--current {
+  color: var(--green);
+  font-weight: 700;
+}
+
+.game-guide__step-icon {
+  font-size: 0.65rem;
+}
+
+.game-guide__next-action {
+  font-size: 0.72rem;
+  color: var(--ink-light);
+  margin: 0;
+  border-top: 1px solid rgba(0,0,0,0.06);
+  padding-top: 6px;
+  line-height: 1.4;
+}
+
 /* ============================================================
    M3 Event Feed Items
    ============================================================ */
