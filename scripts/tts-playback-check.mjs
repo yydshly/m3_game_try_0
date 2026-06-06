@@ -106,13 +106,12 @@ console.log("\n── TTS button: ready state ──");
     }),
   });
   assert(root.innerHTML.includes('data-action="generate-tts"'), "generate-tts button present in ready");
-  // TTS button is disabled when audio already exists to prevent double-generation
-  // Clicking generate-tts when ready triggers play (toggle in handler)
-  assert(root.innerHTML.includes("disabled"), "ready: TTS button disabled (audio exists)");
-  assert(root.innerHTML.includes("MiniMax 播放") || root.innerHTML.includes("▶️ MiniMax"), "ready label: MiniMax 播放");
-  assert(root.innerHTML.includes("▶️"), "ready icon: ▶️");
-  // No separate play-tts button — generate-tts handles play/pause/continue
-  assert(!root.innerHTML.includes("data-action=\"play-tts\""), "ready: no separate play-tts button");
+  // TTS button is NOT disabled in ready — user can click to regenerate
+  assert(!root.innerHTML.includes("disabled") || root.innerHTML.match(/generate-tts[^>]*disabled/) === null, "ready: generate-tts not disabled");
+  assert(root.innerHTML.includes("MiniMax 生成语音") || root.innerHTML.includes("🔊 MiniMax 生成语音"), "ready label: MiniMax 生成语音");
+  // Separate play-tts button is present and clickable
+  assert(root.innerHTML.includes('data-action="play-tts"'), "ready: play-tts button present");
+  assert(root.innerHTML.includes("MiniMax 播放") || root.innerHTML.includes("▶️ MiniMax 播放"), "ready: play-tts label shows MiniMax 播放");
 }
 
 // ── TTS button: playing state ────────────────────────────────────────────────
@@ -126,11 +125,12 @@ console.log("\n── TTS button: playing state ──");
     }),
   });
   assert(root.innerHTML.includes('data-action="generate-tts"'), "generate-tts button present in playing");
-  assert(root.innerHTML.includes("disabled"), "playing: TTS button disabled");
-  assert(root.innerHTML.includes("MiniMax 暂停") || root.innerHTML.includes("⏸️ MiniMax"), "playing label: MiniMax 暂停");
-  assert(root.innerHTML.includes("⏸️"), "playing icon: ⏸️");
-  // No separate play-tts button — generate-tts handles toggle
-  assert(!root.innerHTML.includes("data-action=\"play-tts\""), "playing: no separate play-tts button");
+  // TTS button is NOT disabled in playing
+  assert(!root.innerHTML.includes("disabled") || root.innerHTML.match(/generate-tts[^>]*disabled/) === null, "playing: generate-tts not disabled");
+  assert(root.innerHTML.includes("MiniMax 生成语音") || root.innerHTML.includes("🔊 MiniMax 生成语音"), "playing label: MiniMax 生成语音");
+  // Separate play-tts button is present showing pause
+  assert(root.innerHTML.includes('data-action="play-tts"'), "playing: play-tts button present");
+  assert(root.innerHTML.includes("MiniMax 暂停") || root.innerHTML.includes("⏸️ MiniMax 暂停"), "playing: play-tts label shows MiniMax 暂停");
 }
 
 // ── TTS button: paused state ─────────────────────────────────────────────────
@@ -144,12 +144,12 @@ console.log("\n── TTS button: paused state ──");
     }),
   });
   assert(root.innerHTML.includes('data-action="generate-tts"'), "generate-tts button present in paused");
-  // TTS button is disabled when audio already exists
-  assert(root.innerHTML.includes("disabled"), "paused: TTS button disabled (audio exists)");
-  assert(root.innerHTML.includes("MiniMax 播放") || root.innerHTML.includes("▶️ MiniMax"), "paused label: MiniMax 播放");
-  assert(root.innerHTML.includes("▶️"), "paused icon: ▶️");
-  // No separate play-tts button — generate-tts handles toggle
-  assert(!root.innerHTML.includes("data-action=\"play-tts\""), "paused: no separate play-tts button");
+  // TTS button is NOT disabled in paused
+  assert(!root.innerHTML.includes("disabled") || root.innerHTML.match(/generate-tts[^>]*disabled/) === null, "paused: generate-tts not disabled");
+  assert(root.innerHTML.includes("MiniMax 生成语音") || root.innerHTML.includes("🔊 MiniMax 生成语音"), "paused label: MiniMax 生成语音");
+  // Separate play-tts button is present showing continue
+  assert(root.innerHTML.includes('data-action="play-tts"'), "paused: play-tts button present");
+  assert(root.innerHTML.includes("MiniMax 继续") || root.innerHTML.includes("▶️ MiniMax 继续"), "paused: play-tts label shows MiniMax 继续");
 }
 
 // ── TTS button: error state ──────────────────────────────────────────────────
@@ -210,38 +210,40 @@ console.log("\n── Play button: replay after audio naturally ends ──");
       scriptHash: "abc123",
     }),
   });
-  // No separate play-tts button — clicking generate-tts triggers play
-  assert(!root.innerHTML.includes("data-action=\"play-tts\""), "after natural end: no separate play-tts button (generate-tts handles play)");
-  assert(root.innerHTML.includes("MiniMax 播放") || root.innerHTML.includes("▶️ MiniMax"), "after natural end: button shows MiniMax 播放");
+  // Two-button model: play-tts button IS present for replay
+  assert(root.innerHTML.includes('data-action="play-tts"'), "after natural end: play-tts button present");
+  assert(root.innerHTML.includes("MiniMax 播放") || root.innerHTML.includes("▶️ MiniMax 播放"), "after natural end: play-tts shows MiniMax 播放");
 }
 
 // ── Play button: hidden when no audio ────────────────────────────────────────
 console.log("\n── Play button: hidden when no audio ──");
 {
   render({ broadcastAudio: makeAudio({ status: "ready", audioUrl: null }) });
-  assert(!root.innerHTML.includes("data-action=\"play-tts\""), "no separate play-tts when audioUrl is null");
+  assert(!root.innerHTML.includes("data-action=\"play-tts\""), "no play-tts when audioUrl is null");
 
   render({ broadcastAudio: makeAudio({ status: "idle" }) });
-  assert(!root.innerHTML.includes("data-action=\"play-tts\""), "no separate play-tts in idle state");
+  assert(!root.innerHTML.includes("data-action=\"play-tts\""), "no play-tts in idle state");
 
   render({ broadcastAudio: makeAudio({ status: "loading" }) });
-  assert(!root.innerHTML.includes("data-action=\"play-tts\""), "no separate play-tts in loading state");
+  assert(!root.innerHTML.includes("data-action=\"play-tts\""), "no play-tts in loading state");
 }
 
-// ── TTS button: generate-tts handles play/pause/continue toggle ────────────────
-console.log("\n── TTS button: generate-tts handles play/pause/continue toggle ──");
+// ── Two-button model: separate play-tts button handles play/pause/continue ─────
+console.log("\n── Two-button: play-tts handles play/pause/continue ──");
 {
-  // In playing state, generate-tts button shows "MiniMax 暂停" and is disabled
-  // Clicking triggers pause via the toggle logic in onGenerateTts handler
-  render({ broadcastAudio: makeAudio({ status: "playing" }) });
-  assert(root.innerHTML.includes("disabled"), "playing: TTS button disabled");
-  assert(root.innerHTML.includes("MiniMax 暂停") || root.innerHTML.includes("⏸️ MiniMax"), "playing: TTS button label shows MiniMax 暂停");
+  // In playing state, play-tts button shows "MiniMax 暂停" and is clickable
+  render({ broadcastAudio: makeAudio({ status: "playing", audioUrl: "/mock.mp3" }) });
+  assert(root.innerHTML.includes("data-action=\"play-tts\""), "playing: play-tts button present");
+  assert(root.innerHTML.includes("MiniMax 暂停") || root.innerHTML.includes("⏸️ MiniMax 暂停"), "playing: play-tts label shows MiniMax 暂停");
 
-  // In paused state, generate-tts button shows "MiniMax 播放" and is disabled
-  // Clicking triggers resume via the toggle logic
-  render({ broadcastAudio: makeAudio({ status: "paused" }) });
-  assert(root.innerHTML.includes("disabled"), "paused: TTS button disabled");
-  assert(root.innerHTML.includes("MiniMax 播放") || root.innerHTML.includes("▶️ MiniMax"), "paused: TTS button label shows MiniMax 播放");
+  // In paused state, play-tts button shows "MiniMax 继续" and is clickable
+  render({ broadcastAudio: makeAudio({ status: "paused", audioUrl: "/mock.mp3" }) });
+  assert(root.innerHTML.includes("data-action=\"play-tts\""), "paused: play-tts button present");
+  assert(root.innerHTML.includes("MiniMax 继续") || root.innerHTML.includes("▶️ MiniMax 继续"), "paused: play-tts label shows MiniMax 继续");
+
+  // generate-tts is NOT disabled in playing/paused (user can regenerate)
+  render({ broadcastAudio: makeAudio({ status: "playing", audioUrl: "/mock.mp3" }) });
+  assert(!root.innerHTML.match(/data-action="generate-tts"[^>]*disabled/), "playing: generate-tts not disabled");
 }
 
 // ── Broadcast indicator on town-stage while playing ───────────────────────────

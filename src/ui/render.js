@@ -207,6 +207,11 @@ function renderDayCycleStatus(safeUiState, handlers = {}) {
     })()
     : "";
 
+  const isRunning = dc.status === "running";
+  const isWaiting = dc.status === "waiting_choice";
+  const isCompleted = dc.status === "completed";
+  const isError = dc.status === "error";
+
   // Day-opening TTS button
   const dayOpenTextKey = "day_opening:current";
   const doTa = ttsAudios[dayOpenTextKey] ?? {};
@@ -221,10 +226,6 @@ function renderDayCycleStatus(safeUiState, handlers = {}) {
     })()
     : "";
   const stepText = dc.step || "处理中……";
-  const isRunning = dc.status === "running";
-  const isWaiting = dc.status === "waiting_choice";
-  const isCompleted = dc.status === "completed";
-  const isError = dc.status === "error";
 
   return `
     <div class="day-cycle-status ${cls}" aria-live="polite">
@@ -242,7 +243,7 @@ function renderDayCycleStatus(safeUiState, handlers = {}) {
 
 // ── Left Column: Game Actions + Compact Goals ───────────────────────────────────
 
-function renderGameActions(state, safeUiState) {
+function renderGameActions(state, safeUiState, handlers = {}) {
   const nextPhaseLabel = state.phaseIndex === phases.length - 1 ? "🌙 结束今天" : `⏭️ 推进到${phases[state.phaseIndex + 1].label}`;
   const phase = getCurrentPhase(state);
   const isAnimating = safeUiState.isAnimating;
@@ -273,7 +274,7 @@ function renderGameActions(state, safeUiState) {
   const dayCycleActive = dayCycleRunning || dayCycleWaiting || dayCycleCompleted || dayCycleError;
   const dayCycleDisabled = dayCycleActive || isAnimating ? "disabled" : "";
 
-  const dayCycleBanner = dayCycleActive ? renderDayCycleStatus(safeUiState, safeHandlers) : "";
+  const dayCycleBanner = dayCycleActive ? renderDayCycleStatus(safeUiState, handlers) : "";
 
   return `
     <div class="game-actions">
@@ -626,39 +627,33 @@ function renderAtmospherePanel(state, uiState) {
   // Normalize generating → loading for backward compatibility with existing tests
   const baStatus = ba.status === "generating" ? "loading" : (ba.status ?? "idle");
 
-  // TTS button: only handles generation (idle) and re-generation (error)
-  // Disabled when audio already exists (ready/paused/playing) to prevent double-generation
-  const ttsButtonDisabled = (baStatus === "loading" || baStatus === "ready" || baStatus === "playing" || baStatus === "paused") ? "disabled" : "";
+  // TTS button: only handles generation (idle) and re-generation (error/retry)
+  // Only disabled during loading to prevent double-generation
+  const ttsButtonDisabled = baStatus === "loading" ? "disabled" : "";
   const ttsButtonClass = {
     idle: "button--broadcast",
     loading: "button--ghost",
     ready: "button--broadcast",
-    playing: "button--live",
+    playing: "button--broadcast",
     paused: "button--broadcast",
     error: "button--broadcast",
   }[baStatus] ?? "button--broadcast";
   const ttsButtonLabel = {
     idle: "🔊 MiniMax 生成语音",
     loading: "🔊 MiniMax 生成中…",
-    ready: "▶️ MiniMax 播放",
-    playing: "⏸️ MiniMax 暂停",
-    paused: "▶️ MiniMax 播放",
+    ready: "🔊 MiniMax 生成语音",
+    playing: "🔊 MiniMax 生成语音",
+    paused: "🔊 MiniMax 生成语音",
     error: "⚠️ MiniMax 重新生成",
   }[baStatus] ?? "🔊 MiniMax 生成语音";
-  const ttsButtonIcon = {
-    idle: "🔊",
-    loading: "🔊",
-    ready: "▶️",
-    playing: "⏸️",
-    paused: "▶️",
-    error: "⚠️",
-  }[baStatus] ?? "🔊";
 
-  // Play button: visible when audio exists, not loading, and not currently playing
-  // (allows replay after audio ended or resume after pause — not shown during playback)
+  // Play button: handles play/pause/continue toggle
+  // Always clickable when audio exists (ready/paused/playing)
   const hasAudio = ba.audioUrl && baStatus !== "loading";
-  const showPlayButton = hasAudio && baStatus !== "playing";
-  const playButtonLabel = baStatus === "paused" ? "继续" : "播放";
+  const playButtonClass = baStatus === "playing" ? "button--live" : "button--ghost";
+  const playButtonLabel = baStatus === "playing" ? "⏸️ MiniMax 暂停" : baStatus === "paused" ? "▶️ MiniMax 继续" : "▶️ MiniMax 播放";
+  const playButtonDisabled = !hasAudio || baStatus === "loading" || baStatus === "error" ? "disabled" : "";
+  const showPlayButton = hasAudio && baStatus !== "loading" && baStatus !== "error";
   const hasError = baStatus === "error" && ba.error;
 
   // Friendly error message — never expose API keys or trace IDs
@@ -672,6 +667,7 @@ function renderAtmospherePanel(state, uiState) {
         .replace(/\s+/g, " ")
         .trim()
     : "";
+  const debugCodeLabel = hasError && ba.debugCode ? `调试码：${ba.debugCode}` : "";
 
   // TTS status indicator for the panel badge
   const ttsStatusLine = baStatus !== "idle"
@@ -718,11 +714,15 @@ function renderAtmospherePanel(state, uiState) {
             type="button"
             data-action="generate-tts"
             ${ttsButtonDisabled}
-            title="${friendlyError || ""}"
           >
-            ${ttsButtonIcon} ${escapeHtml(ttsButtonLabel)}
+            ${escapeHtml(ttsButtonLabel)}
           </button>
-          ${hasError && friendlyError ? `<span class="tts-error-hint">⚠️ ${escapeHtml(friendlyError)}</span>` : ""}
+          ${showPlayButton ? `
+            <button class="button ${playButtonClass}" type="button" data-action="play-tts" ${playButtonDisabled}>
+              ${escapeHtml(playButtonLabel)}
+            </button>
+          ` : ""}
+          ${hasError && friendlyError ? `<span class="tts-error-hint" title="${escapeHtml(debugCodeLabel || "")}">⚠️ ${escapeHtml(friendlyError)}${debugCodeLabel ? ` <span class="debug-code">(${debugCodeLabel})</span>` : ""}</span>` : ""}
         </div>
       ` : `
         <p class="atmosphere-empty">让 M3 根据今天的小镇状态，写一段早安或晚间广播。</p>
@@ -1679,14 +1679,28 @@ export function renderApp(root, state, handlers, uiState = {}) {
   };
 
   const safeHandlers = {
+    onAdvance: handlers.onAdvance ?? (() => {}),
+    onRunDay: handlers.onRunDay ?? (() => {}),
+    onToggleResidentVoice: handlers.onToggleResidentVoice ?? (() => {}),
+    onToggleAutoPlay: handlers.onToggleAutoPlay ?? (() => {}),
+    onMiniMaxPlan: handlers.onMiniMaxPlan ?? (() => {}),
+    onMiniMaxEvent: handlers.onMiniMaxEvent ?? (() => {}),
+    onMiniMaxBroadcast: handlers.onMiniMaxBroadcast ?? (() => {}),
+    onGenerateTts: handlers.onGenerateTts ?? (() => {}),
+    onPlayTts: handlers.onPlayTts ?? (() => {}),
+    onPauseTts: handlers.onPauseTts ?? (() => {}),
+    onResetAssignments: handlers.onResetAssignments ?? (() => {}),
+    onRunTownDayCycle: handlers.onRunTownDayCycle ?? (() => {}),
+    onNewTown: handlers.onNewTown ?? (() => {}),
+    onSelectResident: handlers.onSelectResident ?? (() => {}),
+    onAssignTask: handlers.onAssignTask ?? (() => {}),
+    onChooseEvent: handlers.onChooseEvent ?? (() => {}),
     onPlayMimoTts: handlers.onPlayMimoTts ?? (() => {}),
     onPauseMimoTts: handlers.onPauseMimoTts ?? (() => {}),
     onResumeMimoTts: handlers.onResumeMimoTts ?? (() => {}),
     onVoicePause: handlers.onVoicePause ?? (() => {}),
     onVoiceResume: handlers.onVoiceResume ?? (() => {}),
     onVoiceStop: handlers.onVoiceStop ?? (() => {}),
-    onGenerateTts: handlers.onGenerateTts ?? (() => {}),
-    onPlayTts: handlers.onPlayTts ?? (() => {}),
   };
 
   root.innerHTML = `
@@ -1696,7 +1710,7 @@ export function renderApp(root, state, handlers, uiState = {}) {
 
       <main class="layout">
         <div class="left-col">
-          ${renderGameActions(state, safeUiState)}
+          ${renderGameActions(state, safeUiState, safeHandlers)}
           ${renderCompactGoals(state)}
         </div>
         <section class="map-panel">
@@ -1754,7 +1768,7 @@ export function renderApp(root, state, handlers, uiState = {}) {
     </div>
   `;
 
-  bindEvents(root, handlers);
+  bindEvents(root, safeHandlers);
 }
 
 // ── Voice Playback Bar ─────────────────────────────────────────────────────────────────

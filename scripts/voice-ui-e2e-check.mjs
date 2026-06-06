@@ -151,18 +151,20 @@ console.log("\n── Atmosphere panel: generate-tts appears exactly once ──
   assert(matches.length === 1, `generate-tts appears ${matches.length} time(s) (expected 1)`);
 }
 
-// ── 3. play-tts button does NOT appear in atmosphere panel ─────────────────
+// ── 3. Two-button state machine: both generate-tts and play-tts present ───────
 
-console.log("\n── Atmosphere panel: play-tts does not appear separately ──");
+console.log("\n── Atmosphere panel: two-button state machine ──");
 {
   const state = createInitialState();
   const root = makeRoot();
   renderApp(root, state, makeMinimalHandlers(), makeUiState({
     broadcastAudio: { status: "ready", text: "测试", audioUrl: "/mock.mp3", error: null, scriptHash: "abc" },
   }));
-  // play-tts should NOT appear — generate-tts button handles both generate and play
+  // Two-button model: generate-tts AND play-tts both exist
+  const genMatches = root.innerHTML.match(/data-action="generate-tts"/g) || [];
+  assert(genMatches.length === 1, `generate-tts appears ${genMatches.length} time(s) (expected 1)`);
   const playMatches = root.innerHTML.match(/data-action="play-tts"/g) || [];
-  assert(playMatches.length === 0, `play-tts appears ${playMatches.length} time(s) (expected 0)`);
+  assert(playMatches.length === 1, `play-tts appears ${playMatches.length} time(s) (expected 1)`);
 }
 
 // ── 4. Clicking generate-tts does not throw ReferenceError ──────────────────
@@ -193,22 +195,26 @@ console.log("\n── Click generate-tts: no ReferenceError ──");
   assert(clicked && !err, "onGenerateTts handler is callable without throwing");
 }
 
-// ── 5. Clicking play-tts (if it exists) does not throw ReferenceError ─────
+// ── 5. Clicking play-tts does not throw ReferenceError ─────────────────────────
 
 console.log("\n── Click play-tts: no ReferenceError ──");
 {
-  // play-tts no longer exists as a separate button — verify it's absent from atmosphere panel
+  // Two-button model: play-tts exists as a separate clickable button
   const state = createInitialState();
   const root = makeRoot();
-  let err = null;
-  try {
-    renderApp(root, state, makeMinimalHandlers(), makeUiState({
-      broadcastAudio: { status: "ready", text: "测试", audioUrl: "/mock.mp3", error: null, scriptHash: "abc" },
-    }));
-    const html = root.innerHTML;
-    // play-tts should NOT exist in atmosphere panel at all
-    assert(!html.includes('data-action="play-tts"'), "play-tts button correctly absent from atmosphere panel");
-  } catch (e) { err = e.message; failed++; console.error(`  ✗ FAIL: ${err}`); }
+  let clicked = false;
+  const handlers = {
+    ...makeMinimalHandlers(),
+    onPlayTts: () => { clicked = true; },
+  };
+  renderApp(root, state, handlers, makeUiState({
+    broadcastAudio: { status: "ready", text: "测试", audioUrl: "/mock.mp3", error: null, scriptHash: "abc" },
+  }));
+  const html = root.innerHTML;
+  // play-tts IS present in two-button model
+  assert(html.includes('data-action="play-tts"'), "play-tts button present in atmosphere panel");
+  assert(!html.includes("ReferenceError"), "no ReferenceError in DOM");
+  assert(!html.includes("TypeError"), "no TypeError in DOM");
 }
 
 // ── 6. Recommended clip with voice ON has non-empty data-text ─────────────
@@ -433,6 +439,91 @@ console.log("\n── Atmosphere panel: only one generate-tts, no duplicate ─�
     const panel = atmospherePanelMatch[1];
     const genInPanel = (panel.match(/data-action="generate-tts"/g) || []).length;
     assert(genInPanel === 1, `generate-tts in atmosphere panel=${genInPanel} (expected 1)`);
+  }
+}
+
+// ── 16. Two-button state: playing shows pause button ────────────────────────────
+
+console.log("\n── Two-button: playing state shows pause button ──");
+{
+  const state = createInitialState();
+  const root = makeRoot();
+  renderApp(root, state, makeMinimalHandlers(), makeUiState({
+    broadcastAudio: { status: "playing", text: "测试", audioUrl: "/mock.mp3", error: null, scriptHash: "abc" },
+  }));
+  const html = root.innerHTML;
+  assert(html.includes("data-action=\"play-tts\""), "play-tts button present during playing");
+  assert(html.includes("暂停"), "pause label shown during playing");
+}
+
+// ── 17. Two-button state: paused shows resume button ──────────────────────────
+
+console.log("\n── Two-button: paused state shows resume button ──");
+{
+  const state = createInitialState();
+  const root = makeRoot();
+  renderApp(root, state, makeMinimalHandlers(), makeUiState({
+    broadcastAudio: { status: "paused", text: "测试", audioUrl: "/mock.mp3", error: null, scriptHash: "abc" },
+  }));
+  const html = root.innerHTML;
+  assert(html.includes("data-action=\"play-tts\""), "play-tts button present during paused");
+  assert(html.includes("继续"), "resume label shown during paused");
+}
+
+// ── 18. MiniMax error shows debugCode in title attribute ───────────────────────
+
+console.log("\n── MiniMax error: debugCode visible in title attribute ──");
+{
+  const state = createInitialState();
+  const root = makeRoot();
+  renderApp(root, state, makeMinimalHandlers(), makeUiState({
+    broadcastAudio: {
+      status: "error",
+      text: "测试",
+      audioUrl: null,
+      error: "MiniMax 广播语音生成失败，请稍后重试。",
+      debugCode: "MINIMAX_TTS_REQUEST_FAILED",
+      scriptHash: "abc",
+    },
+  }));
+  const html = root.innerHTML;
+  // debugCode should be in title attribute, not in visible text
+  assert(html.includes("调试码"), "debugCode shown in error hint (title attribute)");
+  assert(html.includes("MINIMAX_TTS_"), "debugCode value present");
+  assert(!html.includes("sk-"), "no API key leaked");
+  assert(!html.includes("Bearer"), "no Bearer token leaked");
+}
+
+// ── 19. bindEvents uses safeHandlers: missing handlers don't crash ─────────────
+
+console.log("\n── bindEvents: missing optional handlers don't crash ──");
+{
+  const state = createInitialState();
+  const root = makeRoot();
+  // Pass a handlers object missing some optional handlers
+  const minimalHandlers = {
+    onAdvance() {},
+    onRunDay() {},
+    onMiniMaxPlan() {},
+    onMiniMaxEvent() {},
+    onMiniMaxBroadcast() {},
+    onSelectResident() {},
+    onAssignTask() {},
+    onChooseEvent() {},
+    onResetAssignments() {},
+    onNewTown() {},
+    // Missing: onToggleAutoPlay, onToggleResidentVoice, onGenerateTts, onPlayTts, onPauseTts,
+    // onRunTownDayCycle, onPlayMimoTts, onPauseMimoTts, onResumeMimoTts,
+    // onVoicePause, onVoiceResume, onVoiceStop
+  };
+  try {
+    renderApp(root, state, minimalHandlers, makeUiState());
+    const html = root.innerHTML;
+    assert(!html.includes("ReferenceError"), "no ReferenceError with partial handlers");
+    assert(!html.includes("handlers is not defined"), "no handlers is not defined");
+  } catch (e) {
+    failed++;
+    console.error(`  ✗ FAIL: render threw with partial handlers: ${e.message}`);
   }
 }
 

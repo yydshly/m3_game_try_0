@@ -113,6 +113,7 @@ function makeAudioState(overrides = {}) {
     text: "",
     audioUrl: null,
     error: null,
+    debugCode: null,
     traceId: null,
     generatedAt: null,
     scriptHash: "",
@@ -477,6 +478,7 @@ function makeTtsAudio(overrides = {}) {
     audioUrl: null,
     textHash: "",
     error: null,
+    debugCode: null,   // non-sensitive error category for dev debugging
     generatedAt: null,
     startedAt: null,  // when playback started
     textPreview: "",   // truncated text for voice playback bar
@@ -1328,16 +1330,6 @@ function render() {
         const currentHash = hashBroadcastScript(scriptText);
         const ba = uiState.broadcastAudio;
 
-        // Toggle play/pause when audio already exists
-        if (ba.status === "playing") {
-          handlers.onPauseTts();
-          return;
-        }
-        if ((ba.status === "ready" || ba.status === "paused") && ba.audioUrl) {
-          handlers.onPlayTts();
-          return;
-        }
-
         // If loading, ignore (prevent double generation)
         if (ba.status === "loading") return;
 
@@ -1372,13 +1364,21 @@ function render() {
           // Auto-play after successful generation
           handlers.onPlayTts();
         } catch (error) {
+          // Categorize MiniMax TTS errors for dev debugging
+          const msg = error.message ?? "";
+          let devTag = "MINIMAX_TTS_REQUEST_FAILED";
+          if (msg.includes("fetch") || msg.includes("network") || msg.includes("Network")) devTag = "MINIMAX_TTS_NETWORK_ERROR";
+          else if (msg.includes("400") || msg.includes("401") || msg.includes("403")) devTag = "MINIMAX_TTS_AUTH_ERROR";
+          else if (msg.includes("500") || msg.includes("502") || msg.includes("503")) devTag = "MINIMAX_TTS_SERVER_ERROR";
+          console.warn(`[minimaxTts] ${devTag}:`, msg);
           uiState = {
             ...uiState,
             broadcastAudio: {
               status: "error",
               text: scriptText,
               audioUrl: null,
-              error: error.message,
+              error: "MiniMax 广播语音生成失败，请稍后重试。",
+              debugCode: devTag,
               traceId: null,
               generatedAt: null,
               scriptHash: currentHash,
@@ -1604,6 +1604,7 @@ function render() {
                   textHash: currentHash,
                   textPreview: text.slice(0, 40),
                   error: "MiMo 语音生成失败，请稍后重试。",
+                  debugCode: devTag,
                 }),
               },
               currentVoicePlayback: {
