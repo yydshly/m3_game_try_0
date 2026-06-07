@@ -149,9 +149,9 @@ console.log("\n── buildVoicePlaybackView distinguishes resident-dialogue vs 
 
   assert(convView.type === "conversation" || convView.type === "conversation", "conversation type detected");
   assert(bcView.type === "town_broadcast", "broadcast type detected");
-  assert(convView.visible === true, "conversation view is visible when playing");
+  assert(convView.visible === false, "conversation chip is hidden (local to dialogue panel)");
   assert(bcView.visible === true, "broadcast view is visible when playing");
-  assert(convView.speakerName === "小花", "conversation view has speakerName");
+  assert(convView.speakerName === "", "conversation chip speakerName is empty (suppressed)");
   assert(bcView.speakerName === "小镇广播", "broadcast view has speakerName as fallback title");
 }
 

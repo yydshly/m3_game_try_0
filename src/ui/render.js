@@ -2570,6 +2570,11 @@ export function buildVoicePlaybackView(cvp) {
   const isConversation = sourceType === "conversation" || sourceType === "resident-dialogue";
   const isBroadcast = sourceType === "town_broadcast";
 
+  // Conversation audio is local to the stage bubble + dialogue panel — suppress the global chip
+  if (isConversation) {
+    return { visible: false, type: sourceType, status, speakerName: "", targetName: "", text: "", canPause: false, canResume: false, canStop: false, error: "" };
+  }
+
   // Determine chip title and subtitle based on source type
   let speakerName = "";
   let targetName = "";

@@ -291,7 +291,79 @@ console.log("\n── Voice playback active: suppresses resident focus ──");
   assert(!html.includes("stage-bubble--resident-focus"), "voice playback suppresses resident-focus bubble");
 }
 
-// ── Test 10: Source-level check for hide option in updateVoicePlaybackDomStatus ─
+// ── Test 10: Conversation audio hides global playback chip ─────────────────────────
+
+console.log("\n── Conversation audio: hides global playback chip ──");
+{
+  const state = createInitialState();
+  const queue = [
+    { id: "line-1", speakerId: state.residents[0].id, speakerName: state.residents[0].name, text: "米米，今天有什么计划吗？", audioKey: "conversation:xiaohua:line-1" },
+  ];
+
+  root.innerHTML = "";
+  renderApp(root, state, handlers, {
+    residentConversation: {
+      enabled: true,
+      status: "playing",
+      queue,
+      currentIndex: 0,
+      currentLineId: "line-1",
+      visibleText: "米米，今天有什么计划吗？",
+    },
+    currentVoicePlayback: {
+      key: "conversation:xiaohua:line-1",
+      provider: "mimo",
+      scene: "conversation",
+      sourceType: "conversation",
+      sourceId: state.residents[0].id,
+      title: state.residents[0].name,
+      subtitle: "对 米米 说",
+      textPreview: "米米，今天有什么计划吗？",
+      status: "playing",
+    },
+    ttsAudios: {
+      "conversation:xiaohua:line-1": { status: "playing" },
+    },
+  });
+
+  const html = root.innerHTML;
+
+  // Global playback chip must not appear for conversation audio
+  assert(!html.includes("voice-playback-chip--playing"), "conversation does not render global voice playback chip");
+  // No "正在播放" global label from the chip
+  assert(!html.includes("voice-playback-chip__compact") || !html.includes("正在播放"), "conversation does not show global '正在播放' label");
+  // Current dialogue line still shows local playing status
+  assert(html.includes("播放中"), "current dialogue line still shows local playing status");
+}
+
+// ── Test 11: Broadcast audio still shows global playback chip ─────────────────────
+
+console.log("\n── Broadcast: still shows global playback chip ──");
+{
+  const state = createInitialState();
+
+  root.innerHTML = "";
+  renderApp(root, state, handlers, {
+    currentVoicePlayback: {
+      key: "minimax-broadcast",
+      provider: "minimax",
+      scene: "town_broadcast",
+      sourceType: "town_broadcast",
+      title: "小镇广播",
+      subtitle: "",
+      textPreview: "早安，小镇！",
+      status: "playing",
+    },
+  });
+
+  const html = root.innerHTML;
+
+  // Broadcast must still show the global chip
+  assert(html.includes("voice-playback-chip"), "broadcast still renders global voice playback chip");
+  assert(html.includes("voice-playback-chip--playing"), "broadcast chip has playing state class");
+}
+
+// ── Test 13: Source-level check for hide option in updateVoicePlaybackDomStatus ─
 
 console.log("\n── Source check: updateVoicePlaybackDomStatus supports hide option ──");
 {
@@ -303,7 +375,7 @@ console.log("\n── Source check: updateVoicePlaybackDomStatus supports hide o
   assert(hasConversationHide, "conversation audio ended calls updateConversationAudioDomState with { hide: true }");
 }
 
-// ── Test 11: buildWorkbenchMode exists and is pure UI function ─────────────────
+// ── Test 14: buildWorkbenchMode exists and is pure UI function ─────────────────
 
 console.log("\n── Source check: buildWorkbenchMode is defined in render.js ──");
 {
@@ -315,6 +387,16 @@ console.log("\n── Source check: buildWorkbenchMode is defined in render.js �
   assert(hasModeValues, "buildWorkbenchMode returns correct mode values");
   const hasSuppressFlags = renderSource.includes("suppressResidentFocus: true");
   assert(hasSuppressFlags, "buildWorkbenchMode returns suppress flags");
+}
+
+// ── Test 15: buildVoicePlaybackView returns visible:false for conversation ──────
+
+console.log("\n── Source check: buildVoicePlaybackView suppresses conversation chip ──");
+{
+  const fs = await import("fs");
+  const renderSource = fs.readFileSync("./src/ui/render.js", "utf8");
+  const hasConversationGuard = renderSource.includes("isConversation") && renderSource.includes('visible: false');
+  assert(hasConversationGuard, "buildVoicePlaybackView returns visible:false for conversation");
 }
 
 // ── Summary ───────────────────────────────────────────────────────────────────
