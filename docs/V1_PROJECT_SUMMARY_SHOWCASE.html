@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 小镇生活 V1 项目总结</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f5efe6;
+    --card: #fffbf5;
+    --green: #5a8a6e;
+    --green-light: #e8f0eb;
+    --gold: #c9923a;
+    --gold-light: #fdf3e3;
+    --rose: #b05c5c;
+    --rose-light: #f7e8e8;
+    --text: #3d3028;
+    --text-muted: #7a6e62;
+    --border: #e0d5c8;
+    --shadow: rgba(90, 60, 30, 0.08);
+    --radius: 12px;
+  }
+
+  body {
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", sans-serif;
+    background-color: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    font-size: 16px;
+  }
+
+  .container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+
+  /* Hero */
+  .hero {
+    text-align: center;
+    padding: 64px 32px;
+    background: var(--card);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    box-shadow: 0 4px 24px var(--shadow);
+    margin-bottom: 48px;
+  }
+  .hero-emoji { font-size: 56px; margin-bottom: 16px; }
+  .hero h1 {
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: var(--green);
+    margin-bottom: 8px;
+    letter-spacing: 0.02em;
+  }
+  .hero-sub {
+    font-size: 1.1rem;
+    color: var(--text-muted);
+    margin-bottom: 20px;
+  }
+  .hero-badge {
+    display: inline-block;
+    background: var(--green-light);
+    color: var(--green);
+    border: 1px solid var(--green);
+    border-radius: 100px;
+    padding: 4px 16px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin: 4px;
+  }
+  .hero-badge.rose {
+    background: var(--rose-light);
+    color: var(--rose);
+    border-color: var(--rose);
+  }
+  .hero-desc {
+    margin-top: 28px;
+    font-size: 0.95rem;
+    color: var(--text-muted);
+    max-width: 560px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  /* Section */
+  .section {
+    background: var(--card);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    box-shadow: 0 2px 16px var(--shadow);
+    padding: 36px 40px;
+    margin-bottom: 32px;
+  }
+  .section h2 {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--green);
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--green-light);
+  }
+  .section h3 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--text);
+    margin: 20px 0 8px;
+  }
+
+  /* Card grid */
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 12px;
+  }
+  .card-item {
+    background: var(--green-light);
+    border: 1px solid #c8ddd3;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 0.88rem;
+    color: var(--text);
+  }
+
+  /* Loop flow */
+  .loop-flow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin: 16px 0;
+  }
+  .loop-node {
+    background: var(--green-light);
+    border: 1px solid var(--green);
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 0.88rem;
+    color: var(--green);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .loop-arrow {
+    color: var(--gold);
+    font-size: 1rem;
+    font-weight: 700;
+  }
+
+  /* Two columns */
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-top: 16px;
+  }
+
+  /* List */
+  .list {
+    list-style: none;
+    margin-top: 12px;
+  }
+  .list li {
+    padding: 6px 0;
+    font-size: 0.92rem;
+    border-bottom: 1px dashed var(--border);
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .list li:last-child { border-bottom: none; }
+  .list li::before { content: "•"; color: var(--green); font-weight: 700; flex-shrink: 0; }
+
+  /* Alert box */
+  .alert {
+    background: var(--gold-light);
+    border: 1px solid var(--gold);
+    border-left: 4px solid var(--gold);
+    border-radius: 6px;
+    padding: 14px 18px;
+    font-size: 0.9rem;
+    color: var(--text);
+    margin-top: 16px;
+  }
+  .alert.rose {
+    background: var(--rose-light);
+    border-color: var(--rose);
+    border-left-color: var(--rose);
+  }
+
+  /* Table */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 12px;
+    font-size: 0.88rem;
+  }
+  th {
+    background: var(--green-light);
+    color: var(--green);
+    padding: 8px 12px;
+    text-align: left;
+    border: 1px solid var(--border);
+    font-weight: 600;
+  }
+  td {
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    color: var(--text);
+    vertical-align: top;
+  }
+  tr:nth-child(even) td { background: #faf7f2; }
+
+  /* Check list */
+  .check-list {
+    list-style: none;
+    margin-top: 12px;
+  }
+  .check-list li {
+    padding: 6px 0;
+    font-size: 0.92rem;
+    display: flex;
+    gap: 8px;
+    border-bottom: 1px dashed var(--border);
+  }
+  .check-list li:last-child { border-bottom: none; }
+  .check-list li .icon { color: var(--green); flex-shrink: 0; }
+
+  /* Story block */
+  .story-block {
+    background: var(--green-light);
+    border-radius: 8px;
+    padding: 20px 24px;
+    font-size: 0.92rem;
+    line-height: 1.9;
+    color: var(--text);
+    border-left: 4px solid var(--green);
+    margin-top: 16px;
+  }
+
+  /* Conclusion */
+  .conclusion {
+    text-align: center;
+    padding: 40px 32px;
+    background: var(--card);
+    border-radius: var(--radius);
+    border: 2px solid var(--green);
+    box-shadow: 0 4px 24px var(--shadow);
+    margin-bottom: 32px;
+  }
+  .conclusion p {
+    font-size: 1.05rem;
+    color: var(--text);
+    margin-bottom: 12px;
+  }
+  .conclusion .highlight {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--green);
+  }
+
+  /* Footer */
+  footer {
+    text-align: center;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    padding: 24px;
+  }
+
+  /* Responsive */
+  @media (max-width: 700px) {
+    .container { padding: 24px 16px 60px; }
+    .hero { padding: 40px 20px; }
+    .hero h1 { font-size: 1.6rem; }
+    .section { padding: 24px 20px; }
+    .two-col { grid-template-columns: 1fr; gap: 16px; }
+    .card-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+    .loop-flow { flex-direction: column; align-items: flex-start; }
+    .loop-arrow { transform: rotate(90deg); }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="hero-emoji">🏡</div>
+    <h1>AI 小镇生活 V1</h1>
+    <p class="hero-sub">一次关于"AI 能否驱动游戏世界"的技术探索</p>
+    <div>
+      <span class="hero-badge">技术探索完成</span>
+      <span class="hero-badge">项目冻结</span>
+      <span class="hero-badge rose">V1 原型</span>
+    </div>
+    <p class="hero-desc">
+      这个项目不是传统经营游戏，也不是普通网页 Demo。<br>
+      它验证 MiniMax-M3 能否作为游戏世界中的规划者、事件导演、广播员和记忆引用者。
+    </p>
+  </div>
+
+  <!-- 这个项目证明了什么 -->
+  <div class="section">
+    <h2>🏷️ 这个项目证明了什么？</h2>
+    <div class="card-grid">
+      <div class="card-item">✅ AI 不只是 NPC 台词生成器</div>
+      <div class="card-item">✅ AI 可以参与小镇规划</div>
+      <div class="card-item">✅ AI 可以生成事件</div>
+      <div class="card-item">✅ AI 可以生成广播文案</div>
+      <div class="card-item">✅ 玩家选择可以进入世界状态</div>
+      <div class="card-item">✅ 小镇可以对过去选择产生反馈</div>
+      <div class="card-item">✅ 轻量 Web 原型足以验证 AI 游戏闭环</div>
+      <div class="card-item">✅ M3 可以作为记忆引用者影响后续生成</div>
+    </div>
+  </div>
+
+  <!-- V1 当前进展 -->
+  <div class="section">
+    <h2>📋 V1 当前进展</h2>
+    <div class="card-grid">
+      <div class="card-item">小镇 UI 主界面</div>
+      <div class="card-item">居民状态显示</div>
+      <div class="card-item">任务安排系统</div>
+      <div class="card-item">舞台演出动画</div>
+      <div class="card-item">M3 小镇事件生成</div>
+      <div class="card-item">M3 小镇广播文案</div>
+      <div class="card-item">玩家事件选择</div>
+      <div class="card-item">小镇记忆链路</div>
+      <div class="card-item">居民记忆系统</div>
+      <div class="card-item">居民对话队列</div>
+      <div class="card-item">点击居民观察反馈</div>
+      <div class="card-item">地点特效动画</div>
+      <div class="card-item">任务完成反馈</div>
+      <div class="card-item">居民移动动画</div>
+      <div class="card-item">第二天开场回响</div>
+      <div class="card-item">全局语音播放条</div>
+    </div>
+  </div>
+
+  <!-- 已验证的 AI 小镇闭环 -->
+  <div class="section">
+    <h2>🔄 已验证的 AI 小镇闭环</h2>
+    <div class="loop-flow">
+      <div class="loop-node">居民有状态</div>
+      <span class="loop-arrow">→</span>
+      <div class="loop-node">AI 规划</div>
+      <span class="loop-arrow">→</span>
+      <div class="loop-node">舞台演出</div>
+      <span class="loop-arrow">→</span>
+      <div class="loop-node">AI 事件</div>
+      <span class="loop-arrow">→</span>
+      <div class="loop-node">玩家选择</div>
+      <span class="loop-arrow">→</span>
+      <div class="loop-node">世界反馈</div>
+      <span class="loop-arrow">→</span>
+      <div class="loop-node">记忆沉淀</div>
+      <span class="loop-arrow">→</span>
+      <div class="loop-node">后续引用</div>
+    </div>
+    <p style="font-size:0.9rem;color:var(--text-muted);margin-top:12px;">
+      MiniMax-M3 在 V1 中承担了四个角色：<strong>规划者</strong>（安排居民任务）、<strong>叙事导演</strong>（生成小镇事件）、<strong>广播员</strong>（生成广播文案）、<strong>记忆引用者</strong>（将记忆注入 prompt）。
+    </p>
+  </div>
+
+  <!-- 开发反思 -->
+  <div class="section">
+    <h2>🔍 开发过程中的反思</h2>
+    <div class="two-col">
+      <div>
+        <h3>做对了什么</h3>
+        <ul class="list">
+          <li>先验证 AI 驱动闭环，不先做复杂美术</li>
+          <li>轻量 Web 原型快速试错，没有一上来上游戏引擎</li>
+          <li>玩家选择进入记忆链路，小镇真的在"记得"</li>
+          <li>用测试脚本保护关键体验，不用每次手动回归</li>
+          <li>API fallback 设计，无 Key 也能运行</li>
+          <li>点击居民后的观察反馈让世界更可交互</li>
+        </ul>
+      </div>
+      <div>
+        <h3>暴露了什么问题</h3>
+        <ul class="list">
+          <li>render.js 逐渐变重，UI 和游戏状态混合</li>
+          <li>状态边界不够清晰，uiState / state / isAnimating 纠缠</li>
+          <li>缺少统一演出状态机，travel→task→feedback 靠隐式约定</li>
+          <li>事件/任务/记忆/对话是轻量拼接，不是系统化机制</li>
+          <li>缺少真正游戏主循环，玩家目标不清晰</li>
+          <li>缺少居民关系成长系统和故事结构</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- 为什么不继续开发 -->
+  <div class="section">
+    <h2>🚫 为什么 V1 到这里就该停止？</h2>
+    <div class="alert">
+      继续堆 TTS 连续剧、背景音乐、自由对话、更多地图、更多居民，<br>
+      <strong>并不会自动让它变成游戏。</strong>
+    </div>
+    <div class="alert rose" style="margin-top:12px;">
+      当前最大瓶颈已经从技术实现转移到游戏设计。
+    </div>
+    <p style="margin-top:16px;font-size:0.9rem;color:var(--text-muted);">
+      真正的问题不是"还缺什么功能"，而是：玩家每天为什么回来？居民为什么值得关心？
+      这些不是技术问题，是设计问题。V1 代码有原型技术债，在有技术债的代码上继续开发，会持续遭遇架构摩擦。
+    </p>
+    <div class="alert" style="margin-top:12px;background:var(--green-light);border-color:var(--green);border-left-color:var(--green);">
+      <strong>现在停止不是放弃，而是把一次成功的技术探索沉淀下来，避免把原型拖成不可维护的半成品。</strong>
+    </div>
+  </div>
+
+  <!-- 下一步游戏设计 -->
+  <div class="section">
+    <h2>📐 下一次 AI 游戏开发前，需要先设计什么？</h2>
+    <table>
+      <thead>
+        <tr><th>问题</th><th>为什么重要</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>玩家是谁？</td><td>决定世界如何对待玩家</td></tr>
+        <tr><td>玩家每天为什么回来？</td><td>没有日活动力，游戏就没有意义</td></tr>
+        <tr><td>一天的核心目标是什么？</td><td>有目标才有结构，有结构才有体验曲线</td></tr>
+        <tr><td>居民为什么值得关心？</td><td>如果居民只是任务机器，就没有情感价值</td></tr>
+        <tr><td>居民关系如何推进？</td><td>关系不推进，就没有成长感</td></tr>
+        <tr><td>玩家选择如何产生长期后果？</td><td>没有后果的选择是空气</td></tr>
+        <tr><td>小镇记忆如何影响未来事件？</td><td>记忆不产生后果，玩家就不会认真对待</td></tr>
+        <tr><td>AI 事件导演如何避免随机散乱？</td><td>AI 生成自由度过高会让世界失去连贯性</td></tr>
+        <tr><td>哪些内容由 AI 生成，哪些由规则控制？</td><td>AI 是工具，不是上帝</td></tr>
+      </tbody>
+    </table>
+    <div class="alert" style="margin-top:16px;">
+      <strong>核心原则：</strong>先设计，再开发。先主循环，再功能堆叠。先规则边界，再 AI 生成。
+    </div>
+  </div>
+
+  <!-- 未来游戏故事方向 -->
+  <div class="section">
+    <h2>🌿 未来如果重做，它可以讲什么故事？</h2>
+    <div class="story-block">
+      玩家来到一个逐渐失去活力的小镇。这里有居民，有建筑，有每天的日常，有选择，有记忆。
+      居民不是任务 NPC，而是带着记忆、遗憾、习惯和愿望生活的人。
+      玩家每天做出小选择，这些选择不会立刻改变世界，但会慢慢改变居民关系、小镇氛围和未来事件。
+      <br><br>
+      AI 像一个温柔的事件导演，观察居民状态，记住玩家选择，在合适的时间安排冲突、广播、问候和日常事件。
+      <br><br>
+      最终目标不是通关，而是让玩家感觉：<strong>这个小镇真的在生活，而自己参与过它的变化。</strong>
+    </div>
+  </div>
+
+  <!-- 结论 -->
+  <div class="conclusion">
+    <p>V1 技术探索完成。</p>
+    <p>当前项目可以冻结。</p>
+    <p class="highlight">下一步不是继续写代码，而是先完成真正的游戏设计。</p>
+    <p style="margin-top:16px;font-size:0.85rem;color:var(--text-muted);">
+      先设计，再开发。<br>先主循环，再功能堆叠。<br>先规则边界，再 AI 生成。
+    </p>
+  </div>
+
+  <footer>
+    AI 小镇生活 V1 &mdash; 技术探索原型 &mdash; 项目已冻结<br>
+    <a href="V1_RETROSPECTIVE_AND_GAME_DESIGN_PLAN.md" style="color:var(--green);">查看详细复盘文档 &rarr;</a>
+  </footer>
+
+</div>
+</body>
+</html>

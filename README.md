@@ -40,8 +40,8 @@ V1 验证了以下技术能力可在轻量 Web 原型中跑通：
 **小镇记忆** — 玩家选择记忆链路，优先级注入广播/事件 prompt
 **居民对话队列** — M3 生成短对白 + 本地 fallback，按序演出
 **点击居民后的观察反馈** — 心情表情、关系状态、近期记忆
-**地点拟人化** — 地点事件气泡演出（bloom / steam / spark / chat / leaf / rest）
-**对话顺序修复** — 居民对话按 phaseIndex 递增排序，语音播放顺序稳定
+**地点特效演出** — 地点氛围反馈动画（bloom / steam / spark / chat / leaf / rest）
+**对话顺序修复** — 保持对话模板原始问答顺序，避免 seed 轮转打乱语义
 **舞台演出闭环** — 移动动画 → 任务气泡 → 地点特效 → 完成徽章，全链路锁步
 
 ### V1 已验证的 AI 小镇闭环
@@ -118,7 +118,8 @@ V2 优先做游戏设计，不继续堆技术功能。
 
 V1 代码适合作为参考样机和经验沉淀，详见：
 
-**[AI 小镇生活 V1 复盘与后续游戏设计规划](docs/V1_RETROSPECTIVE_AND_GAME_DESIGN_PLAN.md)**
+- [AI 小镇生活 V1 项目总结展示页](docs/V1_PROJECT_SUMMARY_SHOWCASE.html)
+- [AI 小镇生活 V1 复盘与后续游戏设计规划](docs/V1_RETROSPECTIVE_AND_GAME_DESIGN_PLAN.md)
 
 ---
 
