@@ -4861,3 +4861,46 @@ details summary {
   }
 }
 
+/* ── Stage Conversation Overlay ──────────────────────────────────────────── */
+
+.stage-conversation-overlay {
+  position: absolute;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  z-index: 14;
+  min-width: min(520px, 72%);
+  max-width: min(720px, 82%);
+  padding: 12px 18px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(120, 96, 52, 0.18);
+  box-shadow: 0 10px 26px rgba(77, 56, 32, 0.16);
+  backdrop-filter: blur(6px);
+}
+
+.stage-conversation-overlay__speaker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 8px;
+  font-weight: 700;
+  color: #5f4a2a;
+}
+
+.stage-conversation-overlay__avatar {
+  font-size: 15px;
+}
+
+.stage-conversation-overlay__name {
+  font-size: 13px;
+}
+
+.stage-conversation-overlay__text {
+  display: inline;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #3e3326;
+}
+

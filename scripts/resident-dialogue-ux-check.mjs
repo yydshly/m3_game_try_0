@@ -297,6 +297,42 @@ console.log("\n── stage-bubble (当前场景) still exists ──");
   assert(root.innerHTML.includes("当前场景"), "当前场景 label preserved");
 }
 
+// ── 12b. Main stage shows conversation overlay during dialogue ───────────────────
+console.log("\n── Main stage shows stage-conversation-overlay during active dialogue ──");
+{
+  const state = createInitialState();
+  const speakerId = state.residents[0].id;
+  const targetId = state.residents[1].id;
+  root.innerHTML = "";
+  renderApp(root, state, handlers, {
+    activeScenario: selectTownLifeScenario(state),
+    residentSceneBeats: [],
+    residentConversation: {
+      enabled: true,
+      status: "playing",
+      queue: [
+        { id: "conv-line-1", speakerId, targetId, speakerName: "小花", targetName: "米米", text: "今天天气真好。", audioKey: "conversation:hua:conv-line-1", scene: "conversation", status: "idle" },
+        { id: "conv-line-2", speakerId: targetId, targetId: speakerId, speakerName: "米米", targetName: "小花", text: "是啊，适合出去走走。", audioKey: "conversation:mimi:conv-line-2", scene: "conversation", status: "idle" },
+      ],
+      currentIndex: 0,
+      currentLineId: "conv-line-1",
+      visibleText: "今天天气真好。",
+      sessionState: {
+        participants: [
+          { residentId: speakerId, residentName: "小花", role: "speaker" },
+          { residentId: targetId, residentName: "米米", role: "listener" },
+        ],
+      },
+    },
+  });
+  const html = root.innerHTML;
+  assert(html.includes("stage-conversation-overlay"), "main stage has stage-conversation-overlay during conversation");
+  assert(html.includes("今天天气真好。"), "overlay shows current dialogue text");
+  assert(html.includes("小花"), "overlay shows speaker name");
+  assert(html.includes("米米"), "overlay shows target name");
+  assert(!html.includes("正在播放"), "overlay does not show '正在播放'");
+}
+
 // ── 13. deed-outcome-panel still exists ───────────────────────────────────────
 console.log("\n── deed-outcome-panel still exists ──");
 {

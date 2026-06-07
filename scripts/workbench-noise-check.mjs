@@ -336,6 +336,54 @@ console.log("\n── Conversation audio: hides global playback chip ──");
   assert(html.includes("播放中"), "current dialogue line still shows local playing status");
 }
 
+// ── Test 10b: Conversation playing shows stage overlay ────────────────────────────
+
+console.log("\n── Conversation playing: shows stage overlay with dialogue text ──");
+{
+  const state = createInitialState();
+  const speakerId = state.residents[0].id;
+  const targetId = state.residents[1].id;
+  const queue = [
+    { id: "line-1", speakerId, targetId, speakerName: state.residents[0].name, targetName: state.residents[1].name, text: "米米，今天有什么计划吗？", audioKey: "conv:r0:line-1" },
+  ];
+
+  root.innerHTML = "";
+  renderApp(root, state, handlers, {
+    residentConversation: {
+      enabled: true,
+      status: "playing",
+      queue,
+      currentIndex: 0,
+      currentLineId: "line-1",
+      visibleText: "米米，今天有什么计划吗？",
+      sessionState: {
+        participants: [
+          { residentId: speakerId, residentName: state.residents[0].name, role: "speaker" },
+          { residentId: targetId, residentName: state.residents[1].name, role: "listener" },
+        ],
+      },
+    },
+  });
+
+  const html = root.innerHTML;
+
+  // Stage overlay must be present
+  assert(html.includes("stage-conversation-overlay"), "conversation renders main stage dialogue overlay");
+  // Overlay must show current dialogue text
+  assert(html.includes("米米，今天有什么计划吗？"), "conversation overlay shows current dialogue text");
+  // Overlay must show speaker name
+  assert(html.includes(state.residents[0].name), "conversation overlay shows speaker name");
+  // Overlay must show target name
+  assert(html.includes(state.residents[1].name), "conversation overlay shows target name");
+  // Stage bubbles must be suppressed
+  assert(!html.includes("stage-bubble--scene"), "conversation suppresses scene bubble");
+  assert(!html.includes("stage-bubble--resident-focus"), "conversation suppresses resident-focus bubble");
+  // Global playback chip still hidden
+  assert(!html.includes("voice-playback-chip--playing"), "conversation still hides global playback chip");
+  // No "正在播放" in main stage
+  assert(!html.includes("正在播放"), "conversation does not show '正在播放' on main stage");
+}
+
 // ── Test 11: Broadcast audio still shows global playback chip ─────────────────────
 
 console.log("\n── Broadcast: still shows global playback chip ──");

@@ -1359,6 +1359,46 @@ function renderTaskCompletionPanel(taskFeedback) {
   </aside>`;
 }
 
+/**
+ * Render the stage-level conversation performance overlay.
+ * Shown at the bottom-center of the stage when a resident dialogue is active.
+ * Does NOT show any audio status — only the speaker, target, and dialogue text.
+ * @param {object} state
+ * @param {object} uiState - safeUiState
+ * @returns {string} HTML or empty string
+ */
+function renderStageConversationOverlay(state, uiState) {
+  const conv = uiState.residentConversation;
+  const isActive = conv?.status === "playing" || conv?.status === "paused";
+
+  if (!isActive) return "";
+
+  const line = conv.queue?.[conv.currentIndex];
+  if (!line) return "";
+
+  const speaker = state.residents.find((r) => r.id === line.speakerId);
+  const participants = conv.sessionState?.participants ?? [];
+  const target = participants.find((p) => p.residentId !== line.speakerId);
+
+  const speakerName = line.speakerName ?? speaker?.name ?? "居民";
+  const targetName = target?.residentName ?? "";
+  const text = conv.visibleText || line.text || "";
+
+  if (!text.trim()) return "";
+
+  return `
+    <aside class="stage-conversation-overlay" aria-label="当前居民对话">
+      <div class="stage-conversation-overlay__speaker">
+        <span class="stage-conversation-overlay__avatar">${escapeHtml(speaker?.avatar ?? "💬")}</span>
+        <span class="stage-conversation-overlay__name">
+          ${escapeHtml(speakerName)}${targetName ? ` → ${escapeHtml(targetName)}` : ""}
+        </span>
+      </div>
+      <p class="stage-conversation-overlay__text">${escapeHtml(text)}</p>
+    </aside>
+  `;
+}
+
 function renderTownStage(state, uiState, handlers = {}) {
   const digest = buildStageDigest(state);
   const phase = getCurrentPhase(state);
@@ -1476,6 +1516,7 @@ function renderTownStage(state, uiState, handlers = {}) {
       <div class="town-stage__characters">
         ${charactersHtml}
       </div>
+      ${renderStageConversationOverlay(state, uiState)}
       ${(() => {
         const workbenchMode = buildWorkbenchMode(uiState);
 
@@ -2580,10 +2621,7 @@ export function buildVoicePlaybackView(cvp) {
   let targetName = "";
   let text = cvp.textPreview ?? "";
 
-  if (isConversation) {
-    speakerName = cvp.title ?? "";
-    targetName = cvp.subtitle?.replace(/^对\s*/, "") ?? "";
-  } else if (isBroadcast) {
+  if (isBroadcast) {
     speakerName = "小镇广播";
     targetName = "";
     text = cvp.textPreview ?? "";
