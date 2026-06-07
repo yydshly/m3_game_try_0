@@ -32,7 +32,7 @@
  * @param {object} options
  * @param {object} [options.activeScenario] - active scenario object
  * @param {object} [options.completionFeedback] - completion feedback from current phase
- * @param {number} [options.rotationSeed] - seed for template rotation (default based on day)
+ * @param {number} [options.rotationSeed] - seed for future multi-script selection (default based on day; currently unused since line order is stable)
  * @returns {DialogueTurn[]} structured dialogue turns
  */
 export function buildResidentDialogueTurns(state, options = {}) {
@@ -56,17 +56,18 @@ export function buildResidentDialogueTurns(state, options = {}) {
   const libraryKey = selectPhraseLibrary(activeScenario, completionFeedback, phaseIndex);
   const snippets = DIALOGUE_SNIPPETS[libraryKey] ?? DIALOGUE_SNIPPETS.fallback;
 
-  // Rotate template based on seed so we don't repeat the same conversation
-  const rotated = rotateArray(snippets, rotationSeed % snippets.length);
+  // Keep line order stable to preserve dialogue coherence.
+  // Variation should happen by selecting a whole script, not rotating lines.
+  const ordered = snippets;
 
   // Map template turns to actual residents
   const turns = [];
-  const maxLines = Math.min(rotated.length, 6);
+  const maxLines = Math.min(ordered.length, 6);
 
   for (let i = 0; i < maxLines; i++) {
     const pairIdx = i % pairs.length;
     const pair = pairs[pairIdx];
-    const turn = rotated[i];
+    const turn = ordered[i];
 
     const fromResident = turn.from === "target" ? pair.target : pair.speaker;
     const toResident = turn.to === "target" ? pair.target : pair.speaker;
@@ -439,15 +440,17 @@ export function buildResidentConversationSession(state, options = {}) {
   const locationLabel = getLocationLabel(locationId);
 
   // Step 2: Generate turns using the fixed pair only
+  // Keep line order stable to preserve dialogue coherence.
+  // Variation should happen by selecting a whole script, not rotating lines.
   const libraryKey = selectPhraseLibrary(activeScenario, completionFeedback, phaseIndex);
   const snippets = DIALOGUE_SNIPPETS[libraryKey] ?? DIALOGUE_SNIPPETS.fallback;
-  const rotated = rotateArray(snippets, rotationSeed % snippets.length);
+  const ordered = snippets;
 
   const lines = [];
-  const maxLines = Math.min(rotated.length, 6);
+  const maxLines = Math.min(ordered.length, 6);
 
   for (let i = 0; i < maxLines; i++) {
-    const turn = rotated[i];
+    const turn = ordered[i];
     // Determine actual speaker: alternate based on line index, but allow 2-same max
     const actualSpeaker = (i % 2 === 0) ? speaker : target;
     const actualTarget = (i % 2 === 0) ? target : speaker;

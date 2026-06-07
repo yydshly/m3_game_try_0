@@ -3,7 +3,7 @@ import { createInitialState } from "../src/domain/state.js";
 import { advancePhase } from "../src/domain/simulation.js";
 import { renderApp } from "../src/ui/render.js";
 import { selectTownLifeScenario } from "../src/domain/aiDirector.js";
-import { buildResidentDialogueTurns } from "../src/services/dialogueGenerator.js";
+import { buildResidentDialogueTurns, buildResidentConversationSession } from "../src/services/dialogueGenerator.js";
 import { buildVoicePlaybackView } from "../src/ui/render.js";
 
 const root = {
@@ -618,6 +618,65 @@ console.log("\n── Conversation bubble: renders full text, not truncated ─�
   // Must NOT have manual truncation
   assert(!html.includes("好，等会儿广..."), "dialogue is not manually truncated with ellipsis");
   assert(html.includes("等会儿广场上见"), "full text without truncation is present");
+}
+
+// ── 21. Dialogue order: day 6 morning must not ask plan after meetup agreed ─────────
+console.log("\n── Dialogue order: day 6 morning preserves logical Q&A sequence ──");
+{
+  const state = createInitialState();
+  state.day = 6;
+  state.phaseIndex = 0; // morning
+
+  // Build session as would be done for day 6 morning
+  const session = buildResidentConversationSession(state, {
+    activeScenario: null,
+    rotationSeed: state.day,
+  });
+
+  const texts = session.lines.map((l) => l.text).join("\n");
+
+  const askIndex = texts.indexOf("今天有什么计划吗");
+  const planIndex = texts.indexOf("想去");
+  const meetupIndex = texts.indexOf("等会儿广场上见");
+
+  assert(askIndex >= 0, "conversation includes plan question: 今天有什么计划吗");
+  assert(planIndex >= 0, "conversation includes plan answer: 想去");
+  assert(meetupIndex >= 0, "conversation includes meetup response: 等会儿广场上见");
+  assert(askIndex < planIndex, "question appears before plan answer (not: 先约定后提问)");
+  assert(planIndex < meetupIndex, "plan answer appears before meetup response");
+
+  // Also verify no scrambled order: meetup should not come before question
+  assert(
+    !(meetupIndex >= 0 && askIndex >= 0 && meetupIndex < askIndex),
+    "conversation does NOT agree on meetup before asking the plan question"
+  );
+}
+
+// ── 22. Dialogue order: rotationSeed does not scramble line order ─────────────────
+console.log("\n── Dialogue order: rotationSeed does not scramble line order ──");
+{
+  const state = createInitialState();
+  state.phaseIndex = 0; // morning
+
+  // Test multiple "days" (rotationSeed values) — order must remain stable
+  const orderResults = [];
+  for (const seed of [1, 2, 3, 4, 5, 6, 7]) {
+    const session = buildResidentConversationSession(state, {
+      activeScenario: null,
+      rotationSeed: seed,
+    });
+    const texts = session.lines.map((l) => l.text);
+    orderResults.push(texts.join("|"));
+  }
+
+  // All orders should be identical (no rotation)
+  const firstOrder = orderResults[0];
+  for (let i = 1; i < orderResults.length; i++) {
+    assert(
+      orderResults[i] === firstOrder,
+      `rotationSeed=${i + 1} produces same line order as rotationSeed=1 (order is stable)`
+    );
+  }
 }
 
 // ── Results ────────────────────────────────────────────────────────────────────
