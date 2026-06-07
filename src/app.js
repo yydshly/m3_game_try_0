@@ -1099,6 +1099,71 @@ function pauseBroadcastAudio() {
 }
 
 /**
+ * Returns true if the audioKey belongs to a resident conversation audio clip.
+ * Conversation audio keys use the prefix "conversation:" and should receive
+ * local DOM updates instead of full re-renders during playback events.
+ */
+function isConversationAudioKey(audioKey) {
+  return String(audioKey || "").startsWith("conversation:");
+}
+
+/**
+ * Update the voice playback chip status in the DOM without a full re-render.
+ * Used during conversation audio playback to avoid disrupting the panel scroll.
+ * @returns {boolean} true if the node was found and updated, false otherwise.
+ */
+function updateVoicePlaybackDomStatus(status, options = {}) {
+  const bar = root?.querySelector?.(".voice-playback-chip");
+  if (!bar) return false;
+
+  bar.dataset.status = status;
+
+  const statusMap = {
+    loading: "正在生成语音",
+    ready: "语音已就绪",
+    playing: "正在播放",
+    paused: "已暂停",
+    error: "播放异常",
+    idle: "",
+  };
+
+  const textNode = bar.querySelector(".voice-playback-chip__compact, .voice-playback-chip__error, .voice-playback-chip__broadcast");
+  if (textNode && options.text) {
+    textNode.textContent = options.text;
+  }
+
+  return true;
+}
+
+/**
+ * Update a single conversation line's voice status in the DOM without a full re-render.
+ * @returns {boolean} true if the line was found and updated, false otherwise.
+ */
+function updateConversationLineDomStatus(audioKey, status) {
+  if (!audioKey) return false;
+  const line = root?.querySelector?.(`[data-conversation-audio-key="${CSS.escape(audioKey)}"]`);
+  if (!line) return false;
+
+  line.dataset.voiceStatus = status;
+
+  const statusMap = {
+    loading: "生成中",
+    ready: "已就绪",
+    playing: "播放中",
+    paused: "已暂停",
+    error: "语音异常",
+    idle: "",
+  };
+
+  const statusNode = line.querySelector(".dialogue-beat__voice-status");
+  if (statusNode) {
+    statusNode.textContent = statusMap[status] ?? status;
+  }
+
+  return true;
+}
+
+/**
  * Start playing a MiMo audio URL for a given audioKey.
  * @param {string} audioKey
  * @param {string} audioUrl
@@ -1129,6 +1194,7 @@ function playMimoAudio(audioKey, audioUrl) {
   audio.onplay = () => {
     voiceLog("mimo:audio:playing", { audioKey });
     const entry = uiState.ttsAudios[audioKey];
+    const isConv = isConversationAudioKey(audioKey);
     if (entry) {
       uiState = {
         ...uiState,
@@ -1140,6 +1206,11 @@ function playMimoAudio(audioKey, audioUrl) {
           updatedAt: Date.now(),
         },
       };
+      if (isConv) {
+        updateConversationLineDomStatus(audioKey, "playing");
+        updateVoicePlaybackDomStatus("playing");
+        return;
+      }
       render();
     }
   };
@@ -1148,6 +1219,7 @@ function playMimoAudio(audioKey, audioUrl) {
     const entry = uiState.ttsAudios[audioKey];
     if (entry && entry.status === "playing") {
       voiceLog("mimo:audio:paused", { audioKey });
+      const isConv = isConversationAudioKey(audioKey);
       uiState = {
         ...uiState,
         ttsAudios: { ...uiState.ttsAudios, [audioKey]: { ...entry, status: "paused" } },
@@ -1157,12 +1229,18 @@ function playMimoAudio(audioKey, audioUrl) {
           updatedAt: Date.now(),
         },
       };
+      if (isConv) {
+        updateConversationLineDomStatus(audioKey, "paused");
+        updateVoicePlaybackDomStatus("paused");
+        return;
+      }
       render();
     }
   };
 
   audio.onended = () => {
     voiceLog("mimo:audio:ended", { audioKey });
+    const isConv = isConversationAudioKey(audioKey);
     uiState = {
       ...uiState,
       ttsAudios: {
@@ -1172,11 +1250,17 @@ function playMimoAudio(audioKey, audioUrl) {
       currentVoicePlayback: makeVoicePlaybackState(), // clear
     };
     activeMimoAudios.delete(audioKey);
+    if (isConv) {
+      updateConversationLineDomStatus(audioKey, "ready");
+      updateVoicePlaybackDomStatus("idle");
+      return;
+    }
     render();
   };
 
   audio.onerror = () => {
     voiceLog("mimo:audio:error", { audioKey, errorName: "AudioError" });
+    const isConv = isConversationAudioKey(audioKey);
     uiState = {
       ...uiState,
       ttsAudios: {
@@ -1195,6 +1279,11 @@ function playMimoAudio(audioKey, audioUrl) {
       },
     };
     activeMimoAudios.delete(audioKey);
+    if (isConv) {
+      updateConversationLineDomStatus(audioKey, "error");
+      updateVoicePlaybackDomStatus("error");
+      return;
+    }
     render();
   };
 
@@ -1202,6 +1291,7 @@ function playMimoAudio(audioKey, audioUrl) {
     // Autoplay blocked — treat as paused
     voiceLog("mimo:audio:blocked", { audioKey });
     const currentEntry = uiState.ttsAudios[audioKey];
+    const isConv = isConversationAudioKey(audioKey);
     if (currentEntry) {
       uiState = {
         ...uiState,
@@ -1212,6 +1302,12 @@ function playMimoAudio(audioKey, audioUrl) {
           updatedAt: Date.now(),
         },
       };
+      if (isConv) {
+        updateConversationLineDomStatus(audioKey, "paused");
+        updateVoicePlaybackDomStatus("paused");
+        activeMimoAudios.delete(audioKey);
+        return;
+      }
       render();
     }
     activeMimoAudios.delete(audioKey);

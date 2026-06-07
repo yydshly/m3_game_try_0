@@ -705,9 +705,19 @@ function renderResidentDialoguePanel({ beats = [], conversationQueue = [], curre
         // Show the typewriter visibleText for current line, full text for past lines
         const displayText = isCurrent ? (visibleText || line.text) : (isPast ? line.text : "");
         if (!displayText) return ""; // Don't show future lines
-        return `<div class="dialogue-beat ${isCurrent ? "dialogue-beat--current" : ""}">
+        const audioKey = line.audioKey ?? "";
+        const voiceStatus = line.ttsAudio?.status ?? "idle";
+        const voiceStatusLabel = ({
+          loading: "生成中",
+          ready: "已就绪",
+          playing: "播放中",
+          paused: "已暂停",
+          error: "语音异常",
+        }[voiceStatus] ?? "");
+        return `<div class="dialogue-beat ${isCurrent ? "dialogue-beat--current" : ""}" data-conversation-audio-key="${escapeHtml(audioKey)}" data-voice-status="${escapeHtml(voiceStatus)}">
           <span class="dialogue-beat__name">${escapeHtml(line.speakerName ?? "居民")}：</span>
           <span class="dialogue-beat__text">${escapeHtml(displayText)}</span>
+          ${voiceStatusLabel ? `<span class="dialogue-beat__voice-status">${escapeHtml(voiceStatusLabel)}</span>` : ""}
         </div>`;
       })
       .join("");
