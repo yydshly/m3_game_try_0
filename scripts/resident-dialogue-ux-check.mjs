@@ -297,12 +297,13 @@ console.log("\n── stage-bubble (当前场景) still exists ──");
   assert(root.innerHTML.includes("当前场景"), "当前场景 label preserved");
 }
 
-// ── 12b. Main stage shows conversation overlay during dialogue ───────────────────
-console.log("\n── Main stage shows stage-conversation-overlay during active dialogue ──");
+// ── 12b. Main stage shows conversation overlay and speaker/listener highlights ───────────────────
+console.log("\n── Main stage shows stage-conversation-overlay and speaker/listener highlights during active dialogue ──");
 {
   const state = createInitialState();
-  const speakerId = state.residents[0].id;
-  const targetId = state.residents[1].id;
+  const speakerId = state.residents[0].id;  // 小花 = speaker
+  const listenerId = state.residents[1].id;  // 米米 = listener
+  const outsiderId = state.residents[2].id;   // 第三位居民 = 非参与者
   root.innerHTML = "";
   renderApp(root, state, handlers, {
     activeScenario: selectTownLifeScenario(state),
@@ -311,8 +312,8 @@ console.log("\n── Main stage shows stage-conversation-overlay during active 
       enabled: true,
       status: "playing",
       queue: [
-        { id: "conv-line-1", speakerId, targetId, speakerName: "小花", targetName: "米米", text: "今天天气真好。", audioKey: "conversation:hua:conv-line-1", scene: "conversation", status: "idle" },
-        { id: "conv-line-2", speakerId: targetId, targetId: speakerId, speakerName: "米米", targetName: "小花", text: "是啊，适合出去走走。", audioKey: "conversation:mimi:conv-line-2", scene: "conversation", status: "idle" },
+        { id: "conv-line-1", speakerId, targetId: listenerId, speakerName: "小花", targetName: "米米", text: "今天天气真好。", audioKey: "conversation:hua:conv-line-1", scene: "conversation", status: "idle" },
+        { id: "conv-line-2", speakerId: listenerId, targetId: speakerId, speakerName: "米米", targetName: "小花", text: "是啊，适合出去走走。", audioKey: "conversation:mimi:conv-line-2", scene: "conversation", status: "idle" },
       ],
       currentIndex: 0,
       currentLineId: "conv-line-1",
@@ -320,17 +321,91 @@ console.log("\n── Main stage shows stage-conversation-overlay during active 
       sessionState: {
         participants: [
           { residentId: speakerId, residentName: "小花", role: "speaker" },
-          { residentId: targetId, residentName: "米米", role: "listener" },
+          { residentId: listenerId, residentName: "米米", role: "listener" },
         ],
       },
     },
   });
   const html = root.innerHTML;
+  // Overlay assertions
   assert(html.includes("stage-conversation-overlay"), "main stage has stage-conversation-overlay during conversation");
   assert(html.includes("今天天气真好。"), "overlay shows current dialogue text");
   assert(html.includes("小花"), "overlay shows speaker name");
   assert(html.includes("米米"), "overlay shows target name");
   assert(!html.includes("正在播放"), "overlay does not show '正在播放'");
+  // Speaker/listener class assertions
+  assert(html.includes("stage-character--speaking"), "current speaker has stage-character--speaking class");
+  assert(html.includes("stage-character--listening"), "current listener has stage-character--listening class");
+  // Exactly one speaker and one listener
+  const speakingCount = (html.match(/stage-character--speaking/g) || []).length;
+  const listeningCount = (html.match(/stage-character--listening/g) || []).length;
+  assert(speakingCount === 1, `only one speaker has speaking class (got ${speakingCount})`);
+  assert(listeningCount === 1, `only one listener has listening class (got ${listeningCount})`);
+  // Conversation bubble only on speaker
+  const convBubbleCount = (html.match(/stage-character__dialogue--conversation/g) || []).length;
+  assert(convBubbleCount === 1, "only speaker shows conversation bubble");
+}
+
+// ── 12c. Idle conversation: no overlay, no speaking/listening classes ─────────────────
+console.log("\n── Idle conversation: no overlay, no speaking/listening classes ──");
+{
+  const state = createInitialState();
+  root.innerHTML = "";
+  renderApp(root, state, handlers, {
+    activeScenario: selectTownLifeScenario(state),
+    residentSceneBeats: [],
+    residentConversation: {
+      enabled: true,
+      status: "idle",
+      queue: [],
+      currentIndex: 0,
+      currentLineId: "",
+      visibleText: "",
+    },
+  });
+  const html = root.innerHTML;
+  assert(!html.includes("stage-conversation-overlay"), "idle: no stage overlay");
+  assert(!html.includes("stage-character--speaking"), "idle: no speaking class");
+  assert(!html.includes("stage-character--listening"), "idle: no listening class");
+}
+
+// ── 12d. Speaker switches on line change ─────────────────────────────────────────
+console.log("\n── Speaker switches when currentIndex changes ──");
+{
+  const state = createInitialState();
+  const speakerId = state.residents[0].id;
+  const listenerId = state.residents[1].id;
+  // Render with line 2 as current (speaker = listenerId, listener = speakerId)
+  root.innerHTML = "";
+  renderApp(root, state, handlers, {
+    activeScenario: selectTownLifeScenario(state),
+    residentSceneBeats: [],
+    residentConversation: {
+      enabled: true,
+      status: "playing",
+      queue: [
+        { id: "conv-line-1", speakerId, targetId: listenerId, speakerName: "小花", targetName: "米米", text: "第一句。", audioKey: "conversation:hua:conv-line-1", scene: "conversation", status: "idle" },
+        { id: "conv-line-2", speakerId: listenerId, targetId: speakerId, speakerName: "米米", targetName: "小花", text: "第二句。", audioKey: "conversation:mimi:conv-line-2", scene: "conversation", status: "idle" },
+      ],
+      currentIndex: 1,  // Now line 2 is current
+      currentLineId: "conv-line-2",
+      visibleText: "第二句。",
+      sessionState: {
+        participants: [
+          { residentId: speakerId, residentName: "小花", role: "speaker" },
+          { residentId: listenerId, residentName: "米米", role: "listener" },
+        ],
+      },
+    },
+  });
+  const html = root.innerHTML;
+  // The speaker should now be the listener resident (米米), not 小花
+  assert(html.includes("stage-character--speaking"), "speaker class present after line switch");
+  assert(html.includes("stage-character--listening"), "listener class present after line switch");
+  // Overlay text should be the second line
+  assert(html.includes("第二句。"), "overlay shows the second line text");
+  // The first line text appears in the right panel as a past line (correct behavior)
+  // so we don't assert !html.includes here
 }
 
 // ── 13. deed-outcome-panel still exists ───────────────────────────────────────

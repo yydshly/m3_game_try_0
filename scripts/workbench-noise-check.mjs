@@ -384,6 +384,134 @@ console.log("\n── Conversation playing: shows stage overlay with dialogue te
   assert(!html.includes("正在播放"), "conversation does not show '正在播放' on main stage");
 }
 
+// ── Test 10c: Speaker gets speaking class, listener gets listening class ───────────
+
+console.log("\n── Conversation: speaker has speaking class, listener has listening class ──");
+{
+  const state = createInitialState();
+  const speakerId = state.residents[0].id;  // 小花 = speaker
+  const listenerId = state.residents[1].id;  // 米米 = listener
+  const outsiderId = state.residents[2].id;   // 其他居民 = 非参与者
+  const queue = [
+    { id: "line-1", speakerId, targetId: listenerId, speakerName: state.residents[0].name, targetName: state.residents[1].name, text: "今天天气真好！", audioKey: "conv:r0:line-1" },
+  ];
+
+  root.innerHTML = "";
+  renderApp(root, state, handlers, {
+    residentConversation: {
+      enabled: true,
+      status: "playing",
+      queue,
+      currentIndex: 0,
+      currentLineId: "line-1",
+      visibleText: "今天天气真好！",
+      sessionState: {
+        participants: [
+          { residentId: speakerId, residentName: state.residents[0].name, role: "speaker" },
+          { residentId: listenerId, residentName: state.residents[1].name, role: "listener" },
+        ],
+      },
+    },
+  });
+
+  const html = root.innerHTML;
+
+  // Speaker must have speaking class
+  assert(html.includes('stage-character--speaking'), "current speaker has stage-character--speaking class");
+  // Listener must have listening class
+  assert(html.includes('stage-character--listening'), "current listener has stage-character--listening class");
+  // Non-participant must NOT have speaking or listening class
+  // Count total speaking/listening classes - should be exactly 1 each (only the two participants)
+  const totalSpeaking = (html.match(/stage-character--speaking/g) || []).length;
+  const totalListening = (html.match(/stage-character--listening/g) || []).length;
+  assert(totalSpeaking === 1, `only one speaker has speaking class (got ${totalSpeaking})`);
+  assert(totalListening === 1, `only one listener has listening class (got ${totalListening})`);
+  // Only one speaker should exist
+  const speakerMatches = html.match(/stage-character--speaking/g) || [];
+  assert(speakerMatches.length === 1, "only one speaker has speaking class");
+  // Only one listener should exist
+  const listenerMatches = html.match(/stage-character--listening/g) || [];
+  assert(listenerMatches.length === 1, "only one listener has listening class");
+}
+
+// ── Test 10d: Conversation bubble only on speaker, not on listener ─────────────────
+
+console.log("\n── Conversation: bubble only on speaker, not on listener ──");
+{
+  const state = createInitialState();
+  const speakerId = state.residents[0].id;
+  const listenerId = state.residents[1].id;
+  const queue = [
+    { id: "line-1", speakerId, targetId: listenerId, speakerName: state.residents[0].name, targetName: state.residents[1].name, text: "一起去花园吧！", audioKey: "conv:r0:line-1" },
+  ];
+
+  root.innerHTML = "";
+  renderApp(root, state, handlers, {
+    residentConversation: {
+      enabled: true,
+      status: "playing",
+      queue,
+      currentIndex: 0,
+      currentLineId: "line-1",
+      visibleText: "一起去花园吧！",
+      sessionState: {
+        participants: [
+          { residentId: speakerId, residentName: state.residents[0].name, role: "speaker" },
+          { residentId: listenerId, residentName: state.residents[1].name, role: "listener" },
+        ],
+      },
+    },
+  });
+
+  const html = root.innerHTML;
+  // Conversation bubble class only appears once (on speaker)
+  const convBubbleMatches = html.match(/stage-character__dialogue--conversation/g) || [];
+  assert(convBubbleMatches.length === 1, "only speaker shows conversation bubble");
+}
+
+// ── Test 10e: Conversation idle/completed cleans up speaking/listening/overlay ───────
+
+console.log("\n── Conversation idle/completed: no speaking/listening/overlay ──");
+{
+  const state = createInitialState();
+
+  root.innerHTML = "";
+  renderApp(root, state, handlers, {
+    residentConversation: {
+      enabled: true,
+      status: "idle",
+      queue: [],
+      currentIndex: 0,
+      currentLineId: "",
+      visibleText: "",
+    },
+  });
+
+  const html = root.innerHTML;
+
+  assert(!html.includes("stage-conversation-overlay"), "idle conversation: no stage overlay");
+  assert(!html.includes("stage-character--speaking"), "idle conversation: no speaking class");
+  assert(!html.includes("stage-character--listening"), "idle conversation: no listening class");
+
+  // Also test completed status
+  root.innerHTML = "";
+  renderApp(root, state, handlers, {
+    residentConversation: {
+      enabled: true,
+      status: "completed",
+      queue: [],
+      currentIndex: 0,
+      currentLineId: "",
+      visibleText: "",
+    },
+  });
+
+  const html2 = root.innerHTML;
+  assert(!html2.includes("stage-conversation-overlay"), "completed conversation: no stage overlay");
+  assert(!html2.includes("stage-character--speaking"), "completed conversation: no speaking class");
+  assert(!html2.includes("stage-character--listening"), "completed conversation: no listening class");
+}
+
 // ── Test 11: Broadcast audio still shows global playback chip ─────────────────────
 
 console.log("\n── Broadcast: still shows global playback chip ──");
