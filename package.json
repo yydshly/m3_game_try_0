@@ -33,6 +33,7 @@
     "tts-playback-check": "node scripts/tts-playback-check.mjs",
     "memory-reference-check": "node scripts/memory-reference-check.mjs",
     "resident-feedback-check": "node scripts/resident-feedback-check.mjs",
+    "resident-focus-click-check": "node scripts/resident-focus-click-check.mjs",
     "desktop-ui-polish-check": "node scripts/desktop-ui-polish-check.mjs",
     "stage-acting-check": "node scripts/stage-acting-check.mjs",
     "broadcast-tts-check": "node scripts/broadcast-tts-check.mjs",

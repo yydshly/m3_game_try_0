@@ -4622,6 +4622,53 @@ details summary {
   font-weight: bold;
 }
 
+/* ── Resident Focus Bubble ───────────────────────────────────────── */
+
+.stage-bubble--resident-focus {
+  border-color: rgba(255, 205, 96, 0.7);
+  background: linear-gradient(135deg, rgba(255, 248, 225, 0.96), rgba(255, 255, 255, 0.92));
+}
+
+.stage-bubble--resident-focus .stage-bubble__tag {
+  color: #8a5a18;
+}
+
+.stage-bubble__resident-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.stage-bubble__resident-meta span {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: rgba(255, 235, 178, 0.7);
+}
+
+/* ── Stage Character Selected — Enhanced Focus ────────────────────── */
+
+.stage-character--selected .stage-character__sprite {
+  box-shadow:
+    0 0 0 3px rgba(255, 244, 190, 0.95),
+    0 10px 24px rgba(90, 63, 28, 0.22);
+  transform: scale(1.06);
+}
+
+.stage-character--selected::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -8px;
+  width: 46px;
+  height: 14px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(255, 222, 125, 0.55), rgba(255, 222, 125, 0));
+  pointer-events: none;
+}
+
 .voice-debug-panel__detail {
   color: #b0bec5;
   word-break: break-all;

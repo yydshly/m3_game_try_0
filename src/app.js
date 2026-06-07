@@ -2763,8 +2763,14 @@ function render() {
       },
       onAssignTask: (residentId, taskId) => commit(assignTask(state, residentId, taskId)),
       onSelectResident: (residentId) => {
-        if (uiState.selectedResidentId === residentId) return;
-        uiState = { ...uiState, selectedResidentId: residentId };
+        uiState = {
+          ...uiState,
+          selectedResidentId: residentId,
+          selectedResidentFocus: {
+            residentId,
+            clickedAt: Date.now(),
+          },
+        };
         render();
       },
       onResetAssignments: () => commit(resetAssignments(state)),

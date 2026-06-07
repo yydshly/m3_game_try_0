@@ -1173,6 +1173,66 @@ function renderChoiceWorldMarker(choiceWorldEffect) {
 }
 
 /**
+ * Build a view model for the resident focus feedback shown in the stage bubble
+ * when a player explicitly clicks a character on the map.
+ */
+function buildResidentFocusView(state, uiState) {
+  const residentId = uiState.selectedResidentFocus?.residentId || uiState.selectedResidentId;
+  if (!residentId) return null;
+
+  const resident = state.residents.find((r) => r.id === residentId);
+  if (!resident) return null;
+
+  const task = getTask(resident.assignmentId);
+  const location = getLocation(resident.locationId);
+  const phase = getCurrentPhase(state);
+  const completionById = new Map(
+    (uiState.completionFeedback?.residentResults ?? []).map((r) => [r.residentId, r])
+  );
+  const moodView = buildResidentMoodView(resident, {
+    completionById,
+    activeAnimations: uiState.activeTaskAnimations ?? [],
+  });
+
+  return {
+    residentId: resident.id,
+    name: resident.name,
+    avatar: resident.avatar,
+    locationLabel: location?.name ?? "小镇",
+    taskLabel: task?.label ?? "休息",
+    moodIcon: moodView.moodIcon,
+    moodLabel: moodView.moodLabel,
+    statusText: moodView.statusText,
+    energyLabel: moodView.energyLabel,
+    memory: resident.memory?.[0] ?? "",
+    phaseLabel: phase.label,
+    clickedAt: uiState.selectedResidentFocus?.clickedAt ?? 0,
+  };
+}
+
+/**
+ * Generate a one-line resident observation text for the stage bubble.
+ * Deterministic based on residentId + clickedAt to pick a template.
+ */
+function buildResidentFocusLine(view) {
+  if (!view) return "";
+
+  const memoryPart = view.memory
+    ? `还记得「${view.memory.slice(0, 18)}${view.memory.length > 18 ? "…" : ""}」`
+    : "";
+
+  const templates = [
+    `${view.name}正在${view.locationLabel}${view.taskLabel ? `忙着${view.taskLabel}` : "停留"}，${view.moodLabel}，${view.energyLabel}。`,
+    `${view.name}抬头看了你一眼：现在是${view.phaseLabel}，我在${view.locationLabel}${view.taskLabel ? `做${view.taskLabel}` : "待一会儿"}。`,
+    `${view.name}的状态：${view.statusText}。${memoryPart}`,
+  ];
+
+  const sum = String(view.clickedAt || view.residentId).split("").reduce((s, c) => s + c.charCodeAt(0), 0);
+  const index = sum % templates.length;
+  return templates[index].trim();
+}
+
+/**
  * Build a stable stage digest based on current phase and scenario.
  * Does NOT change based on events or conversation state — ensures stable layout.
  */
@@ -1347,10 +1407,30 @@ function renderTownStage(state, uiState, handlers = {}) {
       <div class="town-stage__characters">
         ${charactersHtml}
       </div>
-      <aside class="stage-bubble stage-bubble--scene" aria-label="当前小镇场景">
+      ${(() => {
+        const hasExplicitResidentFocus = Boolean(
+          uiState.selectedResidentFocus?.residentId && uiState.selectedResidentFocus?.clickedAt > 0
+        );
+        const focusView = hasExplicitResidentFocus ? buildResidentFocusView(state, uiState) : null;
+        const focusLine = focusView ? buildResidentFocusLine(focusView) : "";
+
+        if (focusView) {
+          return `<aside class="stage-bubble stage-bubble--resident-focus" aria-label="当前观察居民" data-focus-resident-id="${escapeHtml(focusView.residentId)}" data-focus-clicked-at="${escapeHtml(String(focusView.clickedAt))}">
+        <span class="stage-bubble__tag">👤 正在观察：${escapeHtml(focusView.name)}</span>
+        <p>${escapeHtml(focusLine)}</p>
+        <div class="stage-bubble__resident-meta">
+          <span>📍 ${escapeHtml(focusView.locationLabel)}</span>
+          <span>📋 ${escapeHtml(focusView.taskLabel)}</span>
+          <span>${escapeHtml(focusView.moodIcon)} ${escapeHtml(focusView.moodLabel)}</span>
+        </div>
+      </aside>`;
+        }
+
+        return `<aside class="stage-bubble stage-bubble--scene" aria-label="当前小镇场景">
         <span class="stage-bubble__tag">🗺️ 当前场景</span>
         <p>${escapeHtml(digest)}</p>
-      </aside>
+      </aside>`;
+      })()}
       ${renderTaskCompletionPanel(taskFeedback)}
       ${renderVoicePlaybackChip(voiceViewModel, handlers)}
       <div class="stage-legend" aria-hidden="true">
@@ -2014,6 +2094,10 @@ export function renderApp(root, state, handlers, uiState = {}) {
     residentVoiceInteraction: uiState.residentVoiceInteraction ?? { enabled: false, recommendedClipKey: "", lastTriggeredAt: 0, hint: "" },
     residentVoiceClips: Array.isArray(uiState.residentVoiceClips) ? uiState.residentVoiceClips : [],
     residentConversation: uiState.residentConversation ?? { enabled: false, status: "idle", queue: [], currentIndex: 0, currentLineId: "", visibleText: "", typingTimerId: null, autoPlayVoice: true, error: "", runId: "", startedCount: 0 },
+    selectedResidentFocus: uiState.selectedResidentFocus ?? {
+      residentId: uiState.selectedResidentId ?? state.residents[0]?.id ?? "",
+      clickedAt: 0,
+    },
   };
 
   const safeHandlers = {
