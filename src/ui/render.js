@@ -1029,11 +1029,13 @@ function renderStageCharacter(resident, position, taskLabel, status, isSelected,
     : "";
 
   // Conversation bubble — shown when this resident is the current speaker
+  // Shows immediately when the current line is activated (text or visibleText), not waiting for audio
   const currentLine = residentConversation?.queue?.[residentConversation?.currentIndex];
   const isSpeaker = conversationRole?.isSpeaker ?? false;
   const isConversationActive = conversationRole?.isConversationActive ?? false;
-  const conversationBubble = (isConversationActive && isSpeaker && residentConversation?.visibleText)
-    ? `<span class="stage-character__dialogue stage-character__dialogue--conversation" data-conversation-visible-text="${escapeHtml(currentLine?.id ?? '')}">${escapeHtml(residentConversation.visibleText)}</span>`
+  const conversationText = residentConversation?.visibleText || currentLine?.text || "";
+  const conversationBubble = (isConversationActive && isSpeaker && conversationText)
+    ? `<span class="stage-character__dialogue stage-character__dialogue--conversation" data-conversation-visible-text="${escapeHtml(currentLine?.id ?? '')}">${escapeHtml(conversationText)}</span>`
     : "";
 
   // Speaker / listener CSS classes
@@ -1150,6 +1152,33 @@ function renderChoiceAftermathStageIndicator(aftermath) {
 }
 
 /**
+ * Sanitize a place marker label to prevent it from sounding like a person speaking.
+ * UI-layer fallback — does not change M3 output or memory.
+ * @param {string} label - raw markerLabel from choiceWorldEffect
+ * @param {string} placeLabel - display name of the place (e.g. "广场", "花园")
+ * @returns {string} safe label
+ */
+export function sanitizePlaceMarkerLabel(label, placeLabel = "这里") {
+  const raw = safeText(label, "").trim();
+  if (!raw) return `${placeLabel}留下了新的变化`;
+
+  // Patterns that indicate the place is being treated as a speaking character
+  const speechLikePattern = /(回应|说|表示|想到|觉得|明白了|答应|回答|告诉|问|开口|说道)/;
+  const startsWithPlaceSpeech =
+    raw.startsWith(`${placeLabel}回应`) ||
+    raw.startsWith(`${placeLabel}说`) ||
+    raw.startsWith(`${placeLabel}表示`) ||
+    raw.startsWith(`${placeLabel}想到`) ||
+    raw.startsWith(`${placeLabel}觉得`);
+
+  if (speechLikePattern.test(raw) || startsWithPlaceSpeech) {
+    return `${placeLabel}留下了新的变化`;
+  }
+
+  return raw;
+}
+
+/**
  * Render a place-level marker for the player's choice world effect.
  * Positioned above the specific place on the map (not centered).
  * @param {object} choiceWorldEffect - output of buildChoiceWorldEffectView()
@@ -1165,6 +1194,8 @@ function renderChoiceWorldMarker(choiceWorldEffect) {
   const place = stagePlaces[placeId];
   if (!place) return "";
 
+  const safeLabel = sanitizePlaceMarkerLabel(markerLabel, place.label);
+
   return `
     <div
       class="stage-choice-marker stage-choice-marker--warm stage-choice-marker--recent"
@@ -1173,7 +1204,7 @@ function renderChoiceWorldMarker(choiceWorldEffect) {
       aria-live="polite"
     >
       <span class="stage-choice-marker__icon">${safeText(markerIcon, "✨")}</span>
-      <span class="stage-choice-marker__label">${safeText(markerLabel, "留下了痕迹")}</span>
+      <span class="stage-choice-marker__label">${escapeHtml(safeLabel)}</span>
     </div>
   `;
 }
@@ -1360,18 +1391,32 @@ function renderTaskCompletionPanel(taskFeedback) {
 }
 
 /**
+ * Determine if the resident conversation is in an active performance state.
+ * Active means the current line is being shown/played, regardless of audio status.
+ * @param {object} conv - residentConversation object
+ * @returns {boolean}
+ */
+function isResidentConversationActive(conv) {
+  if (!conv?.enabled) return false;
+  if (!Array.isArray(conv.queue) || conv.queue.length === 0) return false;
+  if (conv.currentIndex == null || conv.currentIndex < 0) return false;
+  // Suppress for idle/completed/error — show for everything else (generating, loading, playing, paused)
+  return conv.status !== "idle" && conv.status !== "completed" && conv.status !== "error";
+}
+
+/**
  * Render the stage-level conversation performance overlay.
  * Shown at the bottom-center of the stage when a resident dialogue is active.
  * Does NOT show any audio status — only the speaker, target, and dialogue text.
+ * Shows immediately when the current line is activated (not waiting for audio).
  * @param {object} state
  * @param {object} uiState - safeUiState
  * @returns {string} HTML or empty string
  */
 function renderStageConversationOverlay(state, uiState) {
   const conv = uiState.residentConversation;
-  const isActive = conv?.status === "playing" || conv?.status === "paused";
 
-  if (!isActive) return "";
+  if (!isResidentConversationActive(conv)) return "";
 
   const line = conv.queue?.[conv.currentIndex];
   if (!line) return "";
@@ -1382,6 +1427,7 @@ function renderStageConversationOverlay(state, uiState) {
 
   const speakerName = line.speakerName ?? speaker?.name ?? "居民";
   const targetName = target?.residentName ?? "";
+  // Show visibleText (typewriter) if available, otherwise fall back to line.text immediately
   const text = conv.visibleText || line.text || "";
 
   if (!text.trim()) return "";
@@ -1460,7 +1506,8 @@ function renderTownStage(state, uiState, handlers = {}) {
       });
       const beat = (uiState.residentSceneBeats ?? []).find((b) => b.residentId === resident.id) ?? null;
       // Determine conversation role: speaker, listener, or null
-      const conversationActive = uiState.residentConversation?.status === "playing" || uiState.residentConversation?.status === "paused";
+      // Use broader active check that includes generating/loading (same as renderStageConversationOverlay)
+      const conversationActive = isResidentConversationActive(uiState.residentConversation);
       const currentLine = uiState.residentConversation?.queue?.[uiState.residentConversation?.currentIndex];
       const currentSpeakerId = currentLine?.speakerId ?? null;
       const sessionState = uiState.residentConversation?.sessionState ?? null;
@@ -1516,6 +1563,12 @@ function renderTownStage(state, uiState, handlers = {}) {
       <div class="town-stage__characters">
         ${charactersHtml}
       </div>
+      ${(() => {
+        const workbenchMode = buildWorkbenchMode(uiState);
+        // Place marker only shown during idle (suppressed during conversation/animation/voice)
+        const shouldShowChoiceWorldMarker = workbenchMode.mode === "idle" && choiceWorldEffect?.visible;
+        return shouldShowChoiceWorldMarker ? renderChoiceWorldMarker(choiceWorldEffect) : "";
+      })()}
       ${renderStageConversationOverlay(state, uiState)}
       ${(() => {
         const workbenchMode = buildWorkbenchMode(uiState);
@@ -1575,7 +1628,6 @@ function renderTownStage(state, uiState, handlers = {}) {
           <span class="stage-broadcast-indicator__text">广播播放中…</span>
         </div>
       ` : ""}
-      ${renderChoiceWorldMarker(choiceWorldEffect)}
     </section>
   `;
 }

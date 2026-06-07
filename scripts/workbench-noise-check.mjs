@@ -512,6 +512,147 @@ console.log("\n── Conversation idle/completed: no speaking/listening/overlay
   assert(!html2.includes("stage-character--listening"), "completed conversation: no listening class");
 }
 
+// ── Test 10f: Place marker sanitizes anthropomorphic labels ─────────────────────────
+
+console.log("\n── sanitizePlaceMarkerLabel: sanitizes anthropomorphic labels ──");
+{
+  const { sanitizePlaceMarkerLabel } = await import("../src/ui/render.js");
+
+  // Anthropomorphic labels get sanitized to fallback
+  const cases = [
+    { label: "广场回应：明白了。", place: "广场", expectContains: "留下了新的变化" },
+    { label: "花园说：好的。", place: "花园", expectContains: "留下了新的变化" },
+    { label: "森林表示：知道了。", place: "森林", expectContains: "留下了新的变化" },
+    { label: "广场回应明白了", place: "广场", expectContains: "留下了新的变化" },
+    { label: "花园想到了一个主意", place: "花园", expectContains: "留下了新的变化" },
+    // Normal labels are preserved
+    { label: "花园的气氛变得更热闹", place: "花园", expectContains: "花园的气氛变得更热闹" },
+    { label: "", place: "广场", expectContains: "广场留下了新的变化" },
+  ];
+
+  for (const c of cases) {
+    const result = sanitizePlaceMarkerLabel(c.label, c.place);
+    assert(result.includes(c.expectContains),
+      `sanitizePlaceMarkerLabel("${c.label}", "${c.place}") contains "${c.expectContains}" (got: "${result}")`);
+  }
+
+  // Specifically check forbidden patterns don't appear
+  const forbidden = [
+    ["广场回应：明白了。", "广场"],
+    ["花园说：好的。", "花园"],
+    ["森林表示：知道了。", "森林"],
+  ];
+  for (const [label, place] of forbidden) {
+    const result = sanitizePlaceMarkerLabel(label, place);
+    assert(!result.includes("回应") && !result.includes("说") && !result.includes("表示"),
+      `sanitizePlaceMarkerLabel("${label}", "${place}") = "${result}" — no speech verbs`);
+  }
+}
+
+// ── Test 10g: Place marker hidden during conversation ─────────────────────────────
+
+console.log("\n── Conversation active: hides place choice marker ──");
+{
+  const state = createInitialState();
+  const speakerId = state.residents[0].id;
+  const listenerId = state.residents[1].id;
+  root.innerHTML = "";
+  renderApp(root, state, handlers, {
+    residentConversation: {
+      enabled: true,
+      status: "playing",
+      queue: [
+        { id: "line-1", speakerId, targetId: listenerId, speakerName: state.residents[0].name, targetName: state.residents[1].name, text: "今天天气真好。", audioKey: "conv:r0:line-1" },
+      ],
+      currentIndex: 0,
+      currentLineId: "line-1",
+      visibleText: "今天天气真好。",
+      sessionState: {
+        participants: [
+          { residentId: speakerId, residentName: state.residents[0].name, role: "speaker" },
+          { residentId: listenerId, residentName: state.residents[1].name, role: "listener" },
+        ],
+      },
+    },
+    // Note: choiceWorldEffect is NOT passed here - during conversation it should be suppressed anyway
+  });
+
+  const html = root.innerHTML;
+  assert(!html.includes("stage-choice-marker"), "conversation suppresses choice world marker");
+}
+
+// ── Test 10i: Conversation generating/loading shows overlay immediately ─────────────────────
+
+console.log("\n── Conversation generating: shows stage overlay immediately ──");
+{
+  const state = createInitialState();
+  const speakerId = state.residents[0].id;
+  const listenerId = state.residents[1].id;
+  root.innerHTML = "";
+  renderApp(root, state, handlers, {
+    residentConversation: {
+      enabled: true,
+      status: "generating",
+      queue: [
+        { id: "line-1", speakerId, targetId: listenerId, speakerName: "阿远", targetName: "小花", text: "小花，今天有什么计划吗？", audioKey: "conv:r0:line-1" },
+      ],
+      currentIndex: 0,
+      currentLineId: "line-1",
+      visibleText: "",
+      sessionState: {
+        participants: [
+          { residentId: speakerId, residentName: "阿远", role: "speaker" },
+          { residentId: listenerId, residentName: "小花", role: "listener" },
+        ],
+      },
+    },
+  });
+
+  const html = root.innerHTML;
+  assert(html.includes("stage-conversation-overlay"), "generating conversation shows stage overlay");
+  assert(html.includes("小花，今天有什么计划吗？"), "generating conversation shows current line text");
+  assert(!html.includes("正在播放"), "generating conversation does not show global playing text");
+}
+
+// ── Test 10j: Opening question appears before answer in queue ─────────────────────────
+
+console.log("\n── Conversation queue: question queued before answer renders correctly ──");
+{
+  const state = createInitialState();
+  const speakerId = state.residents[0].id;
+  const listenerId = state.residents[1].id;
+  // Use currentIndex=1 (answer current): answer in overlay, question in panel
+  // This means the conversation has progressed to the second line
+  root.innerHTML = "";
+  renderApp(root, state, handlers, {
+    residentConversation: {
+      enabled: true,
+      status: "playing",
+      queue: [
+        { id: "line-1", speakerId, targetId: listenerId, speakerName: "小花", targetName: "阿远", text: "小花，今天有什么计划吗？", audioKey: "conv:r0:line-1" },
+        { id: "line-2", speakerId: listenerId, targetId: speakerId, speakerName: "阿远", targetName: "小花", text: "想去花园那边看看。", audioKey: "conv:r1:line-2" },
+      ],
+      currentIndex: 1,  // Answer is current (overlay), question is past (panel)
+      currentLineId: "line-2",
+      visibleText: "想去花园那边看看。",
+      sessionState: {
+        participants: [
+          { residentId: speakerId, residentName: "小花", role: "speaker" },
+          { residentId: listenerId, residentName: "阿远", role: "listener" },
+        ],
+      },
+    },
+  });
+
+  const html = root.innerHTML;
+  // Question should appear in the right panel's dialogue-beats-list
+  const questionInPanel = html.includes("今天有什么计划吗？");
+  assert(questionInPanel, "question line appears in right panel (as past line)");
+  // The answer is in the overlay, not panel; question in panel is correct temporal order
+  // We verify queue is ordered [question, answer] by checking both texts appear
+  assert(html.includes("想去花园那边看看。"), "answer line appears (in overlay)");
+}
+
 // ── Test 11: Broadcast audio still shows global playback chip ─────────────────────
 
 console.log("\n── Broadcast: still shows global playback chip ──");

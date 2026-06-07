@@ -346,6 +346,40 @@ console.log("\n── Main stage shows stage-conversation-overlay and speaker/li
   assert(convBubbleCount === 1, "only speaker shows conversation bubble");
 }
 
+// ── 12c-2. Generating/loading status: overlay shows immediately ─────────────────────────────
+console.log("\n── Conversation generating: overlay shows immediately without waiting for audio ──");
+{
+  const state = createInitialState();
+  const speakerId = state.residents[0].id;
+  const listenerId = state.residents[1].id;
+  root.innerHTML = "";
+  renderApp(root, state, handlers, {
+    activeScenario: selectTownLifeScenario(state),
+    residentSceneBeats: [],
+    residentConversation: {
+      enabled: true,
+      status: "generating",
+      queue: [
+        { id: "conv-line-1", speakerId, targetId: listenerId, speakerName: "小花", targetName: "阿远", text: "今天有什么计划吗？", audioKey: "conversation:hua:conv-line-1", scene: "conversation", status: "idle" },
+      ],
+      currentIndex: 0,
+      currentLineId: "conv-line-1",
+      visibleText: "",
+      sessionState: {
+        participants: [
+          { residentId: speakerId, residentName: "小花", role: "speaker" },
+          { residentId: listenerId, residentName: "阿远", role: "listener" },
+        ],
+      },
+    },
+  });
+  const html = root.innerHTML;
+  assert(html.includes("stage-conversation-overlay"), "generating status shows stage overlay");
+  assert(html.includes("今天有什么计划吗？"), "generating status shows current line text from line.text");
+  assert(html.includes("stage-character--speaking"), "generating: speaker has speaking class");
+  assert(html.includes("stage-character--listening"), "generating: listener has listening class");
+}
+
 // ── 12c. Idle conversation: no overlay, no speaking/listening classes ─────────────────
 console.log("\n── Idle conversation: no overlay, no speaking/listening classes ──");
 {

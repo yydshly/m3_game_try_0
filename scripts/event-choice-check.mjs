@@ -256,6 +256,39 @@ console.log("\n── renderApp: player-choice event ──");
   assert(root.innerHTML.includes("森林"), "player-choice place rendered");
 }
 
+// ── Render: choice world marker sanitizes anthropomorphic labels ─────────────────────────
+
+console.log("\n── sanitizePlaceMarkerLabel: sanitizes anthropomorphic place labels ──");
+{
+  const { sanitizePlaceMarkerLabel } = await import("../src/ui/render.js");
+
+  // All these anthropomorphic patterns should be replaced with fallback
+  const anthropomorphicCases = [
+    ["广场回应：明白了。", "广场"],
+    ["花园说：好的。", "花园"],
+    ["森林表示：知道了。", "森林"],
+    ["广场回应明白了。", "广场"],
+  ];
+  for (const [label, place] of anthropomorphicCases) {
+    const result = sanitizePlaceMarkerLabel(label, place);
+    assert(!result.includes("回应") && !result.includes("说") && !result.includes("表示"),
+      `sanitizePlaceMarkerLabel("${label}", "${place}") = "${result}" — no speech verbs`);
+    assert(result.includes("留下了新的变化") || result.includes(`${place}留下了`),
+      `sanitizePlaceMarkerLabel result contains fallback: "${result}"`);
+  }
+
+  // Normal labels should be preserved
+  const normalCases = [
+    ["花园的气氛变得更热闹", "花园"],
+    ["广场有了新变化", "广场"],
+    ["", "广场"],
+  ];
+  for (const [label, place] of normalCases) {
+    const result = sanitizePlaceMarkerLabel(label, place);
+    assert(result.length > 0, `sanitizePlaceMarkerLabel("${label}", "${place}") returns non-empty: "${result}"`);
+  }
+}
+
 // ── Render: old event without choices still works ───────────────────────────────
 
 console.log("\n── renderApp: old m3-event without choices ──");
