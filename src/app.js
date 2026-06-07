@@ -98,6 +98,7 @@ let uiState = {
 let autoPlayTimer = null;
 let animationTimer = null;
 let completionTimer = null;
+let renderSequence = 0;
 
 // ── Broadcast Audio Player ─────────────────────────────────────────────────────────
 
@@ -2008,26 +2009,66 @@ function commit(nextState) {
 
 /**
  * Capture scroll positions of left and right panels before re-render.
- * Called at the start of render() to preserve user scroll state.
+ * Also records conversation metadata so restore can make informed decisions.
  */
 function capturePanelScrollState() {
   const leftPanel = root?.querySelector?.(".left-col");
   const rightPanel = root?.querySelector?.(".side-panel");
+  const conv = uiState.residentConversation ?? {};
 
   return {
     leftScrollTop: leftPanel?.scrollTop ?? 0,
     rightScrollTop: rightPanel?.scrollTop ?? 0,
+    conversationStatus: conv.status ?? "idle",
+    currentLineId: conv.currentLineId ?? "",
+    currentIndex: conv.currentIndex ?? 0,
   };
 }
 
 /**
- * Restore scroll positions of left and right panels after re-render.
- * During active conversation, prioritizes keeping the dialogue panel visible.
+ * Scroll the right panel to keep the active dialogue line or the dialogue panel
+ * visible within the panel's own scrollable area — without touching the page viewport.
  */
-function restorePanelScrollState(snapshot) {
+function restoreRightPanelToConversation(rightPanel) {
+  const currentLine = rightPanel.querySelector(".dialogue-beat--current");
+  const dialoguePanel = rightPanel.querySelector(".dialogue-beats-panel");
+  const target = currentLine ?? dialoguePanel;
+
+  if (!target) return;
+
+  const panelRect = rightPanel.getBoundingClientRect();
+  const targetRect = target.getBoundingClientRect();
+
+  const stickyHeaderOffset = 42; // approx height of sticky ::before label
+  const visibleTop = rightPanel.scrollTop + stickyHeaderOffset;
+  const visibleBottom = rightPanel.scrollTop + rightPanel.clientHeight - 24;
+
+  const targetTopInPanel = targetRect.top - panelRect.top + rightPanel.scrollTop;
+  const targetBottomInPanel = targetRect.bottom - panelRect.top + rightPanel.scrollTop;
+
+  if (targetTopInPanel < visibleTop) {
+    rightPanel.scrollTop = Math.max(0, targetTopInPanel - stickyHeaderOffset);
+    return;
+  }
+
+  if (targetBottomInPanel > visibleBottom) {
+    rightPanel.scrollTop = Math.max(0, targetBottomInPanel - rightPanel.clientHeight + 48);
+  }
+}
+
+/**
+ * Restore scroll positions after re-render.
+ * Uses renderSequence to discard stale RAF callbacks from earlier renders.
+ * During active conversation, directs the right panel to the dialogue area
+ * using scrollTop rather than scrollIntoView (avoids viewport scroll side-effects).
+ */
+function restorePanelScrollState(snapshot, sequence) {
   if (!snapshot) return;
 
   requestAnimationFrame(() => {
+    // Discard this callback if a newer render has since started.
+    if (sequence !== renderSequence) return;
+
     const leftPanel = root?.querySelector?.(".left-col");
     const rightPanel = root?.querySelector?.(".side-panel");
 
@@ -2041,14 +2082,8 @@ function restorePanelScrollState(snapshot) {
     const isConversationActive = convStatus === "playing" || convStatus === "paused";
 
     if (isConversationActive) {
-      const currentLine = rightPanel.querySelector(".dialogue-beat--current");
-      const dialoguePanel = rightPanel.querySelector(".dialogue-beats-panel");
-      const target = currentLine ?? dialoguePanel;
-
-      if (target) {
-        target.scrollIntoView({ block: "nearest", inline: "nearest" });
-        return;
-      }
+      restoreRightPanelToConversation(rightPanel);
+      return;
     }
 
     rightPanel.scrollTop = snapshot.rightScrollTop;
@@ -2056,6 +2091,7 @@ function restorePanelScrollState(snapshot) {
 }
 
 function render() {
+  const sequence = ++renderSequence;
   const panelScrollState = capturePanelScrollState();
 
   try {
@@ -2692,7 +2728,7 @@ function render() {
       },
     }, uiState);
 
-    restorePanelScrollState(panelScrollState);
+    restorePanelScrollState(panelScrollState, sequence);
   } catch (error) {
     renderError(error);
   }
