@@ -1043,10 +1043,15 @@ function renderStageCharacter(resident, position, taskLabel, status, isSelected,
   const listenerClass = (isConversationActive && conversationRole?.isListener) ? " stage-character--listening" : "";
   const participantClass = isParticipant ? " stage-character--conversation-participant" : "";
 
-  // Choice reaction: shown on residents affected by a player choice (context label shows place+reaction)
+  // Choice reaction: shown on residents affected by a player choice.
+  // Use sanitizeChoiceReactionLabel as a safety net to prevent place-personification.
   const choiceAffectedClass = isChoiceAffected ? " stage-character--choice-affected" : "";
-  const choiceReactionBubble = choiceReaction
-    ? `<span class="stage-character__choice-reaction">${escapeHtml(choiceReaction.contextLabel ?? choiceReaction.reactionText)}</span>`
+  const rawReactionLabel = choiceReaction?.contextLabel ?? choiceReaction?.reactionText ?? "";
+  const safeReactionLabel = choiceReaction
+    ? sanitizeChoiceReactionLabel(rawReactionLabel, choiceReaction.residentName ?? "居民", "小镇")
+    : "";
+  const choiceReactionBubble = safeReactionLabel
+    ? `<span class="stage-character__choice-reaction">${escapeHtml(safeReactionLabel)}</span>`
     : "";
 
   // Completion badge shown after animation
@@ -1173,6 +1178,30 @@ export function sanitizePlaceMarkerLabel(label, placeLabel = "这里") {
 
   if (speechLikePattern.test(raw) || startsWithPlaceSpeech) {
     return `${placeLabel}留下了新的变化`;
+  }
+
+  return raw;
+}
+
+/**
+ * Sanitize a choice reaction label for the stage character bubble.
+ * Acts as a UI-layer safety net — does not change M3 output or memory.
+ * @param {string} label - raw contextLabel from choiceWorldEffect
+ * @param {string} residentName - display name of the resident
+ * @param {string} placeLabel - display name of the place (e.g. "广场", "花园")
+ * @returns {string} safe label
+ */
+export function sanitizeChoiceReactionLabel(label, residentName = "居民", placeLabel = "小镇") {
+  const raw = safeText(label, "").trim();
+  if (!raw) return `${residentName}注意到了变化`;
+
+  // Pattern: place name followed by a speech verb
+  const placeSpeechPattern = new RegExp(`^(${placeLabel}|花园|广场|森林|餐厅|工坊|小镇)(回应|说|表示|觉得|想到|明白|回答|告诉|问|开口|说道)`);
+  // Generic reaction patterns
+  const genericReactionPattern = /^(明白了|好的|知道了|收到|嗯|好)[。！!]?$/;
+
+  if (placeSpeechPattern.test(raw) || genericReactionPattern.test(raw)) {
+    return `${residentName}注意到了变化`;
   }
 
   return raw;

@@ -289,6 +289,97 @@ console.log("\n── sanitizePlaceMarkerLabel: sanitizes anthropomorphic place 
   }
 }
 
+// ── sanitizeChoiceReactionLabel: prevents place-personification in reaction bubbles ─
+
+console.log("\n── sanitizeChoiceReactionLabel: prevents place-personification ──");
+{
+  const { sanitizeChoiceReactionLabel } = await import("../src/ui/render.js");
+
+  // Forbidden: place name + speech verb
+  const placeSpeechCases = [
+    ["广场回应：明白了。", "老周", "广场"],
+    ["花园说：好的。", "小花", "花园"],
+    ["森林表示：知道了。", "阿远", "森林"],
+    ["餐厅回应明白了。", "米米", "餐厅"],
+    ["工坊回答收到。", "小七", "工坊"],
+    ["小镇明白了。", "居民", "小镇"],
+  ];
+  for (const [label, resident, place] of placeSpeechCases) {
+    const result = sanitizeChoiceReactionLabel(label, resident, place);
+    assert(!result.includes("回应") && !result.includes("说") && !result.includes("表示"),
+      `sanitizeChoiceReactionLabel("${label}", "${resident}", "${place}") = "${result}" — no speech verbs`);
+    assert(result.includes(resident) && result.includes("注意到了变化"),
+      `sanitizeChoiceReactionLabel result is neutral: "${result}"`);
+  }
+
+  // Forbidden: generic reactions
+  const genericCases = [
+    ["明白了。", "老周", "广场"],
+    ["好的。", "小花", "花园"],
+    ["知道了", "阿远", "森林"],
+    ["收到。", "米米", "餐厅"],
+    ["嗯", "小七", "工坊"],
+    ["好！", "居民", "小镇"],
+  ];
+  for (const [label, resident, place] of genericCases) {
+    const result = sanitizeChoiceReactionLabel(label, resident, place);
+    assert(result === `${resident}注意到了变化`,
+      `sanitizeChoiceReactionLabel("${label}", "${resident}", "${place}") = "${result}" (expected: ${resident}注意到了变化)`);
+  }
+
+  // Safe: non-generic reactions are preserved
+  const safeCases = [
+    ["老周记住了这次选择", "老周", "广场"],
+    ["小花对这个决定很满意", "小花", "花园"],
+  ];
+  for (const [label, resident, place] of safeCases) {
+    const result = sanitizeChoiceReactionLabel(label, resident, place);
+    assert(result === label,
+      `sanitizeChoiceReactionLabel("${label}", "${resident}", "${place}") = "${result}" (preserved)`);
+  }
+
+  // Empty label → neutral fallback
+  {
+    const result = sanitizeChoiceReactionLabel("", "老周", "广场");
+    assert(result === "老周注意到了变化", `empty label → neutral fallback: "${result}"`);
+  }
+}
+
+// ── buildChoiceWorldEffectView: affectedResidents[*].contextLabel is safe ───────────
+
+console.log("\n── buildChoiceWorldEffectView: contextLabel is safe (no place-personification) ──");
+{
+  const { buildChoiceWorldEffectView } = await import("../src/domain/choiceWorldEffect.js");
+  const { createInitialState } = await import("../src/domain/state.js");
+
+  const state = createInitialState();
+  const uiState = {
+    choiceAftermath: {
+      id: "choice-test-1",
+      eventId: "event-test",
+      choiceId: "choice-a",
+      placeId: "plaza",
+      choiceLabel: "送去花园给小花看看",
+      summary: "老周把相框带到花园，小花一眼认出这片叶子，正是第一天她种下的那株。",
+      residentReactions: [
+        { residentId: "zhou", residentName: "老周", reaction: "明白了。" },
+      ],
+      createdAt: Date.now(),
+    },
+  };
+
+  const view = buildChoiceWorldEffectView(state, uiState);
+  assert(view.visible === true, "view is visible");
+
+  for (const ar of view.affectedResidents ?? []) {
+    const forbiddenPattern = /(花园|广场|森林|餐厅|工坊|小镇)(回应|说|表示|觉得|想到|回答|告诉|问|开口|说道)/;
+    assert(
+      !forbiddenPattern.test(ar.contextLabel ?? ""),
+      `contextLabel "${ar.contextLabel}" does not contain place-personification`
+    );
+  }
+}
+
 // ── Render: old event without choices still works ───────────────────────────────
 
 console.log("\n── renderApp: old m3-event without choices ──");

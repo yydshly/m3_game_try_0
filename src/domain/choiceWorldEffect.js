@@ -247,15 +247,22 @@ export function buildChoiceWorldEffectView(state, uiState) {
 
   const affectedResidents = allReactions.slice(0, 2).map((r, idx) => {
     const isPrimary = r === primaryRaw;
-    const label = PLACE_NAMES[eventPlaceId ?? ""] ?? "小镇";
+    const residentName = r.residentName ?? "居民";
     const shortReaction = (r.reaction ?? "").slice(0, 14);
+    // Use a neutral label that doesn't personify the place.
+    // Generic reactions like "明白了"/"好的" become "居民注意到了变化".
+    const genericReactions = ["明白了", "好的", "知道了", "收到", "嗯", "好"];
+    const isGeneric = genericReactions.some((g) => shortReaction.startsWith(g));
+    const neutralLabel = isGeneric
+      ? `${residentName}注意到了变化`
+      : `${residentName}记住了这次选择`;
     return {
       residentId: r.residentId ?? "",
-      residentName: r.residentName ?? "居民",
+      residentName,
       reactionText: shortReaction,
       role: "helper",
       hasBubble: isPrimary,
-      contextLabel: isPrimary ? `${label}回应：${shortReaction}` : null,
+      contextLabel: isPrimary ? neutralLabel : null,
     };
   });
 

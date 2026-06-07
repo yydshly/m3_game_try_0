@@ -562,6 +562,64 @@ console.log("\n── No large standalone voice playback bar above layout ──
   assert(!hasOldSlot, "old large voice-playback-slot with min-height is gone");
 }
 
+// ── 19. CSS: conversation bubble allows wrapping, not clipped ───────────────────
+console.log("\n── CSS: conversation bubble allows wrapping ──");
+{
+  const fs = await import("fs");
+  const css = fs.readFileSync("./src/styles.css", "utf8");
+  const block = css.match(/\.stage-character__dialogue--conversation\s*\{([^}]*)\}/)?.[1] ?? "";
+
+  assert(block.includes("white-space: normal"), "conversation bubble has white-space: normal (allows wrapping)");
+  assert(
+    block.includes("overflow: visible") || block.includes("overflow: unset"),
+    "conversation bubble has overflow: visible or unset (not clipped)"
+  );
+  assert(
+    !block.includes("text-overflow: ellipsis"),
+    "conversation bubble does NOT have text-overflow: ellipsis"
+  );
+  assert(
+    block.includes("max-width: 180") || block.includes("max-width: 200") || block.includes("max-width: 160"),
+    "conversation bubble has expanded max-width (>=160px)"
+  );
+}
+
+// ── 20. Conversation bubble renders full dialogue text without manual truncation ─
+console.log("\n── Conversation bubble: renders full text, not truncated ──");
+{
+  const state = createInitialState();
+  const speakerId = state.residents[0].id;
+  const listenerId = state.residents[1].id;
+  root.innerHTML = "";
+  renderApp(root, state, handlers, {
+    activeScenario: selectTownLifeScenario(state),
+    residentSceneBeats: [],
+    residentConversation: {
+      enabled: true,
+      status: "playing",
+      queue: [
+        { id: "conv-line-1", speakerId, targetId: listenerId, speakerName: "小花", targetName: "阿远", text: "好，等会儿广场上见。", audioKey: "conv:r0:line-1", scene: "conversation", status: "idle" },
+      ],
+      currentIndex: 0,
+      currentLineId: "conv-line-1",
+      visibleText: "好，等会儿广场上见。",
+      sessionState: {
+        participants: [
+          { residentId: speakerId, residentName: "小花", role: "speaker" },
+          { residentId: listenerId, residentName: "阿远", role: "listener" },
+        ],
+      },
+    },
+  });
+  const html = root.innerHTML;
+
+  // Full text must appear in the stage overlay
+  assert(html.includes("好，等会儿广场上见。"), "overlay contains full dialogue text");
+  // Must NOT have manual truncation
+  assert(!html.includes("好，等会儿广..."), "dialogue is not manually truncated with ellipsis");
+  assert(html.includes("等会儿广场上见"), "full text without truncation is present");
+}
+
 // ── Results ────────────────────────────────────────────────────────────────────
 console.log(`\nResults: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

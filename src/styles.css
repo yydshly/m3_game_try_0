@@ -1599,9 +1599,12 @@ button, select {
   padding: 4px 8px;
   font-size: 0.68rem;
   color: #1a3a5c;
-  max-width: 100px;
-  min-width: 60px;
+  max-width: 180px;
+  min-width: 80px;
   text-align: left;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
   animation: dialogueIn 200ms ease-out;
 }
 

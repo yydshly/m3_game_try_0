@@ -549,6 +549,96 @@ console.log("\n── sanitizePlaceMarkerLabel: sanitizes anthropomorphic labels
   }
 }
 
+// ── Test 10fa: sanitizeChoiceReactionLabel prevents place-personification ──────────
+
+console.log("\n── sanitizeChoiceReactionLabel: prevents place-personification ──");
+{
+  const { sanitizeChoiceReactionLabel } = await import("../src/ui/render.js");
+
+  // Forbidden: place + speech verb
+  const placeSpeechCases = [
+    ["广场回应：明白了。", "老周", "广场"],
+    ["花园说：好的。", "小花", "花园"],
+    ["森林表示：知道了。", "阿远", "森林"],
+    ["餐厅回应明白了。", "米米", "餐厅"],
+  ];
+  for (const [label, resident, place] of placeSpeechCases) {
+    const result = sanitizeChoiceReactionLabel(label, resident, place);
+    assert(!result.includes("回应") && !result.includes("说") && !result.includes("表示"),
+      `sanitizeChoiceReactionLabel("${label}", "${resident}", "${place}") — no speech verbs`);
+    assert(result.includes(resident) && result.includes("注意到了变化"),
+      `sanitizeChoiceReactionLabel result is neutral: "${result}"`);
+  }
+
+  // Forbidden: generic reactions → neutral fallback
+  const genericCases = [
+    ["明白了。", "老周"],
+    ["好的。", "小花"],
+    ["知道了", "阿远"],
+    ["收到。", "米米"],
+    ["嗯", "小七"],
+    ["好！", "居民"],
+  ];
+  for (const [label, resident] of genericCases) {
+    const result = sanitizeChoiceReactionLabel(label, resident, "广场");
+    assert(result === `${resident}注意到了变化`,
+      `generic reaction "${label}" → "${result}"`);
+  }
+
+  // Safe: non-generic preserved
+  const safeCases = [
+    ["老周记住了这次选择", "老周"],
+    ["小花对这个决定很满意", "小花"],
+  ];
+  for (const [label, resident] of safeCases) {
+    const result = sanitizeChoiceReactionLabel(label, resident, "广场");
+    assert(result === label, `safe label preserved: "${result}"`);
+  }
+}
+
+// ── Test 10fb: choiceReactionBubble does not show place-personification ────────────
+
+console.log("\n── choiceReactionBubble: no place-personification in rendered HTML ──");
+{
+  // Build a minimal state + uiState with choiceAftermath
+  const { createInitialState } = await import("../src/domain/state.js");
+  const state = createInitialState();
+  const residentId = state.residents[0].id;
+  const residentName = state.residents[0].name;
+
+  root.innerHTML = "";
+  renderApp(root, state, handlers, {
+    choiceAftermath: {
+      id: "choice-test",
+      eventId: "event-test",
+      choiceId: "choice-a",
+      placeId: "plaza",
+      choiceLabel: "送去花园给小花看看",
+      summary: "老周把相框带到花园，小花一眼认出这片叶子，正是第一天她种下的那株。",
+      residentReactions: [
+        { residentId, residentName, reaction: "明白了。" },
+      ],
+      createdAt: Date.now(),
+    },
+  });
+
+  const html = root.innerHTML;
+
+  // Must not contain place-personification patterns
+  assert(!html.includes("广场回应"), "stage does not show '广场回应'");
+  assert(!html.includes("花园回应"), "stage does not show '花园回应'");
+  assert(!html.includes("森林表示"), "stage does not show '森林表示'");
+  assert(!html.includes("广场说"), "stage does not show '广场说'");
+  assert(!html.includes("广场：明白了"), "stage does not show '广场：明白了'");
+  assert(!html.includes("广场回应：明白了"), "stage does not show '广场回应：明白了'");
+
+  // Must contain safe expressions
+  assert(
+    html.includes("注意到了变化") || html.includes(residentName),
+    `stage shows safe expression (resident name or neutral label)`
+  );
+}
+
 // ── Test 10g: Place marker hidden during conversation ─────────────────────────────
 
 console.log("\n── Conversation active: hides place choice marker ──");
