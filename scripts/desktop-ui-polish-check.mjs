@@ -75,13 +75,13 @@ console.log("\n── Map stage bubble: max 120 char truncation ──");
   root.innerHTML = "";
   renderApp(root, state, handlers, makeUiState());
 
-  const bubbleMatch = root.innerHTML.match(/<aside class="stage-bubble"[^>]*>[\s\S]*?<\/aside>/);
+  const bubbleMatch = root.innerHTML.match(/<aside[^>]*class="stage-bubble[^"]*"[^>]*>[\s\S]*?<\/aside>/);
   assert(bubbleMatch !== null, "stage-bubble is rendered");
 
   // Extract the text inside the bubble
   const bubbleText = bubbleMatch?.[0] ?? "";
-  // Check the bubble contains "今日动态" tag (not "最新动态")
-  assert(bubbleText.includes("今日动态"), "stage-bubble shows '今日动态' (stable digest, not latest event)");
+  // Check the bubble contains the new stable scene label (not "今日动态")
+  assert(bubbleText.includes("当前场景"), "stage-bubble shows '当前场景' (stable scene digest, not latest event)");
   // Extract text from <p> and verify reasonable length (digest is short text, not event)
   const pMatch = bubbleText.match(/<p>([\s\S]*?)<\/p>/);
   const pText = pMatch?.[1] ?? "";

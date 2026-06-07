@@ -493,6 +493,7 @@ function renderCompactGoals(state) {
                   <span>${Math.round(goal.value)}/${goal.target}</span>
                 </div>
                 <div class="goal__bar" aria-hidden="true"><i style="width:${progress}%"></i></div>
+                ${goal.detail ? `<p class="goal__detail">${escapeHtml(goal.detail)}</p>` : ""}
               </div>
             `;
           })
@@ -1336,8 +1337,8 @@ function renderTownStage(state, uiState, handlers = {}) {
       <div class="town-stage__characters">
         ${charactersHtml}
       </div>
-      <aside class="stage-bubble" aria-live="polite">
-        <span class="stage-bubble__tag">📌 今日动态</span>
+      <aside class="stage-bubble stage-bubble--scene" aria-label="当前小镇场景">
+        <span class="stage-bubble__tag">🗺️ 当前场景</span>
         <p>${escapeHtml(digest)}</p>
       </aside>
       ${renderTaskCompletionPanel(taskFeedback)}

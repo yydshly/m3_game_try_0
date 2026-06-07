@@ -79,31 +79,31 @@ export function getTownGoals(state) {
   return [
     {
       id: "comfort",
-      label: "Comfort 60",
+      label: "让小镇保持舒适",
       value: state.town.comfort,
       target: 60,
-      detail: "Improve the town with garden care or repairs.",
+      detail: "照看花园、修理工坊会提升小镇舒适度。",
     },
     {
       id: "supplies",
-      label: "Supplies 10",
+      label: "储备足够食材",
       value: state.town.supplies,
       target: 10,
-      detail: "Send residents to forage when supplies run low.",
+      detail: "去森林采集，或通过餐厅事件补充物资。",
     },
     {
       id: "friendship",
-      label: "Friendship 70",
+      label: "促成居民互动",
       value: topRelationship,
       target: 70,
-      detail: "Put residents in the same place to grow relationships.",
+      detail: "让居民在同一地点聊天或合作，会提高关系。",
     },
     {
       id: "wellbeing",
-      label: "Wellbeing 4/5",
+      label: "照顾居民状态",
       value: Math.min(restedResidents, happyResidents),
       target: 4,
-      detail: "Keep mood and energy stable across the town.",
+      detail: "保持心情和体力稳定，居民会更愿意参与小镇生活。",
     },
   ];
 }
