@@ -2006,7 +2006,58 @@ function commit(nextState) {
   }
 }
 
+/**
+ * Capture scroll positions of left and right panels before re-render.
+ * Called at the start of render() to preserve user scroll state.
+ */
+function capturePanelScrollState() {
+  const leftPanel = root?.querySelector?.(".left-col");
+  const rightPanel = root?.querySelector?.(".side-panel");
+
+  return {
+    leftScrollTop: leftPanel?.scrollTop ?? 0,
+    rightScrollTop: rightPanel?.scrollTop ?? 0,
+  };
+}
+
+/**
+ * Restore scroll positions of left and right panels after re-render.
+ * During active conversation, prioritizes keeping the dialogue panel visible.
+ */
+function restorePanelScrollState(snapshot) {
+  if (!snapshot) return;
+
+  requestAnimationFrame(() => {
+    const leftPanel = root?.querySelector?.(".left-col");
+    const rightPanel = root?.querySelector?.(".side-panel");
+
+    if (leftPanel) {
+      leftPanel.scrollTop = snapshot.leftScrollTop;
+    }
+
+    if (!rightPanel) return;
+
+    const convStatus = uiState.residentConversation?.status;
+    const isConversationActive = convStatus === "playing" || convStatus === "paused";
+
+    if (isConversationActive) {
+      const currentLine = rightPanel.querySelector(".dialogue-beat--current");
+      const dialoguePanel = rightPanel.querySelector(".dialogue-beats-panel");
+      const target = currentLine ?? dialoguePanel;
+
+      if (target) {
+        target.scrollIntoView({ block: "nearest", inline: "nearest" });
+        return;
+      }
+    }
+
+    rightPanel.scrollTop = snapshot.rightScrollTop;
+  });
+}
+
 function render() {
+  const panelScrollState = capturePanelScrollState();
+
   try {
     renderApp(root, state, {
       onAdvance: () => {
@@ -2640,6 +2691,8 @@ function render() {
         commit(createInitialState());
       },
     }, uiState);
+
+    restorePanelScrollState(panelScrollState);
   } catch (error) {
     renderError(error);
   }
