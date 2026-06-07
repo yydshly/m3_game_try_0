@@ -121,6 +121,8 @@ V1 代码适合作为参考样机和经验沉淀，详见：
 - [AI 小镇生活 V1 项目总结展示页](docs/V1_PROJECT_SUMMARY_SHOWCASE.html)
 - [AI 小镇生活 V1 复盘与后续游戏设计规划](docs/V1_RETROSPECTIVE_AND_GAME_DESIGN_PLAN.md)
 
+游戏主界面顶部也提供了"V1 项目总结"入口，可直接打开 `docs/V1_PROJECT_SUMMARY_SHOWCASE.html`。
+
 ---
 
 ## V1 主循环

@@ -166,7 +166,13 @@ function renderGameHud(state) {
       <div class="game-hud__brand">
         <span class="eyebrow">🏡 治愈系小镇模拟</span>
         <h1 class="game-hud__title">AI 小镇生活</h1>
-        <a class="game-hud__about-link" href="#project-meaning">了解这个小镇 →</a>
+        <div class="game-hud__links">
+          <a class="game-hud__about-link" href="#project-meaning">了解这个小镇 →</a>
+          <a class="game-hud__about-link game-hud__about-link--summary"
+             href="./docs/V1_PROJECT_SUMMARY_SHOWCASE.html"
+             target="_blank"
+             rel="noopener noreferrer">V1 项目总结 →</a>
+        </div>
       </div>
       <div class="game-hud__time" aria-label="当前天数和阶段">
         <span class="game-hud__day">第 ${state.day} 天</span>

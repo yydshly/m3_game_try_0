@@ -35,6 +35,9 @@ const result = {
   autoPlay: root.innerHTML.includes('data-action="toggle-auto"'),
   minimaxButton: root.innerHTML.includes('data-action="minimax-plan"'),
   townMemory: root.innerHTML.includes("town-memory"),
+  v1SummaryLink: root.innerHTML.includes("V1 项目总结"),
+  v1SummaryHref: root.innerHTML.includes("docs/V1_PROJECT_SUMMARY_SHOWCASE.html"),
+  v1SummaryNewTab: root.innerHTML.includes('target="_blank"'),
 };
 
 if (
@@ -45,7 +48,10 @@ if (
   !result.spotlightStatus ||
   result.goals < 4 ||
   !result.autoPlay ||
-  !result.minimaxButton
+  !result.minimaxButton ||
+  !result.v1SummaryLink ||
+  !result.v1SummaryHref ||
+  !result.v1SummaryNewTab
 ) {
   console.error(result);
   process.exit(1);

@@ -130,6 +130,25 @@ button, select {
   color: var(--green-deep);
 }
 
+.game-hud__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.game-hud__about-link--summary {
+  color: var(--green);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: color 160ms;
+}
+
+.game-hud__about-link--summary:hover {
+  color: var(--green-deep);
+}
+
 .game-hud__time {
   display: flex;
   flex-direction: column;
