@@ -690,7 +690,7 @@ function renderEventDirectorStatus(state, uiState) {
  * @param {string} [params.visibleText] - current typewriter text
  * @param {object} [params.sessionState] - session from buildResidentConversationSession
  */
-function renderResidentDialoguePanel({ beats = [], conversationQueue = [], currentLineIndex = 0, visibleText = "", sessionState = null } = {}) {
+function renderResidentDialoguePanel({ beats = [], conversationQueue = [], currentLineIndex = 0, visibleText = "", sessionState = null, ttsAudios = {} } = {}) {
   // Prefer active conversation queue if available
   if (conversationQueue && conversationQueue.length > 0) {
     const participants = sessionState?.participants ?? [];
@@ -706,7 +706,7 @@ function renderResidentDialoguePanel({ beats = [], conversationQueue = [], curre
         const displayText = isCurrent ? (visibleText || line.text) : (isPast ? line.text : "");
         if (!displayText) return ""; // Don't show future lines
         const audioKey = line.audioKey ?? "";
-        const voiceStatus = line.ttsAudio?.status ?? "idle";
+        const voiceStatus = ttsAudios[audioKey]?.status ?? "idle";
         const voiceStatusLabel = ({
           loading: "生成中",
           ready: "已就绪",
@@ -2076,6 +2076,7 @@ export function renderApp(root, state, handlers, uiState = {}) {
               currentLineIndex: safeUiState.residentConversation?.currentIndex ?? 0,
               visibleText: safeUiState.residentConversation?.visibleText ?? "",
               sessionState: safeUiState.residentConversation?.sessionState ?? null,
+              ttsAudios: safeUiState.ttsAudios ?? {},
             });
 
             // During active conversation, dialogue panel comes first so the user

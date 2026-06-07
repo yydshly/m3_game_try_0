@@ -1128,8 +1128,8 @@ function updateVoicePlaybackDomStatus(status, options = {}) {
   };
 
   const textNode = bar.querySelector(".voice-playback-chip__compact, .voice-playback-chip__error, .voice-playback-chip__broadcast");
-  if (textNode && options.text) {
-    textNode.textContent = options.text;
+  if (textNode) {
+    textNode.textContent = options.text ?? statusMap[status] ?? status;
   }
 
   return true;
@@ -1161,6 +1161,21 @@ function updateConversationLineDomStatus(audioKey, status) {
   }
 
   return true;
+}
+
+/**
+ * Attempt to update conversation audio state via local DOM updates.
+ * Falls back to a full re-render if neither target node is found.
+ * @returns {boolean} true if a node was updated, false if fallback render was triggered.
+ */
+function updateConversationAudioDomState(audioKey, status, options = {}) {
+  const lineUpdated = updateConversationLineDomStatus(audioKey, status);
+  const chipUpdated = updateVoicePlaybackDomStatus(status, options);
+
+  if (lineUpdated || chipUpdated) return true;
+
+  render();
+  return false;
 }
 
 /**
@@ -1207,8 +1222,7 @@ function playMimoAudio(audioKey, audioUrl) {
         },
       };
       if (isConv) {
-        updateConversationLineDomStatus(audioKey, "playing");
-        updateVoicePlaybackDomStatus("playing");
+        updateConversationAudioDomState(audioKey, "playing");
         return;
       }
       render();
@@ -1230,8 +1244,7 @@ function playMimoAudio(audioKey, audioUrl) {
         },
       };
       if (isConv) {
-        updateConversationLineDomStatus(audioKey, "paused");
-        updateVoicePlaybackDomStatus("paused");
+        updateConversationAudioDomState(audioKey, "paused");
         return;
       }
       render();
@@ -1251,8 +1264,7 @@ function playMimoAudio(audioKey, audioUrl) {
     };
     activeMimoAudios.delete(audioKey);
     if (isConv) {
-      updateConversationLineDomStatus(audioKey, "ready");
-      updateVoicePlaybackDomStatus("idle");
+      updateConversationAudioDomState(audioKey, "ready", { text: "" });
       return;
     }
     render();
@@ -1280,8 +1292,7 @@ function playMimoAudio(audioKey, audioUrl) {
     };
     activeMimoAudios.delete(audioKey);
     if (isConv) {
-      updateConversationLineDomStatus(audioKey, "error");
-      updateVoicePlaybackDomStatus("error");
+      updateConversationAudioDomState(audioKey, "error", { text: "播放异常" });
       return;
     }
     render();
@@ -1303,8 +1314,7 @@ function playMimoAudio(audioKey, audioUrl) {
         },
       };
       if (isConv) {
-        updateConversationLineDomStatus(audioKey, "paused");
-        updateVoicePlaybackDomStatus("paused");
+        updateConversationAudioDomState(audioKey, "paused");
         activeMimoAudios.delete(audioKey);
         return;
       }
