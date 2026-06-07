@@ -421,12 +421,17 @@ function renderDayOpeningReflection(openingReflection) {
  */
 function renderRecommendedVoiceClip(voiceState, clips, ttsAudios, conversationStatus) {
   if (!voiceState?.enabled) return "";
+
+  const isConversationActive = conversationStatus === "playing" || conversationStatus === "paused";
+
+  // During conversation, suppress the entire recommended-voice card to reduce noise
+  if (isConversationActive) return "";
+
   const recommendedKey = voiceState.recommendedClipKey ?? "";
   const clip = clips.find((c) => c.key === recommendedKey) ?? clips[0];
 
   // Always render container — empty state uses --empty modifier class
   const hasClip = Boolean(clip);
-  const isConversationActive = conversationStatus === "playing" || conversationStatus === "paused";
 
   const ta = hasClip ? (ttsAudios[clip.key] ?? {}) : {};
   const isLoading = ta.status === "loading";
@@ -436,7 +441,7 @@ function renderRecommendedVoiceClip(voiceState, clips, ttsAudios, conversationSt
   const hasError = ta.status === "error";
 
   let btn = "";
-  if (hasClip && !isConversationActive) {
+  if (hasClip) {
     if (isLoading) {
       btn = `<button class="mimo-tts-btn mimo-tts-btn--loading" disabled>🔊…</button>`;
     } else if (isPlaying) {
@@ -450,12 +455,10 @@ function renderRecommendedVoiceClip(voiceState, clips, ttsAudios, conversationSt
     }
   }
 
-  const actionsHtml = isConversationActive
-    ? `<p class="recommended-voice__hint">💬 对话进行中</p>`
-    : (btn ? `<div class="recommended-voice__actions">${btn}</div>` : "");
+  const actionsHtml = btn ? `<div class="recommended-voice__actions">${btn}</div>` : "";
 
   return `
-    <div class="recommended-voice ${!hasClip ? "recommended-voice--empty" : ""} ${isConversationActive ? "recommended-voice--muted" : ""}" aria-label="推荐收听" aria-live="polite">
+    <div class="recommended-voice ${!hasClip ? "recommended-voice--empty" : ""}" aria-label="推荐收听" aria-live="polite">
       ${hasClip ? `
       <div class="recommended-voice__header">
         <span>🎧</span>
@@ -707,13 +710,16 @@ function renderResidentDialoguePanel({ beats = [], conversationQueue = [], curre
         if (!displayText) return ""; // Don't show future lines
         const audioKey = line.audioKey ?? "";
         const voiceStatus = ttsAudios[audioKey]?.status ?? "idle";
-        const voiceStatusLabel = ({
-          loading: "生成中",
-          ready: "已就绪",
-          playing: "播放中",
-          paused: "已暂停",
-          error: "语音异常",
-        }[voiceStatus] ?? "");
+        // Only show voice status for current line; historical lines don't show "已就绪"
+        const voiceStatusLabel = (() => {
+          if (!isCurrent) return "";
+          return ({
+            loading: "生成中",
+            playing: "播放中",
+            paused: "已暂停",
+            error: "语音异常",
+          }[voiceStatus] ?? "");
+        })();
         return `<div class="dialogue-beat ${isCurrent ? "dialogue-beat--current" : ""}" data-conversation-audio-key="${escapeHtml(audioKey)}" data-voice-status="${escapeHtml(voiceStatus)}">
           <span class="dialogue-beat__name">${escapeHtml(line.speakerName ?? "居民")}：</span>
           <span class="dialogue-beat__text">${escapeHtml(displayText)}</span>
@@ -1258,6 +1264,69 @@ function buildStageDigest(state) {
 }
 
 /**
+ * Determine the current workbench interaction mode based on UI state.
+ * This is a pure UI concern — does NOT write to state.
+ *
+ * Priority (highest to lowest):
+ *   1. task-animation — resident task animation in progress
+ *   2. conversation   — resident dialogue演出中
+ *   3. voice-playback — audio is playing/loading
+ *   4. idle           — no active interaction
+ *
+ * @param {object} uiState
+ * @returns {object} workbenchMode
+ */
+function buildWorkbenchMode(uiState) {
+  const conversationStatus = uiState.residentConversation?.status;
+  const isConversationActive =
+    conversationStatus === "playing" || conversationStatus === "paused";
+
+  const voiceStatus = uiState.currentVoicePlayback?.status;
+  const isVoiceActive =
+    voiceStatus === "loading" ||
+    voiceStatus === "playing" ||
+    voiceStatus === "paused";
+
+  if (uiState.isAnimating) {
+    return {
+      mode: "task-animation",
+      suppressResidentFocus: true,
+      suppressSceneBubble: true,
+      suppressRecommendedVoice: true,
+      compactDialogueStatus: true,
+    };
+  }
+
+  if (isConversationActive) {
+    return {
+      mode: "conversation",
+      suppressResidentFocus: true,
+      suppressSceneBubble: true,
+      suppressRecommendedVoice: true,
+      compactDialogueStatus: true,
+    };
+  }
+
+  if (isVoiceActive) {
+    return {
+      mode: "voice-playback",
+      suppressResidentFocus: true,
+      suppressSceneBubble: false,
+      suppressRecommendedVoice: true,
+      compactDialogueStatus: true,
+    };
+  }
+
+  return {
+    mode: "idle",
+    suppressResidentFocus: false,
+    suppressSceneBubble: false,
+    suppressRecommendedVoice: false,
+    compactDialogueStatus: false,
+  };
+}
+
+/**
  * Render the task completion feedback panel.
  * Always rendered as a fixed-height slot; content shown when taskFeedback.visible is true.
  * @param {object} taskFeedback - result of buildTaskCompletionFeedback()
@@ -1408,28 +1477,43 @@ function renderTownStage(state, uiState, handlers = {}) {
         ${charactersHtml}
       </div>
       ${(() => {
-        const hasExplicitResidentFocus = Boolean(
-          uiState.selectedResidentFocus?.residentId && uiState.selectedResidentFocus?.clickedAt > 0
-        );
-        const focusView = hasExplicitResidentFocus ? buildResidentFocusView(state, uiState) : null;
-        const focusLine = focusView ? buildResidentFocusLine(focusView) : "";
+        const workbenchMode = buildWorkbenchMode(uiState);
 
-        if (focusView) {
-          return `<aside class="stage-bubble stage-bubble--resident-focus" aria-label="当前观察居民" data-focus-resident-id="${escapeHtml(focusView.residentId)}" data-focus-clicked-at="${escapeHtml(String(focusView.clickedAt))}">
-        <span class="stage-bubble__tag">👤 正在观察：${escapeHtml(focusView.name)}</span>
-        <p>${escapeHtml(focusLine)}</p>
-        <div class="stage-bubble__resident-meta">
-          <span>📍 ${escapeHtml(focusView.locationLabel)}</span>
-          <span>📋 ${escapeHtml(focusView.taskLabel)}</span>
-          <span>${escapeHtml(focusView.moodIcon)} ${escapeHtml(focusView.moodLabel)}</span>
-        </div>
-      </aside>`;
+        // During active modes (task-animation, conversation, voice-playback), suppress all bubbles
+        if (workbenchMode.suppressSceneBubble && workbenchMode.suppressResidentFocus) {
+          return "";
         }
 
-        return `<aside class="stage-bubble stage-bubble--scene" aria-label="当前小镇场景">
-        <span class="stage-bubble__tag">🗺️ 当前场景</span>
-        <p>${escapeHtml(digest)}</p>
-      </aside>`;
+        const canShowResidentFocus =
+          !workbenchMode.suppressResidentFocus &&
+          uiState.selectedResidentFocus?.residentId &&
+          uiState.selectedResidentFocus?.clickedAt > 0;
+
+        if (canShowResidentFocus) {
+          const focusView = buildResidentFocusView(state, uiState);
+          const focusLine = focusView ? buildResidentFocusLine(focusView) : "";
+          if (focusView) {
+            return `<aside class="stage-bubble stage-bubble--resident-focus" aria-label="当前观察居民" data-focus-resident-id="${escapeHtml(focusView.residentId)}" data-focus-clicked-at="${escapeHtml(String(focusView.clickedAt))}">
+          <span class="stage-bubble__tag">👤 正在观察：${escapeHtml(focusView.name)}</span>
+          <p>${escapeHtml(focusLine)}</p>
+          <div class="stage-bubble__resident-meta">
+            <span>📍 ${escapeHtml(focusView.locationLabel)}</span>
+            <span>📋 ${escapeHtml(focusView.taskLabel)}</span>
+            <span>${escapeHtml(focusView.moodIcon)} ${escapeHtml(focusView.moodLabel)}</span>
+          </div>
+        </aside>`;
+          }
+        }
+
+        // Show current scene bubble only when not suppressed
+        if (!workbenchMode.suppressSceneBubble) {
+          return `<aside class="stage-bubble stage-bubble--scene" aria-label="当前小镇场景">
+          <span class="stage-bubble__tag">🗺️ 当前场景</span>
+          <p>${escapeHtml(digest)}</p>
+        </aside>`;
+        }
+
+        return "";
       })()}
       ${renderTaskCompletionPanel(taskFeedback)}
       ${renderVoicePlaybackChip(voiceViewModel, handlers)}

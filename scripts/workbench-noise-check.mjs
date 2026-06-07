@@ -1,0 +1,323 @@
+// workbench-noise-check — validates workbench interaction noise reduction rules
+import { createInitialState } from "../src/domain/state.js";
+import { renderApp } from "../src/ui/render.js";
+
+const root = {
+  innerHTML: "",
+  querySelector: () => ({ addEventListener() {} }),
+  querySelectorAll: () => [],
+};
+
+const handlers = {
+  onAdvance() {},
+  onRunDay() {},
+  onToggleAutoPlay() {},
+  onMiniMaxPlan() {},
+  onMiniMaxEvent() {},
+  onMiniMaxBroadcast() {},
+  onGenerateTts() {},
+  onPlayTts() {},
+  onPauseTts() {},
+  onAssignTask() {},
+  onSelectResident() {},
+  onResetAssignments() {},
+  onNewTown() {},
+  onChooseEvent() {},
+  onPlayMimoTts() {},
+  onPauseMimoTts() {},
+  onResumeMimoTts() {},
+  onStopConversation() {},
+  onRunTownDayCycle() {},
+  onVoicePause() {},
+  onVoiceResume() {},
+  onVoiceStop() {},
+};
+
+let passed = 0;
+let failed = 0;
+
+function assert(condition, message) {
+  if (condition) {
+    passed++;
+    console.log(`  ✓ ${message}`);
+  } else {
+    failed++;
+    console.error(`  ✗ FAIL: ${message}`);
+  }
+}
+
+// ── Test 1: Idle state shows current scene bubble ──────────────────────────────
+
+console.log("\n── Idle state: shows '当前场景' bubble ──");
+{
+  const state = createInitialState();
+  root.innerHTML = "";
+  renderApp(root, state, handlers, {
+    selectedResidentFocus: { residentId: state.residents[0].id, clickedAt: 0 },
+  });
+
+  const html = root.innerHTML;
+
+  assert(html.includes("当前场景"), "idle shows '当前场景'");
+  assert(html.includes("stage-bubble--scene"), "idle has stage-bubble--scene class");
+  assert(!html.includes("正在观察"), "idle does NOT show '正在观察' when clickedAt=0");
+}
+
+// ── Test 2: Idle + clickedAt>0 shows resident focus ──────────────────────────
+
+console.log("\n── Idle + clickedAt>0: shows resident focus bubble ──");
+{
+  const state = createInitialState();
+  const residentId = state.residents[0].id;
+
+  root.innerHTML = "";
+  renderApp(root, state, handlers, {
+    selectedResidentFocus: { residentId, clickedAt: Date.now() },
+  });
+
+  const html = root.innerHTML;
+
+  assert(html.includes("正在观察"), "idle with click shows '正在观察'");
+  assert(html.includes("stage-bubble--resident-focus"), "has stage-bubble--resident-focus class");
+  assert(!html.includes("stage-bubble--scene"), "idle with click does NOT show scene bubble");
+}
+
+// ── Test 3: Conversation playing suppresses resident focus ──────────────────────
+
+console.log("\n── Conversation playing: suppresses resident focus bubble ──");
+{
+  const state = createInitialState();
+  const residentId = state.residents[0].id;
+  const queue = [
+    { id: "line-1", speakerId: state.residents[0].id, speakerName: state.residents[0].name, text: "今天天气真好。", audioKey: "conv:r0:line-1" },
+    { id: "line-2", speakerId: state.residents[1].id, speakerName: state.residents[1].name, text: "是啊，适合出去走走。", audioKey: "conv:r1:line-2" },
+  ];
+
+  root.innerHTML = "";
+  renderApp(root, state, handlers, {
+    selectedResidentFocus: { residentId, clickedAt: Date.now() },
+    residentConversation: {
+      enabled: true,
+      status: "playing",
+      queue,
+      currentIndex: 0,
+      currentLineId: "line-1",
+      visibleText: "今天天气真好。",
+    },
+  });
+
+  const html = root.innerHTML;
+
+  assert(!html.includes("正在观察"), "conversation playing suppresses '正在观察'");
+  assert(!html.includes("stage-bubble--resident-focus"), "conversation playing suppresses resident-focus bubble");
+}
+
+// ── Test 4: Conversation playing suppresses scene bubble ───────────────────────
+
+console.log("\n── Conversation playing: suppresses scene bubble ──");
+{
+  const state = createInitialState();
+  const queue = [
+    { id: "line-1", speakerId: state.residents[0].id, speakerName: state.residents[0].name, text: "你好。", audioKey: "conv:r0:line-1" },
+  ];
+
+  root.innerHTML = "";
+  renderApp(root, state, handlers, {
+    residentConversation: {
+      enabled: true,
+      status: "playing",
+      queue,
+      currentIndex: 0,
+      currentLineId: "line-1",
+      visibleText: "你好。",
+    },
+  });
+
+  const html = root.innerHTML;
+
+  assert(!html.includes("stage-bubble--scene"), "conversation playing suppresses scene bubble");
+  assert(!html.includes("当前场景"), "conversation playing suppresses '当前场景'");
+}
+
+// ── Test 5: Conversation playing hides recommended-voice card ─────────────────
+
+console.log("\n── Conversation playing: hides recommended-voice card ──");
+{
+  const state = createInitialState();
+  const queue = [
+    { id: "line-1", speakerId: state.residents[0].id, speakerName: state.residents[0].name, text: "你好。", audioKey: "conv:r0:line-1" },
+  ];
+
+  root.innerHTML = "";
+  renderApp(root, state, handlers, {
+    residentConversation: {
+      enabled: true,
+      status: "playing",
+      queue,
+      currentIndex: 0,
+      currentLineId: "line-1",
+      visibleText: "你好。",
+    },
+    residentVoiceInteraction: {
+      enabled: true,
+      recommendedClipKey: "clip-1",
+      lastTriggeredAt: Date.now(),
+      hint: "试试听一下",
+    },
+    residentVoiceClips: [
+      { key: "clip-1", residentId: state.residents[0].id, residentName: state.residents[0].name, text: "推荐语音", scene: "resident_dialogue" },
+    ],
+  });
+
+  const html = root.innerHTML;
+
+  // The recommended-voice card should not appear during conversation
+  assert(!html.includes("推荐收听"), "conversation playing suppresses recommended-voice card");
+  // Note: 🎧 appears in the atmosphere-panel header (🎧 小镇氛围) which is separate content
+  assert(!html.includes("recommended-voice__label"), "conversation playing suppresses recommended-voice label text");
+}
+
+// ── Test 6: Past dialogue lines do not show "已就绪" ──────────────────────────
+
+console.log("\n── Past dialogue lines: no '已就绪' label ──");
+{
+  const state = createInitialState();
+  const queue = [
+    { id: "line-1", speakerId: state.residents[0].id, speakerName: state.residents[0].name, text: "第一句。", audioKey: "conv:r0:line-1" },
+    { id: "line-2", speakerId: state.residents[1].id, speakerName: state.residents[1].name, text: "第二句。", audioKey: "conv:r1:line-2" },
+  ];
+
+  root.innerHTML = "";
+  renderApp(root, state, handlers, {
+    residentConversation: {
+      enabled: true,
+      status: "playing",
+      queue,
+      currentIndex: 1,
+      currentLineId: "line-2",
+      visibleText: "第二句。",
+    },
+    ttsAudios: {
+      "conv:r0:line-1": { status: "ready" },   // past line — should NOT show 已就绪
+      "conv:r1:line-2": { status: "loading" },  // current line — can show 生成中
+    },
+  });
+
+  const html = root.innerHTML;
+
+  // Should not show "已就绪" for the past line
+  const pastLineDiv = html.match(/data-conversation-audio-key="conv:r0:line-1"[^>]*>[\s\S]*?<div class="dialogue-beat__voice-status">已就绪<\/div>/);
+  assert(!pastLineDiv, "past line does NOT display '已就绪' voice status");
+}
+
+// ── Test 7: Current dialogue line can show "播放中" ────────────────────────────
+
+console.log("\n── Current dialogue line: shows voice status labels ──");
+{
+  const state = createInitialState();
+  const queue = [
+    { id: "line-1", speakerId: state.residents[0].id, speakerName: state.residents[0].name, text: "第一句。", audioKey: "conv:r0:line-1" },
+  ];
+
+  root.innerHTML = "";
+  renderApp(root, state, handlers, {
+    residentConversation: {
+      enabled: true,
+      status: "playing",
+      queue,
+      currentIndex: 0,
+      currentLineId: "line-1",
+      visibleText: "第一句。",
+    },
+    ttsAudios: {
+      "conv:r0:line-1": { status: "playing" },
+    },
+  });
+
+  const html = root.innerHTML;
+
+  // Current line should show "播放中" or similar
+  assert(html.includes("播放中") || html.includes("生成中"), "current line shows a voice status label");
+}
+
+// ── Test 8: Task animation suppresses resident focus ──────────────────────────
+
+console.log("\n── Task animation: suppresses resident focus bubble ──");
+{
+  const state = createInitialState();
+  const residentId = state.residents[0].id;
+
+  root.innerHTML = "";
+  renderApp(root, state, handlers, {
+    selectedResidentFocus: { residentId, clickedAt: Date.now() },
+    isAnimating: true,
+    activeTaskAnimations: [
+      { residentId: state.residents[0].id, taskId: "plant", bubble: "花园变得更有精神了。" },
+    ],
+  });
+
+  const html = root.innerHTML;
+
+  assert(!html.includes("正在观察"), "task animation suppresses '正在观察'");
+  assert(!html.includes("stage-bubble--resident-focus"), "task animation suppresses resident-focus bubble");
+  assert(!html.includes("stage-bubble--scene"), "task animation suppresses scene bubble");
+}
+
+// ── Test 9: Voice playback suppresses resident focus ──────────────────────────
+
+console.log("\n── Voice playback active: suppresses resident focus ──");
+{
+  const state = createInitialState();
+  const residentId = state.residents[0].id;
+
+  root.innerHTML = "";
+  renderApp(root, state, handlers, {
+    selectedResidentFocus: { residentId, clickedAt: Date.now() },
+    currentVoicePlayback: {
+      key: "broadcast-1",
+      provider: "minimax",
+      scene: "town_broadcast",
+      sourceType: "town_broadcast",
+      title: "小镇广播",
+      subtitle: "",
+      textPreview: "广播内容",
+      status: "playing",
+    },
+  });
+
+  const html = root.innerHTML;
+
+  assert(!html.includes("正在观察"), "voice playback suppresses '正在观察'");
+  assert(!html.includes("stage-bubble--resident-focus"), "voice playback suppresses resident-focus bubble");
+}
+
+// ── Test 10: Source-level check for hide option in updateVoicePlaybackDomStatus ─
+
+console.log("\n── Source check: updateVoicePlaybackDomStatus supports hide option ──");
+{
+  const fs = await import("fs");
+  const appSource = fs.readFileSync("./src/app.js", "utf8");
+  const hasHideSupport = appSource.includes("options.hide");
+  assert(hasHideSupport, "updateVoicePlaybackDomStatus handles options.hide");
+  const hasConversationHide = appSource.includes('updateConversationAudioDomState(audioKey, "idle", { hide: true })');
+  assert(hasConversationHide, "conversation audio ended calls updateConversationAudioDomState with { hide: true }");
+}
+
+// ── Test 11: buildWorkbenchMode exists and is pure UI function ─────────────────
+
+console.log("\n── Source check: buildWorkbenchMode is defined in render.js ──");
+{
+  const fs = await import("fs");
+  const renderSource = fs.readFileSync("./src/ui/render.js", "utf8");
+  const hasBuildWorkbenchMode = renderSource.includes("function buildWorkbenchMode");
+  assert(hasBuildWorkbenchMode, "buildWorkbenchMode function is defined");
+  const hasModeValues = renderSource.includes('mode: "conversation"') && renderSource.includes('mode: "task-animation"');
+  assert(hasModeValues, "buildWorkbenchMode returns correct mode values");
+  const hasSuppressFlags = renderSource.includes("suppressResidentFocus: true");
+  assert(hasSuppressFlags, "buildWorkbenchMode returns suppress flags");
+}
+
+// ── Summary ───────────────────────────────────────────────────────────────────
+
+console.log(`\nResults: ${passed} passed, ${failed} failed`);
+if (failed > 0) process.exit(1);

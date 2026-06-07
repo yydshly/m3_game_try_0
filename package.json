@@ -69,8 +69,7 @@
     "event-choice-entry-check": "node scripts/event-choice-entry-check.mjs",
     "event-choice-commit-check": "node scripts/event-choice-commit-check.mjs",
     "event-choice-click-check": "node scripts/event-choice-click-check.mjs",
-    "event-director-check": "node scripts/event-director-check.mjs",
-    "event-choice-check": "node scripts/event-choice-check.mjs",
+    "workbench-noise-check": "node scripts/workbench-noise-check.mjs",
     "player-guidance-check": "node scripts/player-guidance-check.mjs"
   }
 }

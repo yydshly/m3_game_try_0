@@ -287,14 +287,14 @@ console.log("\n── Map bubbles: only current speaker shows bubble ──");
   assert(conversationBubbleMatches.length === 1, `only 1 conversation bubble rendered (got ${conversationBubbleMatches.length})`);
 }
 
-// ── 12. stage-bubble (今日动态) still exists ─────────────────────────────────
-console.log("\n── stage-bubble (今日动态) still exists ──");
+// ── 12. stage-bubble (当前场景) still exists ─────────────────────────────────
+console.log("\n── stage-bubble (当前场景) still exists ──");
 {
   const state = createInitialState();
   root.innerHTML = "";
   renderApp(root, state, handlers, { activeScenario: selectTownLifeScenario(state), residentSceneBeats: [] });
   assert(root.innerHTML.includes("stage-bubble"), "stage-bubble element exists");
-  assert(root.innerHTML.includes("今日动态"), "今日动态 label preserved");
+  assert(root.innerHTML.includes("当前场景"), "当前场景 label preserved");
 }
 
 // ── 13. deed-outcome-panel still exists ───────────────────────────────────────

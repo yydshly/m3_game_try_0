@@ -1116,6 +1116,15 @@ function updateVoicePlaybackDomStatus(status, options = {}) {
   const bar = root?.querySelector?.(".voice-playback-chip");
   if (!bar) return false;
 
+  // Support hide option to collapse the bar after conversation audio ends
+  if (options.hide) {
+    bar.hidden = true;
+    bar.setAttribute("aria-hidden", "true");
+    return true;
+  }
+
+  bar.hidden = false;
+  bar.removeAttribute("aria-hidden");
   bar.dataset.status = status;
 
   const statusMap = {
@@ -1264,7 +1273,7 @@ function playMimoAudio(audioKey, audioUrl) {
     };
     activeMimoAudios.delete(audioKey);
     if (isConv) {
-      updateConversationAudioDomState(audioKey, "ready", { text: "" });
+      updateConversationAudioDomState(audioKey, "idle", { hide: true });
       return;
     }
     render();
