@@ -2054,18 +2054,37 @@ export function renderApp(root, state, handlers, uiState = {}) {
           </div>
         </section>
         <aside class="side-panel">
-          ${renderLlmStatus(safeUiState)}
-          ${renderEventDirectorStatus(state, safeUiState)}
-          ${renderAtmospherePanel(state, safeUiState)}
-          ${renderResidentDialoguePanel({
-            beats: safeUiState.residentSceneBeats,
-            conversationQueue: safeUiState.residentConversation?.queue ?? [],
-            currentLineIndex: safeUiState.residentConversation?.currentIndex ?? 0,
-            visibleText: safeUiState.residentConversation?.visibleText ?? "",
-            sessionState: safeUiState.residentConversation?.sessionState ?? null,
-          })}
-          ${renderChoiceAftermath(safeUiState.choiceAftermath, safeUiState.residentVoiceInteraction)}
-          ${renderSpotlight(state, safeUiState)}
+          ${(() => {
+            const conversationStatus = safeUiState.residentConversation?.status ?? "idle";
+            const isConversationActive = conversationStatus === "playing" || conversationStatus === "paused";
+
+            // Build dialogue panel once — used in both orderings
+            const dialoguePanelHtml = renderResidentDialoguePanel({
+              beats: safeUiState.residentSceneBeats,
+              conversationQueue: safeUiState.residentConversation?.queue ?? [],
+              currentLineIndex: safeUiState.residentConversation?.currentIndex ?? 0,
+              visibleText: safeUiState.residentConversation?.visibleText ?? "",
+              sessionState: safeUiState.residentConversation?.sessionState ?? null,
+            });
+
+            // During active conversation, dialogue panel comes first so the user
+            // always sees it without having to scroll after every re-render.
+            if (isConversationActive) {
+              return `${dialoguePanelHtml}
+${renderLlmStatus(safeUiState)}
+${renderEventDirectorStatus(state, safeUiState)}
+${renderAtmospherePanel(state, safeUiState)}
+${renderChoiceAftermath(safeUiState.choiceAftermath, safeUiState.residentVoiceInteraction)}
+${renderSpotlight(state, safeUiState)}`;
+            }
+
+            return `${renderLlmStatus(safeUiState)}
+${renderEventDirectorStatus(state, safeUiState)}
+${renderAtmospherePanel(state, safeUiState)}
+${dialoguePanelHtml}
+${renderChoiceAftermath(safeUiState.choiceAftermath, safeUiState.residentVoiceInteraction)}
+${renderSpotlight(state, safeUiState)}`;
+          })()}
         </aside>
       </main>
 
